@@ -1,8 +1,21 @@
 const WebSocket = require('ws');
+const fs = require('fs');
+
+const DATA_FILE = './data.json';
+let userData = {};
+try {
+  userData = JSON.parse(fs.readFileSync(DATA_FILE));
+} catch (e) {
+  userData = {};
+}
+function saveData() {
+  fs.writeFileSync(DATA_FILE, JSON.stringify(userData, null, 2));
+}
 
 const wss = new WebSocket.Server({ port: 3000 });
 const clients = new Map(); // id -> ws
-const states = new Map();  // id -> { position, rotation, moving }
+const userById = new Map(); // id -> username
+const states = new Map();  // id -> { position, rotation, moving, money }
 let nextId = 1;
 
 function broadcast(data, excludeId) {
@@ -14,23 +27,37 @@ function broadcast(data, excludeId) {
 }
 
 wss.on('connection', ws => {
-  const id = nextId++;
-  clients.set(id, ws);
-
-  // Send welcome message with existing players
-  const players = [];
-  for (const [pid, state] of states.entries()) {
-    players.push({ id: pid, ...state });
-  }
-  ws.send(JSON.stringify({ type: 'welcome', id, players }));
-
-  broadcast({ type: 'spawn', id }, id);
+  let id = null;
+  let username = null;
 
   ws.on('message', message => {
     try {
       const data = JSON.parse(message);
-      if (data.type === 'state') {
-        states.set(id, { position: data.position, rotation: data.rotation, moving: data.moving });
+      if (data.type === 'login' && id === null) {
+        username = data.username || 'player';
+        id = nextId++;
+        clients.set(id, ws);
+        userById.set(id, username);
+
+        const record = userData[username] || { money: 1000000, position: [0, 100, 0], rotation: 0 };
+        userData[username] = record;
+
+        const state = { position: record.position, rotation: record.rotation || 0, moving: false, money: record.money };
+        states.set(id, state);
+
+        const players = [];
+        for (const [pid, st] of states.entries()) {
+          if (pid === id) continue;
+          players.push({ id: pid, position: st.position, rotation: st.rotation, moving: st.moving });
+        }
+        ws.send(JSON.stringify({ type: 'loginSuccess', id, state, players }));
+        broadcast({ type: 'spawn', id, state }, id);
+      } else if (data.type === 'state' && id !== null) {
+        const st = states.get(id);
+        if (!st) return;
+        st.position = data.position;
+        st.rotation = data.rotation;
+        st.moving = data.moving;
         broadcast({ type: 'update', id, position: data.position, rotation: data.rotation, moving: data.moving }, id);
       }
     } catch (err) {
@@ -39,9 +66,17 @@ wss.on('connection', ws => {
   });
 
   ws.on('close', () => {
-    clients.delete(id);
-    states.delete(id);
-    broadcast({ type: 'remove', id });
+    if (id !== null) {
+      clients.delete(id);
+      userById.delete(id);
+      const st = states.get(id);
+      if (st && username) {
+        userData[username] = { money: st.money || 1000000, position: st.position, rotation: st.rotation };
+        saveData();
+      }
+      states.delete(id);
+      broadcast({ type: 'remove', id });
+    }
   });
 });
 
