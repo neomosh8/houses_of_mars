@@ -1,7 +1,7 @@
 const WebSocket = require('ws');
 const { OAuth2Client } = require("google-auth-library");
 const fs = require('fs');
-const CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "YOUR_GOOGLE_CLIENT_ID";
+const CLIENT_ID = process.env.GOOGLE_CLIENT_ID || 'Y615735242765-o0rm9iuv9291h9iq5t6rh17co4gmjahb.apps.googleusercontent.com';
 const authClient = new OAuth2Client(CLIENT_ID);
 
 const DATA_FILE = './data.json';
@@ -33,6 +33,37 @@ wss.on('connection', ws => {
   let id = null;
   let username = null;
   let displayName = null;
+
+ws.on('message', async message => {
+    try {
+      const data = JSON.parse(message);
+      if (data.type === 'login' && id === null) {
+        try {
+          const ticket = await authClient.verifyIdToken({ idToken: data.token, audience: CLIENT_ID });
+          const payload = ticket.getPayload();
+          username = payload.sub;
+          displayName = payload.name || payload.email || username;
+          id = nextId++;
+          clients.set(id, ws);
+          userById.set(id, displayName);
+
+          const record = userData[username] || { name: displayName, money: 1000000, position: [0, 100, 0], rotation: 0 };
+          userData[username] = record;
+
+          const state = { position: record.position, rotation: record.rotation || 0, moving: false, money: record.money };
+          states.set(id, state);
+
+          const players = [];
+          for (const [pid, st] of states.entries()) {
+            if (pid === id) continue;
+            players.push({ id: pid, position: st.position, rotation: st.rotation, moving: st.moving });
+          }
+          ws.send(JSON.stringify({ type: 'loginSuccess', id, state, players }));
+          broadcast({ type: 'spawn', id, state }, id);
+        } catch (err) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Invalid login' }));
+        }
+
 
   ws.on('message', async message => {
     try {
@@ -89,6 +120,7 @@ wss.on('connection', ws => {
           position: st.position,
           rotation: st.rotation
         };
+
         saveData();
       }
       states.delete(id);
