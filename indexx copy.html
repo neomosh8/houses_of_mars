@@ -24,6 +24,7 @@
   import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
   import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
   import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+  import { SkeletonUtils } from 'three/addons/utils/SkeletonUtils.js';
 
   // Scene, camera, renderer
   const scene = new THREE.Scene();
@@ -67,6 +68,95 @@
   // Output pass to properly handle tone mapping
   const outputPass = new OutputPass();
   composer.addPass(outputPass);
+
+  // --- Multiplayer Networking ---
+  let socket;
+  let clientId = null;
+  const remotePlayers = {};
+  const pendingRemotePlayers = [];
+
+  function initNetwork() {
+    socket = new WebSocket('ws://localhost:3000');
+    socket.addEventListener('message', e => {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'welcome') {
+        clientId = msg.id;
+        msg.players.forEach(p => createRemotePlayer(p.id, p));
+      } else if (msg.type === 'spawn') {
+        createRemotePlayer(msg.id);
+      } else if (msg.type === 'update') {
+        if (msg.id !== clientId) updateRemotePlayer(msg.id, msg);
+      } else if (msg.type === 'remove') {
+        removeRemotePlayer(msg.id);
+      }
+    });
+  }
+
+  function createRemotePlayer(id, state) {
+    if (!model) {
+      pendingRemotePlayers.push({ id, state });
+      return;
+    }
+    if (remotePlayers[id]) return;
+    const remote = SkeletonUtils.clone(model);
+    scene.add(remote);
+    const m = new THREE.AnimationMixer(remote);
+    let idle, run;
+    if (playerAnimations) {
+      const idleClip = playerAnimations.find(a => a.name === 'Idle');
+      const runClip = playerAnimations.find(a => a.name === 'Run');
+      if (idleClip) idle = m.clipAction(idleClip);
+      if (runClip) run = m.clipAction(runClip);
+    }
+    if (idle) idle.play();
+    remotePlayers[id] = { model: remote, mixer: m, idle, run, active: idle };
+    if (state) {
+      remote.position.fromArray(state.position);
+      remote.rotation.y = state.rotation;
+    }
+  }
+
+  function updateRemotePlayer(id, state) {
+    const rp = remotePlayers[id];
+    if (!rp) return;
+    rp.model.position.fromArray(state.position);
+    rp.model.rotation.y = state.rotation;
+    if (typeof state.moving === 'boolean') {
+      const target = state.moving ? rp.run : rp.idle;
+      if (target && rp.active !== target) {
+        rp.active && rp.active.fadeOut(0.2);
+        target.reset().fadeIn(0.2).play();
+        rp.active = target;
+      }
+    }
+  }
+
+  function removeRemotePlayer(id) {
+    const rp = remotePlayers[id];
+    if (!rp) return;
+    scene.remove(rp.model);
+    delete remotePlayers[id];
+  }
+
+  function handlePendingRemotePlayers() {
+    if (!model) return;
+    pendingRemotePlayers.forEach(p => createRemotePlayer(p.id, p.state));
+    pendingRemotePlayers.length = 0;
+  }
+
+  function sendState() {
+    if (!socket || socket.readyState !== WebSocket.OPEN || !model) return;
+    socket.send(JSON.stringify({
+      type: 'state',
+      position: [model.position.x, model.position.y, model.position.z],
+      rotation: model.rotation.y,
+      moving: isMovingForward
+    }));
+  }
+
+  initNetwork();
+
+
 
   // Lighting
   const hemiLight = new THREE.HemisphereLight(0xffeedd, 0x775533, 1.2);
@@ -583,6 +673,7 @@
   let activeAction;
   const modelScale = 1.2;
   const characterHeight = 1.8 * modelScale; // Approximate height of character
+  let playerAnimations = null;
 
   // Track foot positions for dust particles
   const footPositions = {
@@ -616,6 +707,7 @@
       const animations = gltf.animations;
       idleAction = mixer.clipAction(animations.find(a => a.name === 'Idle'));
       runAction = mixer.clipAction(animations.find(a => a.name === 'Run'));
+      playerAnimations = animations;
 
       if (!idleAction) console.warn("Idle animation not found!");
       if (!runAction) console.warn("Run animation not found!");
@@ -643,6 +735,7 @@
       if (terrainMeshes.length > 0) {
         findGroundBelow();
       }
+      handlePendingRemotePlayers();
     },
     undefined,
     err => console.error('GLTF load error (Player):', err)
@@ -844,6 +937,9 @@
     updateParticles(dt);
 
     if (mixer) mixer.update(dt);
+    for (const id in remotePlayers) {
+      remotePlayers[id].mixer.update(dt);
+    }
 
     if (model && terrainMeshes.length > 0) {
         // PHYSICS - Apply gravity if not on ground
@@ -937,6 +1033,7 @@
 
         // Camera follow
         updateCamera(dt);
+        sendState();
     }
 
     // Debug rendering to visualize particle positions
