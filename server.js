@@ -34,37 +34,6 @@ wss.on('connection', ws => {
   let username = null;
   let displayName = null;
 
-ws.on('message', async message => {
-    try {
-      const data = JSON.parse(message);
-      if (data.type === 'login' && id === null) {
-        try {
-          const ticket = await authClient.verifyIdToken({ idToken: data.token, audience: CLIENT_ID });
-          const payload = ticket.getPayload();
-          username = payload.sub;
-          displayName = payload.name || payload.email || username;
-          id = nextId++;
-          clients.set(id, ws);
-          userById.set(id, displayName);
-
-          const record = userData[username] || { name: displayName, money: 1000000, position: [0, 100, 0], rotation: 0 };
-          userData[username] = record;
-
-          const state = { position: record.position, rotation: record.rotation || 0, moving: false, money: record.money };
-          states.set(id, state);
-
-          const players = [];
-          for (const [pid, st] of states.entries()) {
-            if (pid === id) continue;
-            players.push({ id: pid, position: st.position, rotation: st.rotation, moving: st.moving });
-          }
-          ws.send(JSON.stringify({ type: 'loginSuccess', id, state, players }));
-          broadcast({ type: 'spawn', id, state }, id);
-        } catch (err) {
-          ws.send(JSON.stringify({ type: 'error', message: 'Invalid login' }));
-        }
-
-
   ws.on('message', async message => {
     try {
       const data = JSON.parse(message);
@@ -73,7 +42,7 @@ ws.on('message', async message => {
           const ticket = await authClient.verifyIdToken({ idToken: data.token, audience: CLIENT_ID });
           const payload = ticket.getPayload();
           username = payload.sub;
-          const displayName = payload.name || payload.email || username;
+          displayName = payload.name || payload.email || username;
           id = nextId++;
           clients.set(id, ws);
           userById.set(id, displayName);
