@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Mars Runner</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #000; }
+    canvas { display: block; width: 100%; height: 100%; }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.176.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.176.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+<script type="module">
+  import * as THREE from 'three';
+  import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+  import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+  import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+  import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+  import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+  // Scene, camera, renderer
+  const scene = new THREE.Scene();
+  const marsSkyColor = 0x9B7653; // Dusty orange-red for Mars sky
+  // Adjusted fog for potentially larger terrain
+  scene.fog = new THREE.FogExp2(marsSkyColor, 0.0003); // Lower density for more view distance
+
+  // Adjusted camera far plane for potentially larger terrain
+  const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 10000);
+  camera.position.set(0, 10, 15);
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Better shadows
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setClearColor(marsSkyColor);
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.0;
+  document.body.appendChild(renderer.domElement);
+
+  // Post-processing setup for bloom
+  const composer = new EffectComposer(renderer);
+  const renderPass = new RenderPass(scene, camera);
+  composer.addPass(renderPass);
+
+  // Bloom effect
+  const bloomParams = {
+    strength: 0.1,
+    radius: 0.7,
+    threshold: 0.8
+  };
+  const bloomPass = new UnrealBloomPass(
+    new THREE.Vector2(window.innerWidth, window.innerHeight),
+    bloomParams.strength,
+    bloomParams.radius,
+    bloomParams.threshold
+  );
+  composer.addPass(bloomPass);
+
+  // Output pass to properly handle tone mapping
+  const outputPass = new OutputPass();
+  composer.addPass(outputPass);
+
+  // Lighting
+  const hemiLight = new THREE.HemisphereLight(0xffeedd, 0x775533, 1.2);
+  scene.add(hemiLight);
+
+  // Main directional light (sun) - IMPROVED SHADOW SETTINGS
+  const sun = new THREE.DirectionalLight(0xffffff, 1.8);
+  sun.position.set(20, 30, 15);
+  sun.castShadow = true;
+
+  // Improved shadow quality
+  sun.shadow.mapSize.width = 4096; // Increased from 2048
+  sun.shadow.mapSize.height = 4096; // Increased from 2048
+  sun.shadow.camera.near = 0.5;
+  sun.shadow.camera.far = 200; // Extended range
+  sun.shadow.camera.left = -100;
+  sun.shadow.camera.right = 100;
+  sun.shadow.camera.top = 100;
+  sun.shadow.camera.bottom = -100;
+  sun.shadow.bias = -0.0005; // Helps prevent shadow acne
+
+  scene.add(sun);
+
+  // Uncomment to visualize shadow camera (helpful for debugging)
+  // const helper = new THREE.CameraHelper(sun.shadow.camera);
+  // scene.add(helper);
+
+  // Additional directional light for better terrain illumination
+  const secondaryLight = new THREE.DirectionalLight(0xffd6a5, 1.0); // Warm light
+  secondaryLight.position.set(-15, 20, -10); // From opposite direction of sun
+  secondaryLight.castShadow = false; // Optional shadow from secondary light
+  scene.add(secondaryLight);
+
+  // Ground Textures - Load first before terrain
+  const textureLoader = new THREE.TextureLoader();
+  let diffuseMap = null;
+  let bumpMap = null;
+  let specMap = null;
+  const baseTextureRepeat = 1000; // Base repeat factor for the texture
+
+  // Track texture loading status
+  const texturesLoaded = {
+    diffuse: false,
+    bump: false,
+    spec: false
+  };
+
+  // Function to check if all textures are loaded and apply them
+  function checkTexturesAndApply() {
+    if (texturesLoaded.diffuse && texturesLoaded.bump && texturesLoaded.spec) {
+      console.log("All textures loaded - ready to apply");
+      if (gltfTerrain) {
+        applyTexturesToTerrain(gltfTerrain);
+      }
+    }
+  }
+
+  // Load diffuse texture (base color)
+  textureLoader.load(
+    'mars_ground.png',
+    (texture) => {
+      console.log("Mars diffuse texture loaded successfully.");
+      texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+      texture.repeat.set(baseTextureRepeat, baseTextureRepeat);
+      texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      diffuseMap = texture;
+      texturesLoaded.diffuse = true;
+
+      checkTexturesAndApply();
+    },
+    undefined,
+    (error) => {
+      console.error("Error loading Mars diffuse texture:", error);
+      texturesLoaded.diffuse = true; // Mark as done even if error
+      checkTexturesAndApply();
+    }
+  );
+
+  // Load bump map
+  textureLoader.load(
+    'mars_ground_bump.png', // Adjust filename to match your bump map
+    (texture) => {
+      console.log("Mars bump map loaded successfully.");
+      texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+      texture.repeat.set(baseTextureRepeat, baseTextureRepeat);
+      texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      bumpMap = texture;
+      texturesLoaded.bump = true;
+
+      checkTexturesAndApply();
+    },
+    undefined,
+    (error) => {
+      console.error("Error loading Mars bump map:", error);
+      texturesLoaded.bump = true; // Mark as done even if error
+      checkTexturesAndApply();
+    }
+  );
+
+  // Load specular map
+  textureLoader.load(
+    'mars_ground_spec.png', // Adjust filename to match your specular map
+    (texture) => {
+      console.log("Mars specular map loaded successfully.");
+      texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+      texture.repeat.set(baseTextureRepeat, baseTextureRepeat);
+      texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      specMap = texture;
+      texturesLoaded.spec = true;
+
+      checkTexturesAndApply();
+    },
+    undefined,
+    (error) => {
+      console.error("Error loading Mars specular map:", error);
+      texturesLoaded.spec = true; // Mark as done even if error
+      checkTexturesAndApply();
+    }
+  );
+
+  // Load dust particle texture
+  let dustTexture;
+  textureLoader.load(
+    'dust.png',
+    (texture) => {
+      console.log("Dust particle texture loaded successfully.");
+      dustTexture = texture;
+      // Initialize dust particles system once texture is loaded
+      initDustParticles();
+    },
+    undefined,
+    (error) => {
+      console.error("Error loading dust particle texture:", error);
+      // Create a fallback texture - a simple circle
+      const canvas = document.createElement('canvas');
+      canvas.width = 64;
+      canvas.height = 64;
+      const ctx = canvas.getContext('2d');
+      const centerX = canvas.width / 2;
+      const centerY = canvas.height / 2;
+      const radius = 24;
+
+      // Draw a simple radial gradient for the particle
+      const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius);
+      gradient.addColorStop(0, 'rgba(255, 230, 200, 1.0)');
+      gradient.addColorStop(0.5, 'rgba(230, 200, 170, 0.5)');
+      gradient.addColorStop(1, 'rgba(200, 170, 140, 0.0)');
+
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      dustTexture = new THREE.CanvasTexture(canvas);
+      initDustParticles();
+    }
+  );
+
+  // Helper function to apply textures to terrain
+  function applyTexturesToTerrain(terrain) {
+    console.log("Applying textures to terrain...");
+    terrain.traverse(o => {
+      if (o.isMesh) {
+        // Create a new material with all textures
+        o.material = new THREE.MeshStandardMaterial({
+          map: diffuseMap,
+          bumpMap: bumpMap,
+          bumpScale: 2.3, // Adjust bump intensity
+          roughnessMap: specMap, // In PBR, specular is controlled by roughness
+          roughness: 5,
+          metalness: 0.0,
+          color: 0xDC916E // White color to allow texture to show properly
+        });
+        o.receiveShadow = true; // Make sure terrain receives shadows
+        o.material.needsUpdate = true;
+        console.log("Textures applied to mesh:", o.name || "unnamed mesh");
+      }
+    });
+  }
+
+  // --- DUST PARTICLES SYSTEM ---
+  const MAX_PARTICLES = 300;
+  let particleSystem;
+  let dustParticles = []; // Array of active particles
+
+  function initDustParticles() {
+    console.log("Initializing dust particle system...");
+
+    // Create a simple points material using the dust texture
+    const particleMaterial = new THREE.PointsMaterial({
+      size: 1.0,
+      map: dustTexture,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      transparent: true,
+      opacity: 0.6,
+      sizeAttenuation: true,
+      color: 0xbbaa99 // Dusty color
+    });
+
+    // Create geometry for the particles
+    const particlesGeometry = new THREE.BufferGeometry();
+
+    // Create arrays for positions, sizes, and colors
+    const positions = new Float32Array(MAX_PARTICLES * 3);
+    const sizes = new Float32Array(MAX_PARTICLES);
+    const colors = new Float32Array(MAX_PARTICLES * 3);
+
+    // Initialize all particles to be far below the scene (inactive)
+    for (let i = 0; i < MAX_PARTICLES; i++) {
+      positions[i * 3] = 0;
+      positions[i * 3 + 1] = -1000; // Far below the scene
+      positions[i * 3 + 2] = 0;
+
+      sizes[i] = 0;
+
+      // Slightly vary the color of each particle
+      const dustColor = new THREE.Color(0xbbaa99);
+      dustColor.r *= 0.8 + Math.random() * 0.4;
+      dustColor.g *= 0.8 + Math.random() * 0.4;
+      dustColor.b *= 0.8 + Math.random() * 0.4;
+
+      colors[i * 3] = dustColor.r;
+      colors[i * 3 + 1] = dustColor.g;
+      colors[i * 3 + 2] = dustColor.b;
+
+      // Create particle object
+      dustParticles.push({
+        position: new THREE.Vector3(0, -1000, 0),
+        velocity: new THREE.Vector3(0, 0, 0),
+        size: 0,
+        color: dustColor,
+        life: 0,
+        maxLife: 2.0,
+        active: false,
+        index: i
+      });
+    }
+
+    // Add attributes to the buffer geometry
+    particlesGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    particlesGeometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+    particlesGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+    // Create the particle system
+    particleSystem = new THREE.Points(particlesGeometry, particleMaterial);
+    particleSystem.frustumCulled = false; // Prevent particles from disappearing at edge of view
+    scene.add(particleSystem);
+
+    console.log("Dust particle system initialized with", MAX_PARTICLES, "particles");
+  }
+
+  // Create new active particles
+  function emitDustParticle(position, count = 5) {
+    if (!particleSystem) {
+      console.warn("Cannot emit particles - system not initialized");
+      return;
+    }
+
+    const positions = particleSystem.geometry.attributes.position.array;
+    const sizes = particleSystem.geometry.attributes.size.array;
+
+    let emitted = 0;
+
+    // Find inactive particles to reuse
+    for (let i = 0; i < dustParticles.length && emitted < count; i++) {
+      const particle = dustParticles[i];
+
+      if (!particle.active) {
+        // Random offset around the foot position
+        const offsetX = (Math.random() - 0.5) * 0.8;
+        const offsetZ = (Math.random() - 0.5) * 0.8;
+
+        // Position the particle slightly above ground level
+        particle.position.set(
+          position.x + offsetX,
+          position.y + 0.1, // Higher above ground for visibility
+          position.z + offsetZ
+        );
+
+        // Random velocity
+        particle.velocity.set(
+          (Math.random() - 0.5) * 0.6, // More horizontal spread
+          Math.random() * 0.5 + 0.2,   // More vertical rise
+          (Math.random() - 0.5) * 0.6  // More horizontal spread
+        );
+
+        particle.maxLife = 1.0 + Math.random() * 1.5; // 1.0-2.5 seconds
+        particle.life = 0;
+        particle.size = 0.5;  // Starting size (larger for better visibility)
+        particle.active = true;
+
+        // Update the particle data in the buffers
+        const idx = particle.index;
+        positions[idx * 3] = particle.position.x;
+        positions[idx * 3 + 1] = particle.position.y;
+        positions[idx * 3 + 2] = particle.position.z;
+
+        sizes[idx] = particle.size;
+
+        emitted++;
+      }
+    }
+
+    // Mark attributes as needing update
+    particleSystem.geometry.attributes.position.needsUpdate = true;
+    particleSystem.geometry.attributes.size.needsUpdate = true;
+
+    console.log(`Emitted ${emitted} dust particles at (${position.x.toFixed(1)}, ${position.y.toFixed(1)}, ${position.z.toFixed(1)})`);
+  }
+
+  // Update particles every frame
+  function updateParticles(dt) {
+    if (!particleSystem) return;
+
+    const positions = particleSystem.geometry.attributes.position.array;
+    const sizes = particleSystem.geometry.attributes.size.array;
+    let needsUpdate = false;
+
+    // Update each active particle
+    for (let i = 0; i < dustParticles.length; i++) {
+      const particle = dustParticles[i];
+
+      if (particle.active) {
+        // Update particle life
+        particle.life += dt;
+
+        if (particle.life >= particle.maxLife) {
+          // Deactivate the particle
+          particle.active = false;
+
+          // Move it far below scene
+          particle.position.y = -1000;
+          positions[i * 3] = particle.position.x;
+          positions[i * 3 + 1] = particle.position.y;
+          positions[i * 3 + 2] = particle.position.z;
+
+          sizes[i] = 0;
+          needsUpdate = true;
+        } else {
+          // Calculate life progress (0 to 1)
+          const t = particle.life / particle.maxLife;
+
+          // Update position with velocity
+          particle.position.x += particle.velocity.x * dt;
+          particle.position.y += particle.velocity.y * dt;
+          particle.position.z += particle.velocity.z * dt;
+
+          // Air resistance / drag
+          particle.velocity.multiplyScalar(0.95);
+
+          // Gravity effect - slow down ascent
+          particle.velocity.y -= 0.1 * dt;
+
+          // Calculate size and opacity based on life cycle
+          // Start small, grow, then shrink
+          let size;
+          if (t < 0.2) {
+            // Grow quickly at start
+            size = (t / 0.2) * 2.0;
+          } else if (t > 0.8) {
+            // Shrink at end
+            size = 2.0 * (1.0 - (t - 0.8) / 0.2);
+          } else {
+            // Maintain size in middle
+            size = 2.0;
+          }
+
+          // Update size (larger and more visible)
+          particle.size = size;
+          sizes[i] = size;
+
+          // Update position in buffer
+          positions[i * 3] = particle.position.x;
+          positions[i * 3 + 1] = particle.position.y;
+          positions[i * 3 + 2] = particle.position.z;
+
+          needsUpdate = true;
+        }
+      }
+    }
+
+    // Only update buffers if needed
+    if (needsUpdate) {
+      particleSystem.geometry.attributes.position.needsUpdate = true;
+      particleSystem.geometry.attributes.size.needsUpdate = true;
+    }
+  }
+
+  // --- PHYSICS AND GRAVITY SETTINGS ---
+  const gravity = 3.7; // Mars gravity (lower than Earth's 9.8)
+  const groundCheckDistance = 2.0; // Slightly increased for stability
+  let velocity = new THREE.Vector3(0, 0, 0);
+  let onGround = false;
+  let groundY = null; // To track stable ground height
+  const groundDamping = 1; // Dampening factor (0.0 to 1.0) - higher means less bounce
+  const initialFallHeight = 100; // Reasonable height to start falling from
+
+  // Raycaster for ground detection
+  const raycaster = new THREE.Raycaster();
+
+  // --- LOAD GLTF GROUND MODEL ---
+  const groundLoader = new GLTFLoader();
+  let gltfTerrain;
+  const terrainScaleFactor = 50; // Adjust this to scale your terrain
+
+  // Array to store all terrain meshes for raycasting
+  const terrainMeshes = [];
+
+  groundLoader.load(
+    'terrain.gltf', // Replace this with the path to your ground GLTF file
+    (gltf) => {
+      gltfTerrain = gltf.scene;
+
+      gltfTerrain.scale.set(terrainScaleFactor, terrainScaleFactor, terrainScaleFactor);
+
+      // Optional: Adjust terrain position if needed
+      // gltfTerrain.position.y = -someValueToCorrect;
+
+      gltfTerrain.traverse(o => {
+        if (o.isMesh) {
+          o.receiveShadow = true;
+          o.castShadow = false;
+
+          // Add mesh to our array for raycasting
+          terrainMeshes.push(o);
+        }
+      });
+
+      // Apply textures if they're already loaded
+      if (texturesLoaded.diffuse && texturesLoaded.bump && texturesLoaded.spec) {
+        applyTexturesToTerrain(gltfTerrain);
+      }
+
+      scene.add(gltfTerrain);
+
+      // Position model on the terrain if it's already loaded
+      if (model) {
+        findGroundBelow();
+      }
+    },
+    undefined,
+    (error) => {
+      console.error('Error loading GLTF ground:', error);
+      // Create a fallback terrain with some hills
+      createFallbackTerrain();
+    }
+  );
+
+  // Create a fallback procedural terrain with variation for testing
+  function createFallbackTerrain() {
+    // Create a larger, more detailed fallback ground with some hills
+    const groundGeometry = new THREE.PlaneGeometry(200, 200, 50, 50);
+
+    // Add some hills and valleys
+    const vertices = groundGeometry.attributes.position.array;
+    for (let i = 0; i < vertices.length; i += 3) {
+      // Skip the edges to keep them flat
+      const x = vertices[i];
+      const z = vertices[i+2];
+      if (Math.abs(x) < 90 && Math.abs(z) < 90) {
+        // Create some hills using sine waves
+        vertices[i+1] = Math.sin(x * 0.1) * 3 + Math.sin(z * 0.1) * 3;
+      }
+    }
+
+    // Important: update normals after modifying vertices
+    groundGeometry.computeVertexNormals();
+
+    // Create material with available textures
+    const groundMaterial = new THREE.MeshStandardMaterial({
+      roughness: 0.8,
+      metalness: 0.2
+    });
+
+    // Apply textures to fallback terrain if available
+    if (diffuseMap) {
+      groundMaterial.map = diffuseMap;
+      groundMaterial.map.repeat.set(baseTextureRepeat * 0.5, baseTextureRepeat * 0.5);
+    } else {
+      groundMaterial.color.set(0x553311);
+    }
+
+    if (bumpMap) {
+      groundMaterial.bumpMap = bumpMap;
+      groundMaterial.bumpScale = 0.5;
+      groundMaterial.bumpMap.repeat.set(baseTextureRepeat * 0.5, baseTextureRepeat * 0.5);
+    }
+
+    if (specMap) {
+      groundMaterial.roughnessMap = specMap;
+      groundMaterial.roughnessMap.repeat.set(baseTextureRepeat * 0.5, baseTextureRepeat * 0.5);
+    }
+
+    const fallbackGround = new THREE.Mesh(groundGeometry, groundMaterial);
+    fallbackGround.rotation.x = -Math.PI / 2; // Rotate to be horizontal
+    fallbackGround.receiveShadow = true;
+    scene.add(fallbackGround);
+
+    // Add to terrainMeshes for raycasting
+    terrainMeshes.push(fallbackGround);
+
+    console.log("Added fallback procedural terrain with hills.");
+
+    // Position the model if it's already loaded
+    if (model) {
+      findGroundBelow();
+    }
+  }
+
+  // Player model and animations
+  let model, mixer;
+  let runAction, idleAction;
+  let activeAction;
+  const modelScale = 1.2;
+  const characterHeight = 1.8 * modelScale; // Approximate height of character
+
+  // Track foot positions for dust particles
+  const footPositions = {
+    left: new THREE.Vector3(),
+    right: new THREE.Vector3(),
+    lastEmitTime: 0
+  };
+
+  // Load player model
+  new GLTFLoader().load(
+    'https://threejs.org/examples/models/gltf/Soldier.glb',
+    gltf => {
+      model = gltf.scene;
+      model.scale.set(modelScale, modelScale, modelScale);
+      model.rotation.y = 0; // Initial forward direction
+
+      // Setup shadow casting
+      model.traverse(o => {
+        if (o.isMesh) {
+          o.castShadow = true;
+          o.receiveShadow = false;
+        }
+      });
+      scene.add(model);
+
+      // Position the model at a reasonable height above the terrain
+      model.position.set(70, initialFallHeight, -50);
+
+      // Setup animations
+      mixer = new THREE.AnimationMixer(model);
+      const animations = gltf.animations;
+      idleAction = mixer.clipAction(animations.find(a => a.name === 'Idle'));
+      runAction = mixer.clipAction(animations.find(a => a.name === 'Run'));
+
+      if (!idleAction) console.warn("Idle animation not found!");
+      if (!runAction) console.warn("Run animation not found!");
+
+      // Set up animation events for dust particles
+      if (runAction) {
+        // Add an event that fires at specific points in animation
+        // (these numbers would need adjustment based on the actual animation)
+        const leftFootStep = 0.3; // 30% through animation
+        const rightFootStep = 0.8; // 80% through animation
+
+        // Set up animation events using mixer
+        mixer.addEventListener('loop', function(e) {
+          if (e.action === runAction && isMovingForward && onGround) {
+            // Calculate foot positions and emit dust at each step
+            calculateFootPositions();
+          }
+        });
+      }
+
+      activeAction = idleAction || runAction;
+      if (activeAction) activeAction.play();
+
+      // If terrain is already loaded, we can find the ground
+      if (terrainMeshes.length > 0) {
+        findGroundBelow();
+      }
+    },
+    undefined,
+    err => console.error('GLTF load error (Player):', err)
+  );
+
+  // Calculate foot positions based on model
+  function calculateFootPositions() {
+    if (!model) return;
+
+    // Get model's world position
+    const modelPosition = model.position.clone();
+    const modelDirection = new THREE.Vector3(0, 0, -1);
+    modelDirection.applyQuaternion(model.quaternion);
+
+    // Calculate basic foot positions (slightly behind model for walking)
+    // This is an approximation - would be better with actual bone positions
+    const footOffset = 0.5 * modelScale;
+
+    // Position for left foot
+    footPositions.left.set(
+      modelPosition.x - modelDirection.z * footOffset * 0.5, // perpendicular to direction
+      modelPosition.y,
+      modelPosition.z + modelDirection.x * footOffset * 0.5  // perpendicular to direction
+    );
+
+    // Position for right foot
+    footPositions.right.set(
+      modelPosition.x + modelDirection.z * footOffset * 0.5, // perpendicular to direction
+      modelPosition.y,
+      modelPosition.z - modelDirection.x * footOffset * 0.5  // perpendicular to direction
+    );
+
+    // Emit particles at both feet
+    emitDustParticle(footPositions.left, 10); // Emit more particles for better visibility
+    emitDustParticle(footPositions.right, 10);
+
+    console.log("Emitting dust particles at feet positions");
+  }
+
+  /**
+   * Finds the ground below the character without teleporting to it
+   * Just identifies where the ground is for physics to work with
+   */
+  function findGroundBelow() {
+    if (!model || terrainMeshes.length === 0) return;
+
+    // Use the actual current position of the model
+    const origin = model.position.clone();
+
+    // Cast ray downward from current position
+    raycaster.set(
+      origin,
+      new THREE.Vector3(0, -1, 0) // Direction straight down
+    );
+
+    const intersects = raycaster.intersectObjects(terrainMeshes, true);
+
+    if (intersects.length > 0) {
+      // We found ground - but we won't teleport to it
+      // Just let gravity do its work in the animation loop
+      console.log(`Ground found ${intersects[0].distance} units below character.`);
+
+      // We're not on ground yet - we're still falling
+      onGround = false;
+    } else {
+      console.warn("No ground found below character!");
+    }
+  }
+
+  // Input state
+  const keys = { w: false, a: false, s: false, d: false, arrowup: false, arrowleft: false, arrowright: false, arrowdown: false, space: false };
+  window.addEventListener('keydown', e => {
+    const key = e.code.toLowerCase().replace('key', '').replace('arrow','');
+    if (keys.hasOwnProperty(key)) keys[key] = true;
+  });
+  window.addEventListener('keyup', e => {
+    const key = e.code.toLowerCase().replace('key', '').replace('arrow','');
+    if (keys.hasOwnProperty(key)) keys[key] = false;
+  });
+
+  // Camera and movement settings
+  const camOffset = new THREE.Vector3(0, 2.0 * modelScale, 5.0 * modelScale);
+  const modelLookAtHeight = 1.5 * modelScale;
+  const clock = new THREE.Clock();
+  let isMovingForward = false;
+  let lastPosition = new THREE.Vector3();
+  let timeSinceLastEmit = 0;
+
+  function switchAnimation(actionToPlay) {
+    if (activeAction === actionToPlay || !actionToPlay) return;
+    if (activeAction) activeAction.fadeOut(0.2);
+    actionToPlay.reset().fadeIn(0.2).play();
+    activeAction = actionToPlay;
+  }
+
+  /**
+   * Checks if character is in contact with the ground
+   * Called every frame in the animation loop
+   */
+  function checkGroundContact() {
+    if (!model) return;
+
+    // Origin is at character's feet plus half height (center of character)
+    const origin = model.position.clone();
+    origin.y += characterHeight / 2;
+
+    // Cast ray downward
+    raycaster.set(origin, new THREE.Vector3(0, -1, 0));
+    const intersects = raycaster.intersectObjects(terrainMeshes, true);
+
+    // Check if we're on or near ground
+    if (intersects.length > 0 && intersects[0].distance <= groundCheckDistance) {
+      const groundPosition = intersects[0].point.y;
+
+      // Handle initial ground contact
+      if (!onGround) {
+        console.log("Ground contact detected!");
+          velocity.y = 0;
+          onGround = true;
+
+      } else {
+        // Already on ground - stabilize position with smooth interpolation
+        if (groundY === null) {
+          groundY = groundPosition;
+        } else {
+          // Smoothly interpolate ground height to prevent jitter
+          groundY = groundY * 0.9 + groundPosition * 0.1;
+        }
+
+        // Smoothly set character position
+        model.position.y = groundY;
+        velocity.y = 0;
+      }
+    } else {
+      // Not touching ground
+      onGround = false;
+      groundY = null;
+    }
+  }
+
+  // Update alignment with terrain after horizontal movement
+  function updateTerrainAlignment() {
+    if (!model) return;
+
+    // Only check terrain alignment if we're on the ground
+    if (!onGround) return;
+
+    // Origin at character's feet
+    const origin = model.position.clone();
+    origin.y += 0.5 * characterHeight; // Start from middle of character
+
+    // Cast ray downward
+    raycaster.set(origin, new THREE.Vector3(0, -1, 0));
+    const intersects = raycaster.intersectObjects(terrainMeshes, true);
+
+    if (intersects.length > 0) {
+      const targetY = intersects[0].point.y;
+
+      // Smooth interpolation of height change for walking on uneven terrain
+      if (groundY === null) {
+        groundY = targetY;
+      } else {
+        // Adjust smoothing factor based on how fast we're moving
+        // More smoothing (smaller factor) for faster movement to reduce jitter
+        const smoothFactor = isMovingForward ? 0.15 : 0.3;
+        groundY = groundY * (1 - smoothFactor) + targetY * smoothFactor;
+      }
+
+      // Apply smoothed position
+      model.position.y = groundY;
+    }
+  }
+
+  function updateCamera(dt) {
+    if (!model) return;
+
+    const modelWorldPosition = new THREE.Vector3();
+    model.getWorldPosition(modelWorldPosition);
+
+    // Apply camera offset in model's local space
+    const desiredCamPos = modelWorldPosition.clone().add(
+      camOffset.clone().applyQuaternion(model.quaternion)
+    );
+
+    // Smoother camera lerp
+    camera.position.lerp(desiredCamPos, 5 * dt);
+
+    // Look at point slightly above character's feet
+    const lookAtPoint = modelWorldPosition.clone();
+    lookAtPoint.y += modelLookAtHeight;
+    camera.lookAt(lookAtPoint);
+  }
+
+  function animate() {
+    requestAnimationFrame(animate);
+    const dt = clock.getDelta();
+
+    // Update particles
+    updateParticles(dt);
+
+    if (mixer) mixer.update(dt);
+
+    if (model && terrainMeshes.length > 0) {
+        // PHYSICS - Apply gravity if not on ground
+        if (!onGround) {
+            velocity.y -= gravity * dt;
+
+            // Apply velocity (for falling)
+            model.position.y += velocity.y * dt;
+
+            // Force idle animation when in the air
+            if (idleAction && activeAction !== idleAction) {
+                switchAnimation(idleAction);
+                // We're not moving forward when in the air
+                isMovingForward = false;
+            }
+        }
+
+        // Check if on ground after applying gravity
+        checkGroundContact();
+
+        // Controls and movement - only process when on ground
+        if ((idleAction || runAction) && onGround) {
+            // Save last position for movement detection
+            lastPosition.copy(model.position);
+
+            const speed = 5.0 * modelScale;
+            const turnSpeed = (Math.PI); // Adjusted turn speed a bit
+
+            let wantsToMoveForward = keys.w || keys.up;
+            let wantsToMoveBackward = keys.s || keys.down;
+            let turnLeft = keys.a || keys.left;
+            let turnRight = keys.d || keys.right;
+
+            // Handle turning
+            if (turnLeft) model.rotation.y += turnSpeed * dt;
+            if (turnRight) model.rotation.y -= turnSpeed * dt;
+
+            // Movement
+            let moving = false;
+            let moveDir = new THREE.Vector3(0, 0, 0);
+
+            if (wantsToMoveForward) {
+                // Fixed direction to go forward from model perspective
+                moveDir.z = -1;
+                moving = true;
+            } else if (wantsToMoveBackward) {
+                moveDir.z = 0.5;
+                moving = true;
+            }
+
+            // Apply movement in model's local direction
+            if (moving) {
+                // Switch to running animation if not already
+                if (!isMovingForward && runAction) {
+                    switchAnimation(runAction);
+                    isMovingForward = true;
+                }
+
+                // Transform direction to world space
+                moveDir.applyQuaternion(model.quaternion);
+                moveDir.normalize();
+
+                // Store current position before movement
+                const oldPos = model.position.clone();
+
+                // Apply movement
+                model.position.add(moveDir.multiplyScalar(speed * dt));
+
+                // Update terrain alignment after horizontal movement
+                if (onGround) {
+                    updateTerrainAlignment();
+
+                    // Emit dust particles when walking on ground
+                    timeSinceLastEmit += dt;
+                    if (timeSinceLastEmit > 0.1) { // More frequent emission (was 0.2)
+                        calculateFootPositions();
+                        timeSinceLastEmit = 0;
+
+                        // Debug log for dust emission
+                        if (isMovingForward && onGround) {
+                            console.log("Character moving: emitting dust particles");
+                        }
+                    }
+                }
+            } else if (isMovingForward && idleAction) {
+                // Switch to idle when not moving
+                switchAnimation(idleAction);
+                isMovingForward = false;
+            }
+        }
+
+        // Camera follow
+        updateCamera(dt);
+    }
+
+    // Debug rendering to visualize particle positions
+    if (particleSystem && particleSystem.geometry) {
+      const positions = particleSystem.geometry.attributes.position.array;
+      const sizes = particleSystem.geometry.attributes.size.array;
+
+      // Count active particles
+      let activeCount = 0;
+      for (let i = 0; i < dustParticles.length; i++) {
+        if (dustParticles[i].active) activeCount++;
+      }
+
+      if (activeCount > 0 && model) {
+        console.log(`Active particles: ${activeCount}, Character position: (${model.position.x.toFixed(1)}, ${model.position.y.toFixed(1)}, ${model.position.z.toFixed(1)})`);
+      }
+    }
+
+    // Render using composer for bloom effect
+    composer.render();
+}
+
+  animate();
+
+  // Resize handler
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    composer.setSize(window.innerWidth, window.innerHeight);
+
+    // Update bloom pass resolution
+    bloomPass.resolution.set(window.innerWidth, window.innerHeight);
+  });
+</script>
+</body>
+</html>
