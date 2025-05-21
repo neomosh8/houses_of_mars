@@ -24,6 +24,7 @@
        data-callback="handleCredentialResponse"
        data-auto_prompt="false"></div>
   <div class="g_id_signin" data-type="standard" data-size="large"></div>
+
 </div>
 <div id="moneyDisplay" style="position:absolute;top:10px;right:10px;color:#fff;font-family:sans-serif;font-size:20px;z-index:100;">$0</div>
 
@@ -34,7 +35,7 @@
   import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
   import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
   import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-  import { SkeletonUtils } from 'three/addons/utils/SkeletonUtils.js';
+  import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 
   // Scene, camera, renderer
   const scene = new THREE.Scene();
@@ -93,6 +94,7 @@
     socket = new WebSocket('ws://localhost:3000');
     socket.addEventListener("open", () => {
       socket.send(JSON.stringify({ type: "login", token }));
+
     });
     socket.addEventListener("message", e => {
       const msg = JSON.parse(e.data);
@@ -1082,6 +1084,7 @@
       initNetwork(response.credential);
     }
   };
+
 
 
   // Resize handler

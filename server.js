@@ -2,8 +2,9 @@ const WebSocket = require('ws');
 const fs = require('fs');
 const { OAuth2Client } = require('google-auth-library');
 
-const CLIENT_ID = process.env.GOOGLE_CLIENT_ID || 'YOUR_GOOGLE_CLIENT_ID';
+const CLIENT_ID = process.env.GOOGLE_CLIENT_ID || 'Y615735242765-o0rm9iuv9291h9iq5t6rh17co4gmjahb.apps.googleusercontent.com';
 const authClient = new OAuth2Client(CLIENT_ID);
+
 
 const DATA_FILE = './data.json';
 let userData = {};
@@ -64,6 +65,30 @@ ws.on('message', async message => {
         } catch (err) {
           ws.send(JSON.stringify({ type: 'error', message: 'Invalid login' }));
         }
+
+
+  ws.on('message', message => {
+    try {
+      const data = JSON.parse(message);
+      if (data.type === 'login' && id === null) {
+        username = data.username || 'player';
+        id = nextId++;
+        clients.set(id, ws);
+        userById.set(id, username);
+
+        const record = userData[username] || { money: 1000000, position: [0, 100, 0], rotation: 0 };
+        userData[username] = record;
+
+        const state = { position: record.position, rotation: record.rotation || 0, moving: false, money: record.money };
+        states.set(id, state);
+
+        const players = [];
+        for (const [pid, st] of states.entries()) {
+          if (pid === id) continue;
+          players.push({ id: pid, position: st.position, rotation: st.rotation, moving: st.moving });
+        }
+        ws.send(JSON.stringify({ type: 'loginSuccess', id, state, players }));
+        broadcast({ type: 'spawn', id, state }, id);
       } else if (data.type === 'state' && id !== null) {
         const st = states.get(id);
         if (!st) return;
@@ -90,6 +115,7 @@ ws.on('message', async message => {
           position: st.position,
           rotation: st.rotation
         };
+
         saveData();
       }
       states.delete(id);
