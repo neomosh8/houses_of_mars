@@ -15,8 +15,15 @@
     }
   }
   </script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
+<div id="loginOverlay" style="position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:200;">
+  <div id="g_id_onload" data-client_id="YOUR_GOOGLE_CLIENT_ID" data-callback="handleCredentialResponse"></div>
+  <div class="g_id_signin" data-type="standard"></div>
+</div>
+<div id="moneyDisplay" style="position:absolute;top:10px;right:10px;color:#fff;font-family:sans-serif;font-size:20px;z-index:100;">$0</div>
+
 <script type="module">
   import * as THREE from 'three';
   import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -70,23 +77,35 @@
   composer.addPass(outputPass);
 
   // --- Multiplayer Networking ---
+  const loginOverlay = document.getElementById("loginOverlay");
+  const moneyDisplay = document.getElementById("moneyDisplay");
   let socket;
   let clientId = null;
   const remotePlayers = {};
   const pendingRemotePlayers = [];
-
-  function initNetwork() {
+  let playerMoney = 0;
+  let playerStartPos = [70, initialFallHeight, -50];
+  function updateMoneyDisplay() { moneyDisplay.textContent = "$" + playerMoney.toLocaleString(); }
+  function initNetwork(token) {
     socket = new WebSocket('ws://localhost:3000');
-    socket.addEventListener('message', e => {
+    socket.addEventListener("open", () => {
+      socket.send(JSON.stringify({ type: "login", token }));
+    });
+    socket.addEventListener("message", e => {
       const msg = JSON.parse(e.data);
-      if (msg.type === 'welcome') {
+      if (msg.type === "loginSuccess") {
         clientId = msg.id;
+        playerMoney = msg.state.money;
+        playerStartPos = msg.state.position;
+        updateMoneyDisplay();
         msg.players.forEach(p => createRemotePlayer(p.id, p));
-      } else if (msg.type === 'spawn') {
-        createRemotePlayer(msg.id);
-      } else if (msg.type === 'update') {
+        loginOverlay.style.display = "none";
+        if (model) model.position.fromArray(playerStartPos);
+      } else if (msg.type === "spawn") {
+        createRemotePlayer(msg.id, msg.state);
+      } else if (msg.type === "update") {
         if (msg.id !== clientId) updateRemotePlayer(msg.id, msg);
-      } else if (msg.type === 'remove') {
+      } else if (msg.type === "remove") {
         removeRemotePlayer(msg.id);
       }
     });
@@ -153,8 +172,6 @@
       moving: isMovingForward
     }));
   }
-
-  initNetwork();
 
 
 
@@ -700,7 +717,7 @@
       scene.add(model);
 
       // Position the model at a reasonable height above the terrain
-      model.position.set(70, initialFallHeight, -50);
+      model.position.fromArray(playerStartPos);
 
       // Setup animations
       mixer = new THREE.AnimationMixer(model);
@@ -1057,6 +1074,7 @@
 }
 
   animate();
+  window.handleCredentialResponse = (resp) => { initNetwork(resp.credential); };
 
   // Resize handler
   window.addEventListener('resize', () => {
