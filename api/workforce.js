@@ -1,6 +1,8 @@
 require('dotenv').config();
 
 const express = require('express');
+// Set to true to skip AI image generation and use placeholder images
+const USE_PLACEHOLDER_IMAGES = false;
 // Updated OpenAI import and initialization
 let openai = null;
 try {
@@ -47,9 +49,9 @@ module.exports = function(institutionStore, userStore) {
       resume: resumes[Math.floor(Math.random() * resumes.length)],
       wage: Math.floor(Math.random() * 40) + 10,
       effects: {
-        oxygen: Math.random() < 0.3 ? 0.5 : 0,
-        hydration: Math.random() < 0.3 ? 0.5 : 0,
-        health: Math.random() < 0.3 ? 0.5 : 0,
+        oxygen: Math.random() < 0.3 ? -0.5 : 0,
+        hydration: Math.random() < 0.3 ? -0.5 : 0,
+        health: Math.random() < 0.3 ? -0.5 : 0,
       }
     };
   }
@@ -71,9 +73,9 @@ module.exports = function(institutionStore, userStore) {
         3. A compelling 2-sentence backstory
         4. A professional 2-sentence resume/skills summary
         5. A fair wage (10-50 credits per day)
-        6. Any special effects they might provide (small bonuses to oxygen, hydration, or health production)
+        6. The resources they consume each day (oxygen, hydration, or health).
 
-        Format the response as JSON with these exact keys: name, role, backstory, resume, wage, effects (where effects is an object with oxygen, hydration, health as numbers between 0-1).`
+        Format the response as JSON with these exact keys: name, role, backstory, resume, wage, effects (where effects is an object with oxygen, hydration, health as numbers between -1 and 0).`
       });
 
       let workerData = randomWorker(); // fallback
@@ -102,9 +104,9 @@ module.exports = function(institutionStore, userStore) {
             if (aiData.wage && typeof aiData.wage === 'number') workerData.wage = Math.max(10, Math.min(50, aiData.wage));
             if (aiData.effects && typeof aiData.effects === 'object') {
               workerData.effects = {
-                oxygen: Math.max(0, Math.min(1, aiData.effects.oxygen || 0)),
-                hydration: Math.max(0, Math.min(1, aiData.effects.hydration || 0)),
-                health: Math.max(0, Math.min(1, aiData.effects.health || 0))
+                oxygen: Math.min(0, Math.max(-1, aiData.effects.oxygen || 0)),
+                hydration: Math.min(0, Math.max(-1, aiData.effects.hydration || 0)),
+                health: Math.min(0, Math.max(-1, aiData.effects.health || 0))
               };
             }
           } catch (parseError) {
@@ -113,11 +115,11 @@ module.exports = function(institutionStore, userStore) {
         }
       }
 
-      // Generate worker portrait image
-      try {
-        const imageResponse = await openai.responses.create({
-          model: "gpt-4o-mini",
-          input: `Generate a professional portrait image of a Mars colonist worker named ${workerData.name}, who works as a ${workerData.role}.
+      if (!USE_PLACEHOLDER_IMAGES) {
+        try {
+          const imageResponse = await openai.responses.create({
+            model: "gpt-4o-mini",
+            input: `Generate a professional portrait image of a Mars colonist worker named ${workerData.name}, who works as a ${workerData.role}.
 
           Style: Realistic digital art portrait, professional headshot style
           Setting: Futuristic Mars colony environment
@@ -126,22 +128,22 @@ module.exports = function(institutionStore, userStore) {
           Quality: High detail, good lighting
 
           The person should look competent and ready for Mars colonization work.`,
-          tools: [{type: "image_generation"}]
-        });
+            tools: [{type: "image_generation"}]
+          });
 
-        // Extract image data
-        const imageData = imageResponse.output
-          .filter(output => output.type === "image_generation_call")
-          .map(output => output.result);
+          const imageData = imageResponse.output
+            .filter(output => output.type === "image_generation_call")
+            .map(output => output.result);
 
-        if (imageData.length > 0) {
-          // Convert base64 to data URL for direct use in browser
-          workerData.image = `data:image/png;base64,${imageData[0]}`;
-          console.log(`Generated AI image for worker: ${workerData.name}`);
+          if (imageData.length > 0) {
+            workerData.image = `data:image/png;base64,${imageData[0]}`;
+            console.log(`Generated AI image for worker: ${workerData.name}`);
+          }
+        } catch (imageError) {
+          console.log('Failed to generate worker image:', imageError.message);
         }
-      } catch (imageError) {
-        console.log('Failed to generate worker image:', imageError.message);
-        // Keep the placeholder image
+      } else {
+        workerData.image = 'https://placehold.co/150x200?text=Worker';
       }
 
       return workerData;

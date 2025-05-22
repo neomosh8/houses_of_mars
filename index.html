@@ -67,6 +67,12 @@
       font-size: 12px;
       text-align: center;
     }
+    .spinner {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+    }
     #money-display {
       position: absolute;
       top: 0;
@@ -158,18 +164,19 @@
     <div class="panel-tab">Institutions</div>
     <div class="panel-content" id="institution-content"></div>
   </div>
-  <div id="institution-popup" style="display:none;position:absolute;top:50%;left:50%;transform:translate(-50%, -50%);background:#222;padding:10px;border-radius:6px;color:#fff;z-index:20;max-width:300px;">
+  <div id="institution-popup" style="display:none;position:absolute;top:50%;left:50%;transform:translate(-50%, -50%);background:#222;padding:10px;border-radius:6px;color:#fff;z-index:20;width:400px;max-height:80%;overflow:auto;">
     <div id="popup-close" style="cursor:pointer;position:absolute;top:2px;right:6px;">X</div>
     <div id="popup-info">
       <div id="popup-owner"></div>
       <div id="popup-resources"></div>
+      <div id="popup-workforce-carousel" style="display:flex;gap:8px;overflow-x:auto;margin-top:8px;"></div>
     </div>
     <div id="popup-workforce" style="display:none;">
       <div id="workforce-container" style="display:flex;gap:8px;overflow-x:auto;min-height:220px;"></div>
     </div>
     <div style="margin-top:8px;">
       <button id="info-tab-btn">Info</button>
-      <button id="workforce-tab-btn">Workforce</button>
+      <button id="workforce-tab-btn">See Applicants</button>
     </div>
   </div>
   <script type="module">
@@ -503,6 +510,18 @@ function updateStatImages() {
       }
     });
 
+    // Workforce resource consumption
+    Object.values(institutionDataMap).forEach(d => {
+      if (d.owner === playerEmail && Array.isArray(d.workforce)) {
+        d.workforce.forEach(w => {
+          if (!w.effects) return;
+          if (w.effects.hydration) hydration = Math.max(hydration + w.effects.hydration, 0);
+          if (w.effects.oxygen) oxygen = Math.max(oxygen + w.effects.oxygen, 0);
+          if (w.effects.health) health = Math.max(health + w.effects.health, 0);
+        });
+      }
+    });
+
     // Pay workforce wages
     let wages = 0;
     Object.values(institutionDataMap).forEach(d => {
@@ -779,6 +798,35 @@ function updateStatImages() {
     function showInfo() {
       infoDiv.style.display = 'block';
       workforceDiv.style.display = 'none';
+      const carousel = document.getElementById('popup-workforce-carousel');
+      carousel.innerHTML = '';
+      const workers = [];
+      Object.values(institutionDataMap).forEach(d => {
+        if (d.owner === instData.owner && d.name === instData.name && Array.isArray(d.workforce)) {
+          workers.push(...d.workforce);
+        }
+      });
+      if (workers.length === 0) {
+        carousel.textContent = 'No workforce';
+        return;
+      }
+      workers.forEach(w => {
+        const item = document.createElement('div');
+        item.style.minWidth = '80px';
+        item.style.display = 'flex';
+        item.style.flexDirection = 'column';
+        item.style.alignItems = 'center';
+        const img = document.createElement('img');
+        img.src = w.image;
+        img.style.width = '60px';
+        img.style.height = '80px';
+        item.appendChild(img);
+        const name = document.createElement('div');
+        name.textContent = w.name;
+        name.style.fontSize = '12px';
+        item.appendChild(name);
+        carousel.appendChild(item);
+      });
     }
 
     async function showWorkforce() {
@@ -814,6 +862,7 @@ function updateStatImages() {
           front.style.alignItems = 'flex-end';
           front.style.justifyContent = 'center';
           front.style.color = '#fff';
+          front.style.overflow = 'auto';
           const back = document.createElement('div');
           back.style.position = 'absolute';
           back.style.transform = 'rotateY(180deg)';
@@ -824,6 +873,7 @@ function updateStatImages() {
           back.style.color = '#fff';
           back.style.fontSize = '12px';
           back.style.padding = '4px';
+          back.style.overflowY = 'auto';
           back.innerHTML = `<div>${w.backstory}</div><div>${w.resume}</div><div>Wage: ${w.wage}</div>`;
           inner.appendChild(front);
           inner.appendChild(back);
