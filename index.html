@@ -158,6 +158,20 @@
     <div class="panel-tab">Institutions</div>
     <div class="panel-content" id="institution-content"></div>
   </div>
+  <div id="institution-popup" style="display:none;position:absolute;top:50%;left:50%;transform:translate(-50%, -50%);background:#222;padding:10px;border-radius:6px;color:#fff;z-index:20;max-width:300px;">
+    <div id="popup-close" style="cursor:pointer;position:absolute;top:2px;right:6px;">X</div>
+    <div id="popup-info">
+      <div id="popup-owner"></div>
+      <div id="popup-resources"></div>
+    </div>
+    <div id="popup-workforce" style="display:none;">
+      <div id="workforce-container" style="display:flex;gap:8px;overflow-x:auto;min-height:220px;"></div>
+    </div>
+    <div style="margin-top:8px;">
+      <button id="info-tab-btn">Info</button>
+      <button id="workforce-tab-btn">Workforce</button>
+    </div>
+  </div>
   <script type="module">
   import * as THREE from 'three';
   import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -380,7 +394,7 @@ function updateStatImages() {
     });
   }
 
-  window.addEventListener('click', () => {
+  function handleClick(event) {
     if (placingInstitution && ghostInstitution && currentInstitution) {
       if (playerMoney < currentInstitution.price) {
         alert('Not enough money');
@@ -404,8 +418,29 @@ function updateStatImages() {
       ghostInstitution = null;
       placingInstitution = false;
       currentInstitution = null;
+      return;
     }
-  });
+
+    // Raycast to detect institution click
+    const mouse = new THREE.Vector2(
+      (event.clientX / window.innerWidth) * 2 - 1,
+      -(event.clientY / window.innerHeight) * 2 + 1
+    );
+    raycaster.setFromCamera(mouse, camera);
+    const objs = Object.values(institutionsMap);
+    const intersects = raycaster.intersectObjects(objs, true);
+    if (intersects.length > 0) {
+      let obj = intersects[0].object;
+      while (obj && obj.userData && obj.userData.institutionId === undefined) {
+        obj = obj.parent;
+      }
+      if (obj && obj.userData && obj.userData.institutionId !== undefined) {
+        showInstitutionPopup(obj.userData.institutionId);
+      }
+    }
+  }
+
+  window.addEventListener('click', handleClick);
 
   function updateGhostInstitution() {
     if (!placingInstitution || !ghostInstitution || !model) return;
@@ -467,6 +502,18 @@ function updateStatImages() {
         updateMoneyDisplay();
       }
     });
+
+    // Pay workforce wages
+    let wages = 0;
+    Object.values(institutionDataMap).forEach(d => {
+      if (d.owner === playerEmail && Array.isArray(d.workforce)) {
+        d.workforce.forEach(w => { wages += w.wage || 0; });
+      }
+    });
+    if (wages > 0) {
+      playerMoney = Math.max(playerMoney - wages, 0);
+      updateMoneyDisplay();
+    }
     updateStatImages();
   }
 
@@ -566,6 +613,7 @@ function updateStatImages() {
   const remotePlayers = {};
   const pendingRemotePlayers = [];
   const institutionsMap = {};
+  const institutionDataMap = {};
   const institutionBoxes = [];
   const sinking = [];
 
@@ -676,20 +724,22 @@ function updateStatImages() {
     delete remotePlayers[id];
   }
 
-  function createInstitution(data, animate) {
-    const def = institutions.find(i => i.name === data.name);
+  function createInstitution(inst, animate) {
+    const def = institutions.find(i => i.name === inst.name);
     if (!def) return;
     const loader = new GLTFLoader();
     loader.load(def.url, gltf => {
       const obj = gltf.scene;
-      obj.scale.setScalar(data.scale || def.scale || 1);
-      obj.position.fromArray(data.position);
-      obj.rotation.y = data.rotation || 0;
+      obj.scale.setScalar(inst.scale || def.scale || 1);
+      obj.position.fromArray(inst.position);
+      obj.rotation.y = inst.rotation || 0;
       scene.add(obj);
-      institutionsMap[data.id] = obj;
+      institutionsMap[inst.id] = obj;
+      institutionDataMap[inst.id] = { ...inst, effects: def.effects, workforce: inst.workforce || [] };
+      obj.traverse(o => { o.userData.institutionId = inst.id; });
       const box = new THREE.Box3().setFromObject(obj);
-      institutionBoxes.push({ id: data.id, box });
-      if (data.owner === playerEmail && def.effects) {
+      institutionBoxes.push({ id: inst.id, box });
+      if (inst.owner === playerEmail && def.effects) {
         ownedInstitutions.push(def.effects);
       }
       if (animate) {
@@ -699,6 +749,118 @@ function updateStatImages() {
         sinking.push({ obj, start: startY, end: endY, t: 0, emit: 0 });
       }
     });
+  }
+
+  function showInstitutionPopup(id) {
+    const popup = document.getElementById('institution-popup');
+    const infoTabBtn = document.getElementById('info-tab-btn');
+    const workforceTabBtn = document.getElementById('workforce-tab-btn');
+    const infoDiv = document.getElementById('popup-info');
+    const workforceDiv = document.getElementById('popup-workforce');
+    const ownerSpan = document.getElementById('popup-owner');
+    const resDiv = document.getElementById('popup-resources');
+    const closeBtn = document.getElementById('popup-close');
+
+    const instData = institutionDataMap[id];
+    if (!instData) return;
+    const def = institutions.find(i => i.name === instData.name);
+    let count = 0;
+    Object.values(institutionDataMap).forEach(d => {
+      if (d.owner === instData.owner && d.name === instData.name) count++;
+    });
+    const effects = def.effects || {};
+    const lines = [];
+    Object.keys(effects).forEach(k => {
+      lines.push(`${k}: +${effects[k]} (${(effects[k]*count).toFixed(2)} total)`);
+    });
+    resDiv.textContent = lines.join(' | ');
+    ownerSpan.innerHTML = `Owner: <span id="owner-click" style="text-decoration:underline;cursor:pointer;">${instData.owner}</span>`;
+
+    function showInfo() {
+      infoDiv.style.display = 'block';
+      workforceDiv.style.display = 'none';
+    }
+
+    async function showWorkforce() {
+      infoDiv.style.display = 'none';
+      workforceDiv.style.display = 'block';
+      const container = document.getElementById('workforce-container');
+      container.innerHTML = '<div class="spinner">Loading...</div>';
+      try {
+        const res = await fetch(`/api/workforce/generate/${id}`, { method: 'POST' });
+        const workersData = await res.json();
+        container.innerHTML = '';
+        workersData.workers.forEach(w => {
+          const card = document.createElement('div');
+          card.className = 'worker-card';
+          card.style.width = '150px';
+          card.style.perspective = '800px';
+          const inner = document.createElement('div');
+          inner.className = 'card-inner';
+          inner.style.position = 'relative';
+          inner.style.width = '100%';
+          inner.style.height = '200px';
+          inner.style.transition = 'transform 0.6s';
+          inner.style.transformStyle = 'preserve-3d';
+          const front = document.createElement('div');
+          front.style.position = 'absolute';
+          front.style.backfaceVisibility = 'hidden';
+          front.style.width = '100%';
+          front.style.height = '100%';
+          front.style.backgroundImage = `url(${w.image})`;
+          front.style.backgroundSize = 'cover';
+          front.textContent = w.name;
+          front.style.display = 'flex';
+          front.style.alignItems = 'flex-end';
+          front.style.justifyContent = 'center';
+          front.style.color = '#fff';
+          const back = document.createElement('div');
+          back.style.position = 'absolute';
+          back.style.transform = 'rotateY(180deg)';
+          back.style.backfaceVisibility = 'hidden';
+          back.style.width = '100%';
+          back.style.height = '100%';
+          back.style.background = '#333';
+          back.style.color = '#fff';
+          back.style.fontSize = '12px';
+          back.style.padding = '4px';
+          back.innerHTML = `<div>${w.backstory}</div><div>${w.resume}</div><div>Wage: ${w.wage}</div>`;
+          inner.appendChild(front);
+          inner.appendChild(back);
+          card.appendChild(inner);
+          card.onclick = () => {
+            inner.style.transform = inner.style.transform === 'rotateY(180deg)' ? '' : 'rotateY(180deg)';
+          };
+          const hireBtn = document.createElement('button');
+          hireBtn.textContent = 'Hire';
+          hireBtn.onclick = async (e) => {
+            e.stopPropagation();
+            await fetch(`/api/workforce/hire/${id}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ worker: w })
+            });
+            if (!instData.workforce) instData.workforce = [];
+            instData.workforce.push(w);
+            container.removeChild(card);
+          };
+          card.appendChild(hireBtn);
+          container.appendChild(card);
+        });
+      } catch (err) {
+        container.textContent = 'Failed to load';
+      }
+    }
+
+    infoTabBtn.onclick = showInfo;
+    workforceTabBtn.onclick = showWorkforce;
+
+    popup.style.display = 'block';
+    showInfo();
+    closeBtn.onclick = () => {
+      popup.style.display = 'none';
+    };
+    document.getElementById('owner-click').onclick = showWorkforce;
   }
 
   function updateSinking(dt) {
