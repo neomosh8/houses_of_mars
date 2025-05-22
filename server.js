@@ -60,10 +60,10 @@ wss.on('connection', (ws, req) => {
   const user = users[email] || {
     email,
     position: [70, 100, -50],
-    money: 1000,
-    health: 1000,
-    hydration: 1000,
-    oxygen: 1000
+    money: 1000000,
+    health: 100,
+    hydration: 100,
+    oxygen: 100
   };
   if (!users[email]) {
     users[email] = user;
@@ -138,20 +138,20 @@ wss.on('connection', (ws, req) => {
         if (user && user.money >= 1000) {
           user.money -= 1000;
           user.health = 1000;
-          user.hydration = 1000;
-          user.oxygen = 1000;
+          user.hydration = 100;
+          user.oxygen = 100;
           userStore.saveUsers(users);
           const state = states.get(id) || {};
-          state.health = 1000;
-          state.hydration = 1000;
-          state.oxygen = 1000;
+          state.health = 100;
+          state.hydration = 100;
+          state.oxygen = 100;
           states.set(id, state);
           ws.send(
             JSON.stringify({
               type: 'respawn',
-              health: 1000,
-              hydration: 1000,
-              oxygen: 1000,
+              health: 100,
+              hydration: 100,
+              oxygen: 100,
               money: user.money
             })
           );

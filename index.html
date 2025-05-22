@@ -213,23 +213,34 @@ const icons = {
   }
 
 function updateStatImages() {
-  const hydPct = hydration / 10;
+  // Use percentage calculation with better boundaries
+  const healthPct = (health / 100) * 100;  // Convert to 0-100 percentage
+  const hydPct = (hydration / 100) * 100;
+  const oxyPct = (oxygen / 100) * 100;
+
+  // Health image logic
+  let healthSrc = icons.health_low;
+  if (healthPct >= 66) healthSrc = icons.health_full;      // 66-100%
+  else if (healthPct >= 33) healthSrc = icons.health_half; // 33-65%
+  // else shows low (0-32%)
+  fadeSwap(healthImg, healthSrc);
+
+  // Hydration image logic
   let hydSrc = icons.hydration_low;
-  if (hydPct >= 60) hydSrc = icons.hydration_full;
-  else if (hydPct >= 20) hydSrc = icons.hydration_half;
+  if (hydPct >= 66) hydSrc = icons.hydration_full;      // 66-100%
+  else if (hydPct >= 33) hydSrc = icons.hydration_half; // 33-65%
+  // else shows low (0-32%)
   fadeSwap(hydrationImg, hydSrc);
 
-  const oxyPct = oxygen / 10;
+  // Oxygen image logic
   let oxySrc = icons.oxygen_low;
-  if (oxyPct >= 60) oxySrc = icons.oxygen_full;
-  else if (oxyPct >= 20) oxySrc = icons.oxygen_half;
+  if (oxyPct >= 66) oxySrc = icons.oxygen_full;      // 66-100%
+  else if (oxyPct >= 33) oxySrc = icons.oxygen_half; // 33-65%
+  // else shows low (0-32%)
   fadeSwap(oxygenImg, oxySrc);
 
-  const healthPct = health / 10;
-  let healthSrc = icons.health_low;
-  if (healthPct >= 60) healthSrc = icons.health_full;
-  else if (healthPct >= 20) healthSrc = icons.health_half;
-  fadeSwap(healthImg, healthSrc);
+  // Debug logging to help track issues
+  console.log(`Stats - Health: ${health} (${healthPct.toFixed(1)}%), Hydration: ${hydration} (${hydPct.toFixed(1)}%), Oxygen: ${oxygen} (${oxyPct.toFixed(1)}%)`);
 }
 
   function updateMoneyDisplay() {
@@ -413,19 +424,24 @@ function updateStatImages() {
   function updateStats() {
     if (dead) return;
     if (isMovingForward) {
-      hydration = Math.max(hydration - 0.05, 0);
-      oxygen = Math.max(oxygen - 0.1, 0);
-    } else {
-      hydration = Math.max(hydration - 0.01, 0);
+      hydration = Math.max(hydration - 0.1, 0);
       oxygen = Math.max(oxygen - 0.05, 0);
+    } else {
+      hydration = Math.max(hydration - 0.05, 0);
+      oxygen = Math.max(oxygen - 0.01, 0);
     }
 
-    if (oxygen <= 50) lowOxygenOverlay.style.display = 'block';
+    if (oxygen <= 10) lowOxygenOverlay.style.display = 'block';
     else lowOxygenOverlay.style.display = 'none';
 
     const canvas = renderer.domElement;
-    if (hydration <= 50) canvas.style.filter = 'blur(5px)';
-    else canvas.style.filter = '';
+    if (hydration <= 20) {
+      const maxBlur = 30;
+      const blurAmount = maxBlur * (1 - hydration / 20);
+      canvas.style.filter = `blur(${blurAmount.toFixed(1)}px)`;
+    } else {
+      canvas.style.filter = '';
+    }
 
     if (oxygen <= 0 || hydration <= 0) {
       dead = true;
@@ -564,19 +580,34 @@ function updateStatImages() {
         playerMoney = msg.money;
         updateMoneyDisplay();
       } else if (msg.type === 'respawn') {
-        dead = false;
-        deathOverlay.style.display = 'none';
-        oxygen = msg.oxygen;
-        hydration = msg.hydration;
-        health = msg.health;
-        playerMoney = msg.money;
-        renderer.domElement.style.filter = '';
-        lowOxygenOverlay.style.display = 'none';
-        updateMoneyDisplay();
-        updateStatImages();
-      } else if (msg.type === 'error') {
-        alert(msg.message);
-      }
+  dead = false;
+  deathOverlay.style.display = 'none';
+
+  // Set values
+  oxygen = msg.oxygen;
+  hydration = msg.hydration;
+  health = msg.health;
+  playerMoney = msg.money;
+
+  // Clear effects
+  renderer.domElement.style.filter = '';
+  lowOxygenOverlay.style.display = 'none';
+
+  // FORCE RESET IMAGES - DIRECT APPROACH
+  healthImg.dataset.current = '';  // Clear cache
+  hydrationImg.dataset.current = '';
+  oxygenImg.dataset.current = '';
+
+  // DIRECTLY SET TO FULL IMAGES
+  healthImg.src = icons.health_full;
+  healthImg.dataset.current = icons.health_full;
+  hydrationImg.src = icons.hydration_full;
+  hydrationImg.dataset.current = icons.hydration_full;
+  oxygenImg.src = icons.oxygen_full;
+  oxygenImg.dataset.current = icons.oxygen_full;
+
+  updateMoneyDisplay();
+}
     });
   }
 

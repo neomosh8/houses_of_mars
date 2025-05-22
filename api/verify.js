@@ -24,8 +24,8 @@ module.exports = function(client, verifySid, userStore) {
           position: [70, 100, -50],
           money: 1000000,
           health: 200,
-          hydration: 200,
-          oxygen: 200
+          hydration: 100,
+          oxygen: 100
         };
       }
       userStore.saveUsers(users);

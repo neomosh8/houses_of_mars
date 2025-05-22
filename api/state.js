@@ -11,8 +11,8 @@ module.exports = function(userStore) {
       position: user.position,
       money: user.money,
       health: user.health || 1000,
-      hydration: user.hydration || 1000,
-      oxygen: user.oxygen || 1000
+      hydration: user.hydration || 100,
+      oxygen: user.oxygen || 100
     });
   });
 
@@ -24,9 +24,9 @@ module.exports = function(userStore) {
         email,
         position: req.body.position || [0, 0, 0],
         money: req.body.money || 1000,
-        health: 1000,
-        hydration: 1000,
-        oxygen: 1000
+        health: 100,
+        hydration: 100,
+        oxygen: 100
       };
     } else {
       if (req.body.position) users[email].position = req.body.position;
