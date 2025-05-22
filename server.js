@@ -21,6 +21,12 @@ const client = twilio(accountSid, authToken);
 const userStore = require('./userStore');
 const institutionStore = require('./institutionStore');
 
+const INSTITUTION_PRICES = {
+  WatOx: 100,
+  Lab: 200,
+  Depot: 150
+};
+
 const loginRoute = require('./api/login')(client, verifySid);
 const verifyRoute = require('./api/verify')(client, verifySid, userStore);
 const stateRoute = require('./api/state')(userStore);
@@ -51,7 +57,7 @@ wss.on('connection', (ws, req) => {
   emails.set(id, email);
 
   const users = userStore.loadUsers();
-  const user = users[email] || { email, position: [70, 100, -50] };
+  const user = users[email] || { email, position: [70, 100, -50], money: 1000 };
 
   states.set(id, { position: user.position, rotation: 0, moving: false });
 
@@ -60,7 +66,7 @@ wss.on('connection', (ws, req) => {
     players.push({ id: pid, ...state });
   }
   const institutions = institutionStore.getInstitutions();
-  ws.send(JSON.stringify({ type: 'welcome', id, players, institutions }));
+  ws.send(JSON.stringify({ type: 'welcome', id, players, institutions, money: user.money }));
 
    broadcast({ type: 'spawn', id }, id);
 
@@ -76,16 +82,30 @@ wss.on('connection', (ws, req) => {
         }
         broadcast({ type: 'update', id, position: data.position, rotation: data.rotation, moving: data.moving }, id);
       } else if (data.type === 'addInstitution') {
-        const inst = {
-          owner: email,
-          name: data.name,
-          position: data.position,
-          rotation: data.rotation,
-          scale: data.scale
-        };
-        const instId = institutionStore.addInstitution(inst);
-        inst.id = instId;
-        broadcast({ type: 'addInstitution', institution: inst });
+        const price = INSTITUTION_PRICES[data.name] || 0;
+        const users = userStore.loadUsers();
+        const user = users[email];
+        if (user && user.money >= price) {
+          user.money -= price;
+          userStore.saveUsers(users);
+          const inst = {
+            owner: email,
+            name: data.name,
+            position: data.position,
+            rotation: data.rotation,
+            scale: data.scale
+          };
+          const instId = institutionStore.addInstitution(inst);
+          inst.id = instId;
+          broadcast({ type: 'addInstitution', institution: inst });
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'money', money: user.money }));
+          }
+        } else {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'error', message: 'not enough money' }));
+          }
+        }
       }
      } catch (err) {
        console.error('Invalid message', err);
