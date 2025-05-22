@@ -89,6 +89,26 @@
   let playerEmail = null;
   let startPosition = [70, 100, -50];
 
+  async function autoLogin(email) {
+    try {
+      const res = await fetch('/api/state/' + encodeURIComponent(email));
+      if (!res.ok) throw new Error('state');
+      const data = await res.json();
+      startPosition = data.position;
+      playerEmail = email;
+      document.getElementById('login-container').style.display = 'none';
+      initNetwork();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  const stored = localStorage.getItem('playerEmail');
+  if (stored) {
+    autoLogin(stored);
+  }
+
     // --- Institution placement ---
   const institutions = [
     {
@@ -195,6 +215,7 @@
     const data = await res.json();
     startPosition = data.user.position;
     playerEmail = email;
+    localStorage.setItem('playerEmail', email);
     document.getElementById('login-container').style.display = 'none';
     initNetwork();
   }
