@@ -424,11 +424,11 @@ function updateStatImages() {
   function updateStats() {
     if (dead) return;
     if (isMovingForward) {
-      hydration = Math.max(hydration - 0.1, 0);
-      oxygen = Math.max(oxygen - 0.05, 0);
-    } else {
       hydration = Math.max(hydration - 0.05, 0);
-      oxygen = Math.max(oxygen - 0.01, 0);
+      oxygen = Math.max(oxygen - 0.02, 0);
+    } else {
+      hydration = Math.max(hydration - 0.02, 0);
+      oxygen = Math.max(oxygen - 0.005, 0);
     }
 
     if (oxygen <= 10) lowOxygenOverlay.style.display = 'block';
