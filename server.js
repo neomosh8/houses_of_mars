@@ -19,6 +19,7 @@ const verifySid = process.env.TWILIO_VERIFY_SERVICE_SID;
 const client = twilio(accountSid, authToken);
 
 const userStore = require('./userStore');
+const institutionStore = require('./institutionStore');
 
 const loginRoute = require('./api/login')(client, verifySid);
 const verifyRoute = require('./api/verify')(client, verifySid, userStore);
@@ -54,26 +55,38 @@ wss.on('connection', (ws, req) => {
 
   states.set(id, { position: user.position, rotation: 0, moving: false });
 
-   const players = [];
-   for (const [pid, state] of states.entries()) {
-     players.push({ id: pid, ...state });
-   }
-   ws.send(JSON.stringify({ type: 'welcome', id, players }));
+  const players = [];
+  for (const [pid, state] of states.entries()) {
+    players.push({ id: pid, ...state });
+  }
+  const institutions = institutionStore.getInstitutions();
+  ws.send(JSON.stringify({ type: 'welcome', id, players, institutions }));
 
    broadcast({ type: 'spawn', id }, id);
 
    ws.on('message', message => {
      try {
        const data = JSON.parse(message);
-       if (data.type === 'state') {
-         states.set(id, { position: data.position, rotation: data.rotation, moving: data.moving });
+      if (data.type === 'state') {
+        states.set(id, { position: data.position, rotation: data.rotation, moving: data.moving });
         const users = userStore.loadUsers();
         if (users[email]) {
           users[email].position = data.position;
           userStore.saveUsers(users);
         }
-         broadcast({ type: 'update', id, position: data.position, rotation: data.rotation, moving: data.moving }, id);
-       }
+        broadcast({ type: 'update', id, position: data.position, rotation: data.rotation, moving: data.moving }, id);
+      } else if (data.type === 'addInstitution') {
+        const inst = {
+          owner: email,
+          name: data.name,
+          position: data.position,
+          rotation: data.rotation,
+          scale: data.scale
+        };
+        const instId = institutionStore.addInstitution(inst);
+        inst.id = instId;
+        broadcast({ type: 'addInstitution', institution: inst });
+      }
      } catch (err) {
        console.error('Invalid message', err);
      }
