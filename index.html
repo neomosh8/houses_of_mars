@@ -42,6 +42,14 @@
       background: #444;
       cursor: pointer;
       border-radius: 4px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    .institution-tile img {
+      width: 100%;
+      border-radius: 4px;
     }
   </style>
   <script type="importmap">
@@ -83,6 +91,22 @@
 
   // --- Institution placement ---
   const institutions = [
+    {
+      name: 'Habitat',
+      url: 'https://threejs.org/examples/models/gltf/DamagedHelmet/glTF/DamagedHelmet.gltf',
+      thumbnail: 'https://placehold.co/100x100?text=Habitat'
+    },
+    {
+      name: 'Lab',
+      url: 'https://threejs.org/examples/models/gltf/Flamingo.glb',
+      thumbnail: 'https://placehold.co/100x100?text=Lab'
+    },
+    {
+      name: 'Depot',
+      url: 'https://threejs.org/examples/models/gltf/RobotExpressive/RobotExpressive.glb',
+      thumbnail: 'https://placehold.co/100x100?text=Depot'
+    }
+
     { name: 'Habitat', url: 'https://threejs.org/examples/models/gltf/DamagedHelmet/glTF/DamagedHelmet.gltf' },
     { name: 'Lab', url: 'https://threejs.org/examples/models/gltf/Flamingo.glb' },
     { name: 'Depot', url: 'https://threejs.org/examples/models/gltf/RobotExpressive/RobotExpressive.glb' }
@@ -98,6 +122,13 @@
   institutions.forEach(inst => {
     const tile = document.createElement('div');
     tile.className = 'institution-tile';
+    const img = document.createElement('img');
+    img.src = inst.thumbnail;
+    img.alt = inst.name;
+    tile.appendChild(img);
+    const label = document.createElement('div');
+    label.textContent = inst.name;
+    tile.appendChild(label);
     tile.textContent = inst.name;
     tile.addEventListener('click', () => selectInstitution(inst));
     panelContent.appendChild(tile);
@@ -143,7 +174,7 @@
 
   function updateGhostInstitution() {
     if (!placingInstitution || !ghostInstitution || !model) return;
-    const offset = new THREE.Vector3(0, 0, -5);
+    const offset = new THREE.Vector3(0, 3, -5);
     offset.applyQuaternion(model.quaternion);
     const target = model.position.clone().add(offset);
     ghostInstitution.position.copy(target);
