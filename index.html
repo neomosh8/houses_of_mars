@@ -7,7 +7,6 @@
     html, body { margin: 0; height: 100%; overflow: hidden; background: #000; }
     canvas { display: block; width: 100%; height: 100%; }
   </style>
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script type="importmap">
   {
     "imports": {
@@ -18,15 +17,6 @@
   </script>
 </head>
 <body>
-<div id="loginOverlay" style="position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:200;">
-  <div id="g_id_onload"
-       data-client_id="615735242765-o0rm9iuv9291h9iq5t6rh17co4gmjahb.apps.googleusercontent.com"
-       data-callback="handleCredentialResponse">
-  </div>
-  <div class="g_id_signin" data-type="standard"></div>
-</div>
-<div id="moneyDisplay" style="position:absolute;top:10px;right:10px;color:#fff;font-family:sans-serif;font-size:20px;z-index:100;">$0</div>
-
 <script type="module">
   import * as THREE from 'three';
   import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -35,9 +25,6 @@
   import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
   import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
   import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
-
-  // IMPORTANT: Define initialFallHeight before it's used
-  const initialFallHeight = 100; // Reasonable height to start falling from
 
   // Scene, camera, renderer
   const scene = new THREE.Scene();
@@ -83,67 +70,25 @@
   composer.addPass(outputPass);
 
   // --- Multiplayer Networking ---
-  const loginOverlay = document.getElementById("loginOverlay");
-  const moneyDisplay = document.getElementById("moneyDisplay");
   let socket;
   let clientId = null;
   const remotePlayers = {};
   const pendingRemotePlayers = [];
-  let playerMoney = 0;
-  let playerStartPos = [70, initialFallHeight, -50];
-  // Token persisted in localStorage for auto login
-  const storedToken = localStorage.getItem('authToken');
 
-  function updateMoneyDisplay() { moneyDisplay.textContent = "$" + playerMoney.toLocaleString(); }
-
-  function initNetwork(token) {
-    console.log("Initializing network with token", token.substring(0, 10) + "...");
-    const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
-    socket = new WebSocket(`${protocol}://${location.host}/api/socket`);
-
-    socket.addEventListener("open", () => {
-      console.log("WebSocket connection established, sending login...");
-      socket.send(JSON.stringify({ type: "login", token }));
-    });
-
-    socket.addEventListener("message", e => {
+  function initNetwork() {
+    socket = new WebSocket('ws://localhost:3000');
+    socket.addEventListener('message', e => {
       const msg = JSON.parse(e.data);
-      console.log("Received message:", msg.type);
-
-      if (msg.type === "loginSuccess") {
+      if (msg.type === 'welcome') {
         clientId = msg.id;
-        playerMoney = msg.state.money;
-        playerStartPos = msg.state.position;
-        updateMoneyDisplay();
         msg.players.forEach(p => createRemotePlayer(p.id, p));
-        loginOverlay.style.display = "none";
-        localStorage.setItem('authToken', token);
-        if (model) model.position.fromArray(playerStartPos);
-      } else if (msg.type === "spawn") {
-        createRemotePlayer(msg.id, msg.state);
-      } else if (msg.type === "update") {
+      } else if (msg.type === 'spawn') {
+        createRemotePlayer(msg.id);
+      } else if (msg.type === 'update') {
         if (msg.id !== clientId) updateRemotePlayer(msg.id, msg);
-      } else if (msg.type === "remove") {
+      } else if (msg.type === 'remove') {
         removeRemotePlayer(msg.id);
-      } else if (msg.type === "error") {
-        console.error("Server error:", msg.message);
-        alert("Login error: " + msg.message);
-        loginOverlay.style.display = "flex";
-        localStorage.removeItem('authToken');
       }
-    });
-
-    socket.addEventListener("error", err => {
-      console.error("WebSocket error:", err);
-      alert("Connection error. Is the server running?");
-      loginOverlay.style.display = "flex";
-      localStorage.removeItem('authToken');
-    });
-
-    socket.addEventListener("close", () => {
-      console.log("WebSocket connection closed");
-      loginOverlay.style.display = "flex";
-      localStorage.removeItem('authToken');
     });
   }
 
@@ -209,6 +154,10 @@
     }));
   }
 
+  initNetwork();
+
+
+
   // Lighting
   const hemiLight = new THREE.HemisphereLight(0xffeedd, 0x775533, 1.2);
   scene.add(hemiLight);
@@ -230,6 +179,16 @@
   sun.shadow.bias = -0.0005; // Helps prevent shadow acne
 
   scene.add(sun);
+
+  // Uncomment to visualize shadow camera (helpful for debugging)
+  // const helper = new THREE.CameraHelper(sun.shadow.camera);
+  // scene.add(helper);
+
+  // Additional directional light for better terrain illumination
+  const secondaryLight = new THREE.DirectionalLight(0xffd6a5, 1.0); // Warm light
+  secondaryLight.position.set(-15, 20, -10); // From opposite direction of sun
+  secondaryLight.castShadow = false; // Optional shadow from secondary light
+  scene.add(secondaryLight);
 
   // Ground Textures - Load first before terrain
   const textureLoader = new THREE.TextureLoader();
@@ -594,6 +553,7 @@
   let onGround = false;
   let groundY = null; // To track stable ground height
   const groundDamping = 1; // Dampening factor (0.0 to 1.0) - higher means less bounce
+  const initialFallHeight = 100; // Reasonable height to start falling from
 
   // Raycaster for ground detection
   const raycaster = new THREE.Raycaster();
@@ -726,7 +686,6 @@
   new GLTFLoader().load(
     'https://threejs.org/examples/models/gltf/Soldier.glb',
     gltf => {
-      console.log("Player model loaded successfully");
       model = gltf.scene;
       model.scale.set(modelScale, modelScale, modelScale);
       model.rotation.y = 0; // Initial forward direction
@@ -741,7 +700,7 @@
       scene.add(model);
 
       // Position the model at a reasonable height above the terrain
-      model.position.fromArray(playerStartPos);
+      model.position.set(70, initialFallHeight, -50);
 
       // Setup animations
       mixer = new THREE.AnimationMixer(model);
@@ -1098,25 +1057,6 @@
 }
 
   animate();
-
-  // Define the Google Sign-In callback
-  window.handleCredentialResponse = function(response) {
-    console.log("Google Sign-In successful, initializing network...");
-    if (response && response.credential) {
-      localStorage.setItem('authToken', response.credential);
-      initNetwork(response.credential);
-    } else {
-      console.error("Google Sign-In response missing credential");
-      alert("Login failed: No credential received");
-      loginOverlay.style.display = 'flex';
-    }
-  };
-
-  // Attempt automatic login if a token exists from a previous session
-  if (storedToken) {
-    console.log('Found stored token, attempting auto login');
-    initNetwork(storedToken);
-  }
 
   // Resize handler
   window.addEventListener('resize', () => {
