@@ -57,16 +57,45 @@ wss.on('connection', (ws, req) => {
   emails.set(id, email);
 
   const users = userStore.loadUsers();
-  const user = users[email] || { email, position: [70, 100, -50], money: 1000 };
+  const user = users[email] || {
+    email,
+    position: [70, 100, -50],
+    money: 1000,
+    health: 1000,
+    hydration: 1000,
+    oxygen: 1000
+  };
+  if (!users[email]) {
+    users[email] = user;
+    userStore.saveUsers(users);
+  }
 
-  states.set(id, { position: user.position, rotation: 0, moving: false });
+  states.set(id, {
+    position: user.position,
+    rotation: 0,
+    moving: false,
+    health: user.health,
+    hydration: user.hydration,
+    oxygen: user.oxygen
+  });
 
   const players = [];
   for (const [pid, state] of states.entries()) {
     players.push({ id: pid, ...state });
   }
   const institutions = institutionStore.getInstitutions();
-  ws.send(JSON.stringify({ type: 'welcome', id, players, institutions, money: user.money }));
+  ws.send(
+    JSON.stringify({
+      type: 'welcome',
+      id,
+      players,
+      institutions,
+      money: user.money,
+      health: user.health,
+      hydration: user.hydration,
+      oxygen: user.oxygen
+    })
+  );
 
    broadcast({ type: 'spawn', id }, id);
 
@@ -74,13 +103,61 @@ wss.on('connection', (ws, req) => {
      try {
        const data = JSON.parse(message);
       if (data.type === 'state') {
-        states.set(id, { position: data.position, rotation: data.rotation, moving: data.moving });
+        states.set(id, {
+          position: data.position,
+          rotation: data.rotation,
+          moving: data.moving,
+          health: data.health,
+          hydration: data.hydration,
+          oxygen: data.oxygen
+        });
         const users = userStore.loadUsers();
         if (users[email]) {
           users[email].position = data.position;
+          users[email].health = data.health;
+          users[email].hydration = data.hydration;
+          users[email].oxygen = data.oxygen;
           userStore.saveUsers(users);
         }
-        broadcast({ type: 'update', id, position: data.position, rotation: data.rotation, moving: data.moving }, id);
+        broadcast(
+          {
+            type: 'update',
+            id,
+            position: data.position,
+            rotation: data.rotation,
+            moving: data.moving,
+            health: data.health,
+            hydration: data.hydration,
+            oxygen: data.oxygen
+          },
+          id
+        );
+      } else if (data.type === 'respawn') {
+        const users = userStore.loadUsers();
+        const user = users[email];
+        if (user && user.money >= 1000) {
+          user.money -= 1000;
+          user.health = 1000;
+          user.hydration = 1000;
+          user.oxygen = 1000;
+          userStore.saveUsers(users);
+          const state = states.get(id) || {};
+          state.health = 1000;
+          state.hydration = 1000;
+          state.oxygen = 1000;
+          states.set(id, state);
+          ws.send(
+            JSON.stringify({
+              type: 'respawn',
+              health: 1000,
+              hydration: 1000,
+              oxygen: 1000,
+              money: user.money
+            })
+          );
+        } else {
+          ws.send(JSON.stringify({ type: 'error', message: 'not enough money' }));
+        }
       } else if (data.type === 'addInstitution') {
         const price = INSTITUTION_PRICES[data.name] || 0;
         const users = userStore.loadUsers();
