@@ -20,12 +20,32 @@ function getInstitutions() {
   return data.list;
 }
 
+function getInstitution(id) {
+  const data = loadData();
+  return data.list.find(i => i.id === id);
+}
+
 function addInstitution(inst) {
   const data = loadData();
   inst.id = data.nextId++;
+  if (!inst.workforce) inst.workforce = [];
   data.list.push(inst);
   saveData(data);
   return inst.id;
 }
 
-module.exports = { getInstitutions, addInstitution };
+function updateInstitution(id, updates) {
+  const data = loadData();
+  const inst = data.list.find(i => i.id === id);
+  if (!inst) return null;
+  Object.assign(inst, updates);
+  saveData(data);
+  return inst;
+}
+
+module.exports = {
+  getInstitutions,
+  addInstitution,
+  updateInstitution,
+  getInstitution,
+};
