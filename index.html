@@ -106,6 +106,10 @@
       url: 'https://threejs.org/examples/models/gltf/RobotExpressive/RobotExpressive.glb',
       thumbnail: 'https://placehold.co/100x100?text=Depot'
     }
+
+    { name: 'Habitat', url: 'https://threejs.org/examples/models/gltf/DamagedHelmet/glTF/DamagedHelmet.gltf' },
+    { name: 'Lab', url: 'https://threejs.org/examples/models/gltf/Flamingo.glb' },
+    { name: 'Depot', url: 'https://threejs.org/examples/models/gltf/RobotExpressive/RobotExpressive.glb' }
   ];
 
   const panel = document.getElementById('institution-panel');
@@ -125,6 +129,7 @@
     const label = document.createElement('div');
     label.textContent = inst.name;
     tile.appendChild(label);
+    tile.textContent = inst.name;
     tile.addEventListener('click', () => selectInstitution(inst));
     panelContent.appendChild(tile);
   });
