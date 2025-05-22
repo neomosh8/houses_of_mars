@@ -19,7 +19,14 @@ module.exports = function(client, verifySid, userStore) {
 
       const users = userStore.loadUsers();
       if (!users[email]) {
-        users[email] = { email, position: [70, 100, -50], money: 1000 };
+        users[email] = {
+          email,
+          position: [70, 100, -50],
+          money: 1000,
+          health: 1000,
+          hydration: 1000,
+          oxygen: 1000
+        };
       }
       userStore.saveUsers(users);
       res.json({ user: users[email] });

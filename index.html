@@ -95,6 +95,32 @@
       height: 60px;
       transition: opacity 0.2s;
     }
+    #low-oxygen-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      pointer-events: none;
+      background: radial-gradient(circle at center, rgba(0,0,0,0) 0%, rgba(0,0,0,0.8) 100%);
+      display: none;
+      z-index: 6;
+    }
+    #death-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.8);
+      color: #fff;
+      font-family: sans-serif;
+      display: none;
+      z-index: 10;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+    }
   </style>
   <script type="importmap">
   {
@@ -123,6 +149,11 @@
     <div class="stat"><img id="hydration-img" /></div>
     <div class="stat"><img id="oxygen-img" /></div>
   </div>
+  <div id="low-oxygen-overlay"></div>
+  <div id="death-overlay">
+    <div>You died</div>
+    <button id="respawn-btn">Respawn for 1000</button>
+  </div>
   <div id="institution-panel" class="side-panel">
     <div class="panel-tab">Institutions</div>
     <div class="panel-content" id="institution-content"></div>
@@ -141,24 +172,28 @@
   let startPosition = [70, 100, -50];
 
   const icons = {
-    health_full: 'health_full.png',
-    health_half: 'health_half.png',
-    health_low: 'health_low.png',
-    hydration_full: 'hydration_full.png',
-    hydration_half: 'hydration_half.png',
-    hydration_low: 'hydration_low.png',
-    oxygen_full: 'oxygen_full.png',
-    oxygen_half: 'oxygen_half.png',
-    oxygen_low: 'oxygen_low.png'
+    health_full: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPSc2NCcgaGVpZ2h0PSc2NCc+PGNpcmNsZSBjeD0nMzInIGN5PSczMicgcj0nMzAnIGZpbGw9J2dyZWVuJy8+PC9zdmc+',
+    health_half: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPSc2NCcgaGVpZ2h0PSc2NCc+PGNpcmNsZSBjeD0nMzInIGN5PSczMicgcj0nMzAnIGZpbGw9J29yYW5nZScvPjwvc3ZnPg==',
+    health_low: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPSc2NCcgaGVpZ2h0PSc2NCc+PGNpcmNsZSBjeD0nMzInIGN5PSczMicgcj0nMzAnIGZpbGw9J3JlZCcvPjwvc3ZnPg==',
+    hydration_full: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPSc2NCcgaGVpZ2h0PSc2NCc+PGNpcmNsZSBjeD0nMzInIGN5PSczMicgcj0nMzAnIGZpbGw9J2N5YW4nLz48L3N2Zz4=',
+    hydration_half: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPSc2NCcgaGVpZ2h0PSc2NCc+PGNpcmNsZSBjeD0nMzInIGN5PSczMicgcj0nMzAnIGZpbGw9J2JsdWUnLz48L3N2Zz4=',
+    hydration_low: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPSc2NCcgaGVpZ2h0PSc2NCc+PGNpcmNsZSBjeD0nMzInIGN5PSczMicgcj0nMzAnIGZpbGw9J2RhcmtibHVlJy8+PC9zdmc+',
+    oxygen_full: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPSc2NCcgaGVpZ2h0PSc2NCc+PGNpcmNsZSBjeD0nMzInIGN5PSczMicgcj0nMzAnIGZpbGw9J2dyYXknLz48L3N2Zz4=',
+    oxygen_half: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPSc2NCcgaGVpZ2h0PSc2NCc+PGNpcmNsZSBjeD0nMzInIGN5PSczMicgcj0nMzAnIGZpbGw9J2xpZ2h0Z3JheScvPjwvc3ZnPg==',
+    oxygen_low: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPSc2NCcgaGVpZ2h0PSc2NCc+PGNpcmNsZSBjeD0nMzInIGN5PSczMicgcj0nMzAnIGZpbGw9J2RhcmtncmF5Jy8+PC9zdmc+'
   };
 
   const healthImg = document.getElementById('health-img');
   const hydrationImg = document.getElementById('hydration-img');
   const oxygenImg = document.getElementById('oxygen-img');
+  const lowOxygenOverlay = document.getElementById('low-oxygen-overlay');
+  const deathOverlay = document.getElementById('death-overlay');
+  const respawnBtn = document.getElementById('respawn-btn');
 
   let health = 1000;
   let hydration = 1000;
   let oxygen = 1000;
+  let dead = false;
 
   healthImg.src = icons.health_full;
   healthImg.dataset.current = icons.health_full;
@@ -199,6 +234,12 @@
     updateInstitutionTiles();
   }
 
+  respawnBtn.onclick = () => {
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type: 'respawn' }));
+    }
+  };
+
   async function autoLogin(email) {
     try {
       const res = await fetch('/api/state/' + encodeURIComponent(email));
@@ -206,6 +247,10 @@
       const data = await res.json();
       startPosition = data.position;
       playerMoney = data.money || 0;
+      health = data.health || 1000;
+      hydration = data.hydration || 1000;
+      oxygen = data.oxygen || 1000;
+      updateStatImages();
       playerEmail = email;
       document.getElementById('login-container').style.display = 'none';
       initNetwork();
@@ -363,6 +408,7 @@
   }
 
   function updateStats() {
+    if (dead) return;
     if (isMovingForward) {
       hydration = Math.max(hydration - 0.05, 0);
       oxygen = Math.max(oxygen - 0.1, 0);
@@ -370,6 +416,19 @@
       hydration = Math.max(hydration - 0.01, 0);
       oxygen = Math.max(oxygen - 0.05, 0);
     }
+
+    if (oxygen <= 50) lowOxygenOverlay.style.display = 'block';
+    else lowOxygenOverlay.style.display = 'none';
+
+    const canvas = renderer.domElement;
+    if (hydration <= 50) canvas.style.filter = 'blur(5px)';
+    else canvas.style.filter = '';
+
+    if (oxygen <= 0 || hydration <= 0) {
+      dead = true;
+      deathOverlay.style.display = 'flex';
+    }
+
     updateStatImages();
   }
 
@@ -392,6 +451,10 @@
     const data = await res.json();
     startPosition = data.user.position;
     playerMoney = data.user.money || 0;
+    health = data.user.health || 1000;
+    hydration = data.user.hydration || 1000;
+    oxygen = data.user.oxygen || 1000;
+    updateStatImages();
     playerEmail = email;
     localStorage.setItem('playerEmail', email);
     document.getElementById('login-container').style.display = 'none';
@@ -482,6 +545,10 @@
           playerMoney = msg.money;
           updateMoneyDisplay();
         }
+        if (typeof msg.health === 'number') health = msg.health;
+        if (typeof msg.hydration === 'number') hydration = msg.hydration;
+        if (typeof msg.oxygen === 'number') oxygen = msg.oxygen;
+        updateStatImages();
       } else if (msg.type === 'spawn') {
         createRemotePlayer(msg.id);
       } else if (msg.type === 'update') {
@@ -493,6 +560,17 @@
       } else if (msg.type === 'money') {
         playerMoney = msg.money;
         updateMoneyDisplay();
+      } else if (msg.type === 'respawn') {
+        dead = false;
+        deathOverlay.style.display = 'none';
+        oxygen = msg.oxygen;
+        hydration = msg.hydration;
+        health = msg.health;
+        playerMoney = msg.money;
+        renderer.domElement.style.filter = '';
+        lowOxygenOverlay.style.display = 'none';
+        updateMoneyDisplay();
+        updateStatImages();
       } else if (msg.type === 'error') {
         alert(msg.message);
       }
@@ -603,7 +681,10 @@
       type: 'state',
       position: [model.position.x, model.position.y, model.position.z],
       rotation: model.rotation.y,
-      moving: isMovingForward
+      moving: isMovingForward,
+      health,
+      hydration,
+      oxygen
     }));
   }
 
@@ -1496,8 +1577,13 @@
         // Camera follow
         updateCamera(dt);
         updateGhostInstitution();
-        sendState();
-        updateStats();
+        if (!dead) {
+          sendState();
+          updateStats();
+        }
+        else {
+          sendState();
+        }
     }
 
     // Debug rendering to visualize particle positions
