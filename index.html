@@ -91,6 +91,8 @@
   const pendingRemotePlayers = [];
   let playerMoney = 0;
   let playerStartPos = [70, initialFallHeight, -50];
+  // Token persisted in localStorage for auto login
+  const storedToken = localStorage.getItem('authToken');
 
   function updateMoneyDisplay() { moneyDisplay.textContent = "$" + playerMoney.toLocaleString(); }
 
@@ -114,6 +116,7 @@
         updateMoneyDisplay();
         msg.players.forEach(p => createRemotePlayer(p.id, p));
         loginOverlay.style.display = "none";
+        localStorage.setItem('authToken', token);
         if (model) model.position.fromArray(playerStartPos);
       } else if (msg.type === "spawn") {
         createRemotePlayer(msg.id, msg.state);
@@ -124,16 +127,22 @@
       } else if (msg.type === "error") {
         console.error("Server error:", msg.message);
         alert("Login error: " + msg.message);
+        loginOverlay.style.display = "flex";
+        localStorage.removeItem('authToken');
       }
     });
 
     socket.addEventListener("error", err => {
       console.error("WebSocket error:", err);
       alert("Connection error. Is the server running?");
+      loginOverlay.style.display = "flex";
+      localStorage.removeItem('authToken');
     });
 
     socket.addEventListener("close", () => {
       console.log("WebSocket connection closed");
+      loginOverlay.style.display = "flex";
+      localStorage.removeItem('authToken');
     });
   }
 
@@ -1093,12 +1102,20 @@
   window.handleCredentialResponse = function(response) {
     console.log("Google Sign-In successful, initializing network...");
     if (response && response.credential) {
+      localStorage.setItem('authToken', response.credential);
       initNetwork(response.credential);
     } else {
       console.error("Google Sign-In response missing credential");
       alert("Login failed: No credential received");
+      loginOverlay.style.display = 'flex';
     }
   };
+
+  // Attempt automatic login if a token exists from a previous session
+  if (storedToken) {
+    console.log('Found stored token, attempting auto login');
+    initNetwork(storedToken);
+  }
 
   // Resize handler
   window.addEventListener('resize', () => {
