@@ -114,8 +114,8 @@
     {
       name: 'WatOx',
       url: 'WATOX.glb',
-      thumbnail: 'https://placehold.co/100x100?text=Habitat',
-      scale: 1
+      thumbnail: 'watox.png',
+      scale: 7
     },
     {
       name: 'Lab',
@@ -185,7 +185,7 @@
       const box = new THREE.Box3().setFromObject(ghostInstitution);
       const height = box.max.y - box.min.y;
       const ground = getGroundHeightAt(ghostInstitution.position.x, ghostInstitution.position.z);
-      const targetY = ground - height * 0.3;
+      const targetY = ground - height * 0.2;
       const data = {
         type: 'addInstitution',
         name: currentInstitution.name,
@@ -205,7 +205,7 @@
 
   function updateGhostInstitution() {
     if (!placingInstitution || !ghostInstitution || !model) return;
-    const offset = new THREE.Vector3(0, 3, -5);
+    const offset = new THREE.Vector3(0, 3, -20);
     offset.applyQuaternion(model.quaternion);
     const target = model.position.clone().add(offset);
     ghostInstitution.position.copy(target);
