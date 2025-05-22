@@ -114,17 +114,20 @@
     {
       name: 'WatOx',
       url: 'WATOX.glb',
-      thumbnail: 'https://placehold.co/100x100?text=Habitat'
+      thumbnail: 'https://placehold.co/100x100?text=Habitat',
+      scale: 1
     },
     {
       name: 'Lab',
       url: 'https://threejs.org/examples/models/gltf/Flamingo.glb',
-      thumbnail: 'https://placehold.co/100x100?text=Lab'
+      thumbnail: 'https://placehold.co/100x100?text=Lab',
+      scale: 0.5
     },
     {
       name: 'Depot',
       url: 'https://threejs.org/examples/models/gltf/RobotExpressive/RobotExpressive.glb',
-      thumbnail: 'https://placehold.co/100x100?text=Depot'
+      thumbnail: 'https://placehold.co/100x100?text=Depot',
+      scale: 0.8
     }
   ];
 
@@ -151,6 +154,7 @@
 
   let ghostInstitution = null;
   let placingInstitution = false;
+  let currentInstitution = null;
 
   function selectInstitution(inst) {
     if (ghostInstitution) {
@@ -160,6 +164,7 @@
     const loader = new GLTFLoader();
     loader.load(inst.url, gltf => {
       ghostInstitution = gltf.scene;
+      ghostInstitution.scale.setScalar(inst.scale || 1);
       ghostInstitution.traverse(o => {
         if (o.isMesh) {
           o.material = o.material.clone();
@@ -171,19 +176,30 @@
       });
       scene.add(ghostInstitution);
       placingInstitution = true;
+      currentInstitution = inst;
     });
   }
 
   window.addEventListener('click', () => {
-    if (placingInstitution && ghostInstitution) {
-      ghostInstitution.traverse(o => {
-        if (o.isMesh) {
-          o.material.opacity = 1;
-          o.material.transparent = false;
-        }
-      });
-      placingInstitution = false;
+    if (placingInstitution && ghostInstitution && currentInstitution) {
+      const box = new THREE.Box3().setFromObject(ghostInstitution);
+      const height = box.max.y - box.min.y;
+      const ground = getGroundHeightAt(ghostInstitution.position.x, ghostInstitution.position.z);
+      const targetY = ground - height * 0.3;
+      const data = {
+        type: 'addInstitution',
+        name: currentInstitution.name,
+        position: [ghostInstitution.position.x, targetY, ghostInstitution.position.z],
+        rotation: ghostInstitution.rotation.y,
+        scale: currentInstitution.scale
+      };
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify(data));
+      }
+      scene.remove(ghostInstitution);
       ghostInstitution = null;
+      placingInstitution = false;
+      currentInstitution = null;
     }
   });
 
@@ -194,6 +210,17 @@
     const target = model.position.clone().add(offset);
     ghostInstitution.position.copy(target);
     ghostInstitution.rotation.y = model.rotation.y;
+  }
+
+  function getGroundHeightAt(x, z) {
+    if (terrainMeshes.length === 0) return 0;
+    const origin = new THREE.Vector3(x, 1000, z);
+    raycaster.set(origin, new THREE.Vector3(0, -1, 0));
+    const hits = raycaster.intersectObjects(terrainMeshes, true);
+    if (hits.length > 0) {
+      return hits[0].point.y;
+    }
+    return 0;
   }
 
   async function startVerification(email) {
@@ -285,6 +312,8 @@
   let clientId = null;
   const remotePlayers = {};
   const pendingRemotePlayers = [];
+  const institutionsMap = {};
+  const sinking = [];
 
   function initNetwork() {
     socket = new WebSocket('ws://localhost:3000?email=' + encodeURIComponent(playerEmail));
@@ -293,12 +322,17 @@
       if (msg.type === 'welcome') {
         clientId = msg.id;
         msg.players.forEach(p => createRemotePlayer(p.id, p));
+        if (msg.institutions) {
+          msg.institutions.forEach(i => createInstitution(i, false));
+        }
       } else if (msg.type === 'spawn') {
         createRemotePlayer(msg.id);
       } else if (msg.type === 'update') {
         if (msg.id !== clientId) updateRemotePlayer(msg.id, msg);
       } else if (msg.type === 'remove') {
         removeRemotePlayer(msg.id);
+      } else if (msg.type === 'addInstitution') {
+        createInstitution(msg.institution, true);
       }
     });
   }
@@ -347,6 +381,43 @@
     if (!rp) return;
     scene.remove(rp.model);
     delete remotePlayers[id];
+  }
+
+  function createInstitution(data, animate) {
+    const def = institutions.find(i => i.name === data.name);
+    if (!def) return;
+    const loader = new GLTFLoader();
+    loader.load(def.url, gltf => {
+      const obj = gltf.scene;
+      obj.scale.setScalar(data.scale || def.scale || 1);
+      obj.position.fromArray(data.position);
+      obj.rotation.y = data.rotation || 0;
+      scene.add(obj);
+      institutionsMap[data.id] = obj;
+      if (animate) {
+        const startY = obj.position.y + 5;
+        const endY = obj.position.y;
+        obj.position.y = startY;
+        sinking.push({ obj, start: startY, end: endY, t: 0, emit: 0 });
+      }
+    });
+  }
+
+  function updateSinking(dt) {
+    for (let i = sinking.length - 1; i >= 0; i--) {
+      const s = sinking[i];
+      s.t += dt * 5;
+      if (s.emit > 0.05 || s.t === 0) {
+        emitDustParticle(s.obj.position, 5);
+        s.emit = 0;
+      }
+      s.emit += dt;
+      const t = Math.min(s.t, 1);
+      s.obj.position.y = THREE.MathUtils.lerp(s.start, s.end, t);
+      if (t >= 1) {
+        sinking.splice(i, 1);
+      }
+    }
   }
 
   function handlePendingRemotePlayers() {
@@ -1146,6 +1217,7 @@
 
     // Update particles
     updateParticles(dt);
+    updateSinking(dt);
 
     if (mixer) mixer.update(dt);
     for (const id in remotePlayers) {
