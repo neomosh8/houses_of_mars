@@ -287,21 +287,24 @@ function updateStatImages() {
       url: 'WATOX.glb',
       thumbnail: 'watox.png',
       scale: 7,
-      price: 100
+      price: 100,
+      effects: { hydration: 0.5, oxygen: 0.5 }
     },
     {
       name: 'Lab',
       url: 'https://threejs.org/examples/models/gltf/Flamingo.glb',
       thumbnail: 'https://placehold.co/100x100?text=Lab',
       scale: 0.5,
-      price: 200
+      price: 200,
+      effects: { health: 0.2 }
     },
     {
       name: 'Depot',
       url: 'https://threejs.org/examples/models/gltf/RobotExpressive/RobotExpressive.glb',
       thumbnail: 'https://placehold.co/100x100?text=Depot',
       scale: 0.8,
-      price: 150
+      price: 150,
+      effects: { money: 1 }
     }
   ];
 
@@ -313,6 +316,9 @@ function updateStatImages() {
   });
 
   const institutionTiles = [];
+  const ownedInstitutions = [];
+  const INSTITUTION_INTERVAL_FRAMES = 60;
+  let institutionFrame = 0;
   institutions.forEach(inst => {
     const tile = document.createElement('div');
     tile.className = 'institution-tile';
@@ -448,6 +454,19 @@ function updateStatImages() {
       deathOverlay.style.display = 'flex';
     }
 
+    updateStatImages();
+  }
+
+  function applyInstitutionEffects() {
+    ownedInstitutions.forEach(e => {
+      if (e.hydration) hydration = Math.min(hydration + e.hydration, 1000);
+      if (e.oxygen) oxygen = Math.min(oxygen + e.oxygen, 1000);
+      if (e.health) health = Math.min(health + e.health, 1000);
+      if (e.money) {
+        playerMoney += e.money;
+        updateMoneyDisplay();
+      }
+    });
     updateStatImages();
   }
 
@@ -670,6 +689,9 @@ function updateStatImages() {
       institutionsMap[data.id] = obj;
       const box = new THREE.Box3().setFromObject(obj);
       institutionBoxes.push({ id: data.id, box });
+      if (data.owner === playerEmail && def.effects) {
+        ownedInstitutions.push(def.effects);
+      }
       if (animate) {
         const startY = obj.position.y + 5;
         const endY = obj.position.y;
@@ -718,7 +740,8 @@ function updateStatImages() {
       moving: isMovingForward,
       health,
       hydration,
-      oxygen
+      oxygen,
+      money: playerMoney
     }));
   }
 
@@ -1614,6 +1637,11 @@ function updateStatImages() {
         if (!dead) {
           sendState();
           updateStats();
+          institutionFrame++;
+          if (institutionFrame >= INSTITUTION_INTERVAL_FRAMES) {
+            applyInstitutionEffects();
+            institutionFrame = 0;
+          }
         }
         else {
           sendState();

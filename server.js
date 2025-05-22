@@ -76,7 +76,8 @@ wss.on('connection', (ws, req) => {
     moving: false,
     health: user.health,
     hydration: user.hydration,
-    oxygen: user.oxygen
+    oxygen: user.oxygen,
+    money: user.money
   });
 
   const players = [];
@@ -109,7 +110,8 @@ wss.on('connection', (ws, req) => {
           moving: data.moving,
           health: data.health,
           hydration: data.hydration,
-          oxygen: data.oxygen
+          oxygen: data.oxygen,
+          money: data.money
         });
         const users = userStore.loadUsers();
         if (users[email]) {
@@ -117,6 +119,9 @@ wss.on('connection', (ws, req) => {
           users[email].health = data.health;
           users[email].hydration = data.hydration;
           users[email].oxygen = data.oxygen;
+          if (typeof data.money === 'number') {
+            users[email].money = data.money;
+          }
           userStore.saveUsers(users);
         }
         broadcast(
