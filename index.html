@@ -6,6 +6,51 @@
   <style>
     html, body { margin: 0; height: 100%; overflow: hidden; background: #000; }
     canvas { display: block; width: 100%; height: 100%; }
+    .side-panel {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 200px;
+      height: 100%;
+      background: rgba(0,0,0,0.6);
+      color: #fff;
+      font-family: sans-serif;
+      z-index: 5;
+      transform: translateX(180px);
+      transition: transform 0.3s;
+    }
+    .side-panel.open { transform: translateX(0); }
+    .panel-tab {
+      position: absolute;
+      left: -80px;
+      top: 20px;
+      width: 80px;
+      background: #333;
+      text-align: center;
+      cursor: pointer;
+      padding: 8px;
+      border-radius: 4px 0 0 4px;
+    }
+    .panel-content {
+      margin-top: 60px;
+      overflow-y: auto;
+      height: calc(100% - 60px);
+    }
+    .institution-tile {
+      margin: 4px;
+      padding: 6px;
+      background: #444;
+      cursor: pointer;
+      border-radius: 4px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    .institution-tile img {
+      width: 100%;
+      border-radius: 4px;
+    }
   </style>
   <script type="importmap">
   {
@@ -28,7 +73,11 @@
       <div id="login-error" style="color:red;"></div>
     </div>
   </div>
-<script type="module">
+  <div id="institution-panel" class="side-panel">
+    <div class="panel-tab">Institutions</div>
+    <div class="panel-content" id="institution-content"></div>
+  </div>
+  <script type="module">
   import * as THREE from 'three';
   import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
   import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -39,6 +88,93 @@
 
   let playerEmail = null;
   let startPosition = [70, 100, -50];
+
+  // --- Institution placement ---
+  const institutions = [
+    {
+      name: 'Habitat',
+      url: 'https://threejs.org/examples/models/gltf/DamagedHelmet/glTF/DamagedHelmet.gltf',
+      thumbnail: 'https://placehold.co/100x100?text=Habitat'
+    },
+    {
+      name: 'Lab',
+      url: 'https://threejs.org/examples/models/gltf/Flamingo.glb',
+      thumbnail: 'https://placehold.co/100x100?text=Lab'
+    },
+    {
+      name: 'Depot',
+      url: 'https://threejs.org/examples/models/gltf/RobotExpressive/RobotExpressive.glb',
+      thumbnail: 'https://placehold.co/100x100?text=Depot'
+    }
+  ];
+
+  const panel = document.getElementById('institution-panel');
+  const panelTab = panel.querySelector('.panel-tab');
+  const panelContent = document.getElementById('institution-content');
+  panelTab.addEventListener('click', () => {
+    panel.classList.toggle('open');
+  });
+
+  institutions.forEach(inst => {
+    const tile = document.createElement('div');
+    tile.className = 'institution-tile';
+    const img = document.createElement('img');
+    img.src = inst.thumbnail;
+    img.alt = inst.name;
+    tile.appendChild(img);
+    const label = document.createElement('div');
+    label.textContent = inst.name;
+    tile.appendChild(label);
+    tile.addEventListener('click', () => selectInstitution(inst));
+    panelContent.appendChild(tile);
+  });
+
+  let ghostInstitution = null;
+  let placingInstitution = false;
+
+  function selectInstitution(inst) {
+    if (ghostInstitution) {
+      scene.remove(ghostInstitution);
+      ghostInstitution = null;
+    }
+    const loader = new GLTFLoader();
+    loader.load(inst.url, gltf => {
+      ghostInstitution = gltf.scene;
+      ghostInstitution.traverse(o => {
+        if (o.isMesh) {
+          o.material = o.material.clone();
+          o.material.transparent = true;
+          o.material.opacity = 0.5;
+          o.castShadow = true;
+          o.receiveShadow = true;
+        }
+      });
+      scene.add(ghostInstitution);
+      placingInstitution = true;
+    });
+  }
+
+  window.addEventListener('click', () => {
+    if (placingInstitution && ghostInstitution) {
+      ghostInstitution.traverse(o => {
+        if (o.isMesh) {
+          o.material.opacity = 1;
+          o.material.transparent = false;
+        }
+      });
+      placingInstitution = false;
+      ghostInstitution = null;
+    }
+  });
+
+  function updateGhostInstitution() {
+    if (!placingInstitution || !ghostInstitution || !model) return;
+    const offset = new THREE.Vector3(0, 3, -5);
+    offset.applyQuaternion(model.quaternion);
+    const target = model.position.clone().add(offset);
+    ghostInstitution.position.copy(target);
+    ghostInstitution.rotation.y = model.rotation.y;
+  }
 
   async function startVerification(email) {
     const res = await fetch('/api/login', {
@@ -1087,6 +1223,7 @@
 
         // Camera follow
         updateCamera(dt);
+        updateGhostInstitution();
         sendState();
     }
 
