@@ -171,17 +171,17 @@
   let playerMoney = 0;
   let startPosition = [70, 100, -50];
 
-  const icons = {
-    health_full: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPSc2NCcgaGVpZ2h0PSc2NCc+PGNpcmNsZSBjeD0nMzInIGN5PSczMicgcj0nMzAnIGZpbGw9J2dyZWVuJy8+PC9zdmc+',
-    health_half: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPSc2NCcgaGVpZ2h0PSc2NCc+PGNpcmNsZSBjeD0nMzInIGN5PSczMicgcj0nMzAnIGZpbGw9J29yYW5nZScvPjwvc3ZnPg==',
-    health_low: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPSc2NCcgaGVpZ2h0PSc2NCc+PGNpcmNsZSBjeD0nMzInIGN5PSczMicgcj0nMzAnIGZpbGw9J3JlZCcvPjwvc3ZnPg==',
-    hydration_full: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPSc2NCcgaGVpZ2h0PSc2NCc+PGNpcmNsZSBjeD0nMzInIGN5PSczMicgcj0nMzAnIGZpbGw9J2N5YW4nLz48L3N2Zz4=',
-    hydration_half: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPSc2NCcgaGVpZ2h0PSc2NCc+PGNpcmNsZSBjeD0nMzInIGN5PSczMicgcj0nMzAnIGZpbGw9J2JsdWUnLz48L3N2Zz4=',
-    hydration_low: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPSc2NCcgaGVpZ2h0PSc2NCc+PGNpcmNsZSBjeD0nMzInIGN5PSczMicgcj0nMzAnIGZpbGw9J2RhcmtibHVlJy8+PC9zdmc+',
-    oxygen_full: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPSc2NCcgaGVpZ2h0PSc2NCc+PGNpcmNsZSBjeD0nMzInIGN5PSczMicgcj0nMzAnIGZpbGw9J2dyYXknLz48L3N2Zz4=',
-    oxygen_half: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPSc2NCcgaGVpZ2h0PSc2NCc+PGNpcmNsZSBjeD0nMzInIGN5PSczMicgcj0nMzAnIGZpbGw9J2xpZ2h0Z3JheScvPjwvc3ZnPg==',
-    oxygen_low: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPSc2NCcgaGVpZ2h0PSc2NCc+PGNpcmNsZSBjeD0nMzInIGN5PSczMicgcj0nMzAnIGZpbGw9J2RhcmtncmF5Jy8+PC9zdmc+'
-  };
+const icons = {
+  health_full: 'healthfull.png',
+  health_half: 'healthhalf.png',
+  health_low: 'healthlow.png',
+  hydration_full: 'watfull.png',
+  hydration_half: 'wathalf.png',
+  hydration_low: 'watlow.png',
+  oxygen_full: 'o2full.png',
+  oxygen_half: 'o2half.png',
+  oxygen_low: 'o2low.png'
+};
 
   const healthImg = document.getElementById('health-img');
   const hydrationImg = document.getElementById('hydration-img');
@@ -212,22 +212,25 @@
     }, 100);
   }
 
-  function updateStatImages() {
-    const hydPct = hydration / 10;
-    let hydSrc = icons.hydration_low;
-    if (hydPct >= 60) hydSrc = icons.hydration_full;
-    else if (hydPct >= 20) hydSrc = icons.hydration_half;
-    fadeSwap(hydrationImg, hydSrc);
+function updateStatImages() {
+  const hydPct = hydration / 10;
+  let hydSrc = icons.hydration_low;
+  if (hydPct >= 60) hydSrc = icons.hydration_full;
+  else if (hydPct >= 20) hydSrc = icons.hydration_half;
+  fadeSwap(hydrationImg, hydSrc);
 
-    const oxyPct = oxygen / 10;
-    let oxySrc = icons.oxygen_low;
-    if (oxyPct >= 60) oxySrc = icons.oxygen_full;
-    else if (oxyPct >= 20) oxySrc = icons.oxygen_half;
-    fadeSwap(oxygenImg, oxySrc);
+  const oxyPct = oxygen / 10;
+  let oxySrc = icons.oxygen_low;
+  if (oxyPct >= 60) oxySrc = icons.oxygen_full;
+  else if (oxyPct >= 20) oxySrc = icons.oxygen_half;
+  fadeSwap(oxygenImg, oxySrc);
 
-    fadeSwap(healthImg, icons.health_full);
-  }
-
+  const healthPct = health / 10;
+  let healthSrc = icons.health_low;
+  if (healthPct >= 60) healthSrc = icons.health_full;
+  else if (healthPct >= 20) healthSrc = icons.health_half;
+  fadeSwap(healthImg, healthSrc);
+}
 
   function updateMoneyDisplay() {
     document.getElementById('money-display').textContent = `Money: ${playerMoney}`;

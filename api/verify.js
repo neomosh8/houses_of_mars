@@ -22,10 +22,10 @@ module.exports = function(client, verifySid, userStore) {
         users[email] = {
           email,
           position: [70, 100, -50],
-          money: 1000,
-          health: 1000,
-          hydration: 1000,
-          oxygen: 1000
+          money: 1000000,
+          health: 200,
+          hydration: 200,
+          oxygen: 200
         };
       }
       userStore.saveUsers(users);
