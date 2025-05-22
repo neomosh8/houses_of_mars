@@ -98,7 +98,8 @@
 
   function initNetwork(token) {
     console.log("Initializing network with token", token.substring(0, 10) + "...");
-    socket = new WebSocket('ws://localhost:3000');
+    const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
+    socket = new WebSocket(`${protocol}://${location.host}/api/socket`);
 
     socket.addEventListener("open", () => {
       console.log("WebSocket connection established, sending login...");

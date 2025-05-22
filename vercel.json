@@ -1,0 +1,7 @@
+{
+  "functions": { "api/socket.js": { "runtime": "nodejs18.x" } },
+  "routes": [
+    { "src": "/api/socket", "dest": "/api/socket.js" },
+    { "src": "/(.*)", "dest": "/$1" }
+  ]
+}
