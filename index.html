@@ -77,6 +77,24 @@
       background: rgba(0,0,0,0.5);
       z-index: 5;
     }
+    #status-panel {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      display: flex;
+      flex-direction: column;
+      background: rgba(0, 0, 0, 0.3);
+      padding: 4px;
+      z-index: 5;
+    }
+    #status-panel .stat {
+      margin: 2px 0;
+    }
+    #status-panel img {
+      width: 60px;
+      height: 60px;
+      transition: opacity 0.2s;
+    }
   </style>
   <script type="importmap">
   {
@@ -100,6 +118,11 @@
     </div>
   </div>
   <div id="money-display">Money: 0</div>
+  <div id="status-panel">
+    <div class="stat"><img id="health-img" /></div>
+    <div class="stat"><img id="hydration-img" /></div>
+    <div class="stat"><img id="oxygen-img" /></div>
+  </div>
   <div id="institution-panel" class="side-panel">
     <div class="panel-tab">Institutions</div>
     <div class="panel-content" id="institution-content"></div>
@@ -116,6 +139,56 @@
   let playerEmail = null;
   let playerMoney = 0;
   let startPosition = [70, 100, -50];
+
+  const icons = {
+    health_full: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==',
+    hydration_full: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgaPj/HwAEggJ/59habAAAAABJRU5ErkJggg==',
+    hydration_half: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4/5/hPwAH/QL+ppTFtAAAAABJRU5ErkJggg==',
+    hydration_low: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==',
+    oxygen_full: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNg+M/wHwAEAQH/cetH5QAAAABJRU5ErkJggg==',
+    oxygen_half: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4/5/hPwAH/QL+ppTFtAAAAABJRU5ErkJggg==',
+    oxygen_low: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg=='
+  };
+
+  const healthImg = document.getElementById('health-img');
+  const hydrationImg = document.getElementById('hydration-img');
+  const oxygenImg = document.getElementById('oxygen-img');
+
+  let health = 100;
+  let hydration = 100;
+  let oxygen = 100;
+
+  healthImg.src = icons.health_full;
+  healthImg.dataset.current = icons.health_full;
+  hydrationImg.src = icons.hydration_full;
+  hydrationImg.dataset.current = icons.hydration_full;
+  oxygenImg.src = icons.oxygen_full;
+  oxygenImg.dataset.current = icons.oxygen_full;
+
+  function fadeSwap(img, src) {
+    if (img.dataset.current === src) return;
+    img.style.opacity = 0;
+    setTimeout(() => {
+      img.src = src;
+      img.dataset.current = src;
+      img.style.opacity = 1;
+    }, 100);
+  }
+
+  function updateStatImages() {
+    let hydSrc = icons.hydration_low;
+    if (hydration >= 60) hydSrc = icons.hydration_full;
+    else if (hydration >= 20) hydSrc = icons.hydration_half;
+    fadeSwap(hydrationImg, hydSrc);
+
+    let oxySrc = icons.oxygen_low;
+    if (oxygen >= 60) oxySrc = icons.oxygen_full;
+    else if (oxygen >= 20) oxySrc = icons.oxygen_half;
+    fadeSwap(oxygenImg, oxySrc);
+
+    fadeSwap(healthImg, icons.health_full);
+  }
+
 
   function updateMoneyDisplay() {
     document.getElementById('money-display').textContent = `Money: ${playerMoney}`;
@@ -283,6 +356,17 @@
       return hits[0].point.y;
     }
     return 0;
+  }
+
+  function updateStats() {
+    if (isMovingForward) {
+      hydration = Math.max(hydration - 0.5, 0);
+      oxygen = Math.max(oxygen - 1, 0);
+    } else {
+      hydration = Math.max(hydration - 0.1, 0);
+      oxygen = Math.max(oxygen - 0.5, 0);
+    }
+    updateStatImages();
   }
 
   async function startVerification(email) {
@@ -1409,6 +1493,7 @@
         updateCamera(dt);
         updateGhostInstitution();
         sendState();
+        updateStats();
     }
 
     // Debug rendering to visualize particle positions
