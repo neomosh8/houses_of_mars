@@ -62,33 +62,36 @@ module.exports = function(institutionStore, userStore) {
     }
 
     try {
-      // Generate worker profile with text
-      const profileResponse = await openai.responses.create({
-        model: "gpt-4o-mini",
-        input: `Generate a detailed worker profile for a Mars colonization game. The worker will be employed at a ${institutionName} facility.
+      // Generate worker profile with text using correct API
+      const profileResponse = await openai.chat.completions.create({
+        model: "gpt-4",
+        messages: [{
+          role: "system",
+          content: "You are an assistant that generates detailed worker profiles for a Mars colonization game. Always respond with valid JSON only, no additional text."
+        }, {
+          role: "user",
+          content: `Generate a detailed worker profile for a Mars colonization game. The worker will be employed at a ${institutionName} facility.
 
-        Please provide:
-        1. A realistic full name
-        2. A specific job role relevant to Mars colonization
-        3. A compelling 2-sentence backstory
-        4. A professional 2-sentence resume/skills summary
-        5. A fair wage (10-50 credits per day)
-        6. The resources they consume each day (oxygen, hydration, or health).
+          Please provide:
+          1. A realistic full name
+          2. A specific job role relevant to Mars colonization
+          3. A compelling 2-sentence backstory
+          4. A professional 2-sentence resume/skills summary
+          5. A fair wage (10-50 credits per day)
+          6. The resources they consume each day (oxygen, hydration, or health).
 
-        Format the response as JSON with these exact keys: name, role, backstory, resume, wage, effects (where effects is an object with oxygen, hydration, health as numbers between -1 and 0).`
+          Format the response as JSON with these exact keys: name, role, backstory, resume, wage, effects (where effects is an object with oxygen, hydration, health as numbers between -1 and 0).`
+        }],
+        temperature: 0.8,
+        max_tokens: 500
       });
 
       let workerData = randomWorker(); // fallback
 
       // Parse the AI response
-      if (profileResponse.output && profileResponse.output.length > 0) {
-        const textContent = profileResponse.output
-          .filter(output => output.type === "message")
-          .map(output => output.content)
-          .flat()
-          .filter(content => content.type === "text")
-          .map(content => content.text)
-          .join("");
+      if (profileResponse.choices && profileResponse.choices.length > 0) {
+        const textContent = profileResponse.choices[0].message.content;
+        console.log("AI Response:", textContent);
 
         // Try to extract JSON from the response
         const jsonMatch = textContent.match(/\{[\s\S]*\}/);
@@ -115,32 +118,31 @@ module.exports = function(institutionStore, userStore) {
         }
       }
 
+      // Generate image using DALL-E 3
       if (!USE_PLACEHOLDER_IMAGES) {
         try {
-          const imageResponse = await openai.responses.create({
-            model: "gpt-4o-mini",
-            input: `Generate a professional portrait image of a Mars colonist worker named ${workerData.name}, who works as a ${workerData.role}.
-
-          Style: Realistic digital art portrait, professional headshot style
-          Setting: Futuristic Mars colony environment
-          Appearance: Wearing appropriate work uniform/suit for Mars environment
-          Mood: Confident and professional
-          Quality: High detail, good lighting
-
-          The person should look competent and ready for Mars colonization work.`,
-            tools: [{type: "image_generation"}]
+          const imageResponse = await openai.images.generate({
+            model: "dall-e-3",
+            prompt: `Professional portrait of a Mars colonist worker named ${workerData.name}, who works as a ${workerData.role}.
+            Style: Realistic digital art portrait, professional headshot style
+            Setting: Futuristic Mars colony environment
+            Appearance: Wearing appropriate work uniform/suit for Mars environment
+            Mood: Confident and professional
+            Quality: High detail, good lighting
+            The person should look competent and ready for Mars colonization work.`,
+            n: 1,
+            size: "1024x1024",
+            quality: "standard",
+            response_format: "url"
           });
 
-          const imageData = imageResponse.output
-            .filter(output => output.type === "image_generation_call")
-            .map(output => output.result);
-
-          if (imageData.length > 0) {
-            workerData.image = `data:image/png;base64,${imageData[0]}`;
+          if (imageResponse.data && imageResponse.data.length > 0) {
+            workerData.image = imageResponse.data[0].url;
             console.log(`Generated AI image for worker: ${workerData.name}`);
           }
         } catch (imageError) {
           console.log('Failed to generate worker image:', imageError.message);
+          workerData.image = 'https://placehold.co/150x200?text=Worker';
         }
       } else {
         workerData.image = 'https://placehold.co/150x200?text=Worker';

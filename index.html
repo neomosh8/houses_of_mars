@@ -833,11 +833,24 @@ function updateStatImages() {
       infoDiv.style.display = 'none';
       workforceDiv.style.display = 'block';
       const container = document.getElementById('workforce-container');
-      container.innerHTML = '<div class="spinner">Loading...</div>';
+      // Immediately show loading spinner
+      container.innerHTML = '<div class="spinner" style="display: flex; justify-content: center; align-items: center; height: 200px; color: #fff;">Loading applicants...</div>';
+
       try {
         const res = await fetch(`/api/workforce/generate/${id}`, { method: 'POST' });
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
         const workersData = await res.json();
+
+        // Clear loading and display workers
         container.innerHTML = '';
+
+        if (!workersData.workers || workersData.workers.length === 0) {
+          container.innerHTML = '<div style="color: #fff; text-align: center;">No applicants available</div>';
+          return;
+        }
+
         workersData.workers.forEach(w => {
           const card = document.createElement('div');
           card.className = 'worker-card';
@@ -857,12 +870,17 @@ function updateStatImages() {
           front.style.height = '100%';
           front.style.backgroundImage = `url(${w.image})`;
           front.style.backgroundSize = 'cover';
+          front.style.backgroundPosition = 'center';
           front.textContent = w.name;
           front.style.display = 'flex';
           front.style.alignItems = 'flex-end';
           front.style.justifyContent = 'center';
           front.style.color = '#fff';
-          front.style.overflow = 'auto';
+          front.style.textShadow = '0 1px 3px rgba(0,0,0,0.8)';
+          front.style.padding = '8px';
+          front.style.textAlign = 'center';
+          front.style.fontSize = '14px';
+          front.style.fontWeight = 'bold';
           const back = document.createElement('div');
           back.style.position = 'absolute';
           back.style.transform = 'rotateY(180deg)';
@@ -872,9 +890,15 @@ function updateStatImages() {
           back.style.background = '#333';
           back.style.color = '#fff';
           back.style.fontSize = '12px';
-          back.style.padding = '4px';
+          back.style.padding = '8px';
           back.style.overflowY = 'auto';
-          back.innerHTML = `<div>${w.backstory}</div><div>${w.resume}</div><div>Wage: ${w.wage}</div>`;
+          back.style.boxSizing = 'border-box';
+          back.innerHTML = `
+            <div style="margin-bottom: 8px;"><strong>${w.role}</strong></div>
+            <div style="margin-bottom: 8px; font-size: 11px;">${w.backstory}</div>
+            <div style="margin-bottom: 8px; font-size: 11px;">${w.resume}</div>
+            <div style="font-weight: bold;">Wage: $${w.wage}/day</div>
+          `;
           inner.appendChild(front);
           inner.appendChild(back);
           card.appendChild(inner);
@@ -883,22 +907,37 @@ function updateStatImages() {
           };
           const hireBtn = document.createElement('button');
           hireBtn.textContent = 'Hire';
+          hireBtn.style.width = '100%';
+          hireBtn.style.marginTop = '4px';
           hireBtn.onclick = async (e) => {
             e.stopPropagation();
-            await fetch(`/api/workforce/hire/${id}`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ worker: w })
-            });
-            if (!instData.workforce) instData.workforce = [];
-            instData.workforce.push(w);
-            container.removeChild(card);
+            try {
+              const hireRes = await fetch(`/api/workforce/hire/${id}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ worker: w })
+              });
+              if (hireRes.ok) {
+                if (!instData.workforce) instData.workforce = [];
+                instData.workforce.push(w);
+                container.removeChild(card);
+                if (container.children.length === 0) {
+                  container.innerHTML = '<div style="color: #fff; text-align: center;">All applicants hired!</div>';
+                }
+              } else {
+                alert('Failed to hire worker');
+              }
+            } catch (err) {
+              console.error('Hire error:', err);
+              alert('Failed to hire worker');
+            }
           };
           card.appendChild(hireBtn);
           container.appendChild(card);
         });
       } catch (err) {
-        container.textContent = 'Failed to load';
+        console.error('Failed to load workforce:', err);
+        container.innerHTML = '<div style="color: #ff6666; text-align: center;">Failed to load applicants. Please try again.</div>';
       }
     }
 
