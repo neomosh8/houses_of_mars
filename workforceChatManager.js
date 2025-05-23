@@ -115,10 +115,10 @@ class WorkforceChatManager {
         obj.is_proposal = !!obj.proposal;
       }
       console.log('Parsed AI JSON:', obj);
-      return obj;
+      return { ...obj, raw };
     } catch {
       console.log('Using raw text response');
-      return { dialogue: raw, proposal: null, is_proposal: false };
+      return { dialogue: raw, proposal: null, is_proposal: false, raw };
     }
   }
 
@@ -139,7 +139,7 @@ class WorkforceChatManager {
       let instructions = `You are ${worker.name}, ${worker.role}. Backstory: ${worker.backstory}. Resume: ${worker.resume}.`;
       if (worker.director) {
         instructions +=
-          ' When you are ready to propose, reply with JSON exactly like { "dialogue": "...", "is_proposal": true, "proposal": { "title": "Title", "description": "Details", "cost": 100 } }. Otherwise reply with { "dialogue": "...", "is_proposal": false, "proposal": null }.';
+          ' When you are ready to propose, reply with JSON exactly like { "dialogue": "...", "is_proposal": true, "proposal": { "title": "Title", "description": "Details", "cost": 100, "prerequisites": [ { "type": "hire", "value": "Role" } ], "gains": { "resource": 1 }, "risk": "low" } }. Otherwise reply with { "dialogue": "...", "is_proposal": false, "proposal": null }. Always respond with valid JSON.';
       }
 
       const basePrompt = (!worker.initialized && history)
@@ -166,7 +166,8 @@ class WorkforceChatManager {
             text: {
               dialogue: result.dialogue,
               is_proposal: result.is_proposal,
-              proposal: result.proposal || null
+              proposal: result.proposal || null,
+              raw: result.raw
             }
           });
         } else {

@@ -46,6 +46,7 @@ export function renderProposals(container, proposals, instId, institutionDataMap
       }
       if (gainParts.length) parts.push('Gain: ' + gainParts.join(', '));
     }
+    if (p.risk) parts.push(`Risk: ${p.risk}`);
     if (parts.length) meta.textContent = parts.join(' | ');
     if (meta.textContent) card.appendChild(meta);
 
@@ -70,7 +71,10 @@ export function renderProposals(container, proposals, instId, institutionDataMap
       table.appendChild(row);
     });
     card.appendChild(table);
-
+    // enable approval if there are no prerequisites
+    if (prereqs.length === 0) {
+      setTimeout(checkReady, 0);
+    }
     const approve = document.createElement('button');
     approve.textContent = 'Approve';
     approve.disabled = true;

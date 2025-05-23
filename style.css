@@ -227,6 +227,16 @@ canvas { display: block; width: 100%; height: 100%; }
   font-size: 12px;
 }
 
+.chat-raw {
+  background: #222;
+  color: #0f0;
+  padding: 4px;
+  border-radius: 4px;
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
 .hidden { display: none; }
 .popup-actions { margin-top: 8px; display: flex; gap: 4px; }
 
