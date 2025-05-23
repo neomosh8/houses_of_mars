@@ -31,7 +31,6 @@ module.exports = function(client, verifySid, userStore) {
       userStore.saveUsers(users);
       res.json({ user: users[email] });
     } catch (e) {
-      console.error('verify error', e);
       res.status(500).json({ error: 'verification failed' });
     }
   });

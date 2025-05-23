@@ -14,8 +14,8 @@ try {
       apiKey: process.env.OPENAI_API_KEY
     });
   }
-} catch (error) {
-  console.log('OpenAI not available:', error.message);
+} catch {
+  // OpenAI not available
 }
 
 const chatManager = require('../workforceChatManager');
@@ -98,7 +98,6 @@ module.exports = function(institutionStore, userStore) {
       // Parse the AI response
       if (profileResponse.choices && profileResponse.choices.length > 0) {
         const textContent = profileResponse.choices[0].message.content;
-        console.log("AI Response:", textContent);
 
         // Try to extract JSON from the response
         const jsonMatch = textContent.match(/\{[\s\S]*\}/);
@@ -119,8 +118,8 @@ module.exports = function(institutionStore, userStore) {
                 health: Math.min(0, Math.max(-1, aiData.effects.health || 0))
               };
             }
-          } catch (parseError) {
-            console.log('Failed to parse AI response, using fallback');
+          } catch {
+            // ignore parse errors
           }
         }
       }
@@ -145,10 +144,8 @@ module.exports = function(institutionStore, userStore) {
 
           if (imageResponse.data && imageResponse.data.length > 0) {
             workerData.image = imageResponse.data[0].url;
-            console.log(`Generated AI image for worker: ${workerData.name}`);
           }
         } catch (imageError) {
-          console.log('Failed to generate worker image:', imageError.message);
           workerData.image = 'https://placehold.co/150x200?text=Worker';
         }
       } else {
@@ -157,8 +154,7 @@ module.exports = function(institutionStore, userStore) {
 
       return workerData;
 
-    } catch (error) {
-      console.log('AI worker generation failed:', error.message);
+    } catch {
       return randomWorker();
     }
   }
@@ -179,8 +175,7 @@ module.exports = function(institutionStore, userStore) {
     try {
       const generatedWorkers = await Promise.all(workerPromises);
       workers.push(...generatedWorkers);
-    } catch (error) {
-      console.log('Batch worker generation failed, using fallbacks');
+    } catch {
       // Fill with random workers if AI generation fails
       for (let i = 0; i < num; i++) {
         workers.push(randomWorker());
@@ -198,12 +193,10 @@ module.exports = function(institutionStore, userStore) {
       const institutionName = institution ? institution.name : 'Mars Colony';
       const num = Math.floor(Math.random() * 5) + 1; // 1-5 workers
 
-      console.log(`Generating ${num} workers for ${institutionName}...`);
       const workers = await generateWorkers(num, institutionName);
 
       res.json({ workers });
-    } catch (error) {
-      console.error('Worker generation error:', error);
+    } catch {
       res.status(500).json({ error: 'Failed to generate workers' });
     }
   });
@@ -243,8 +236,8 @@ module.exports = function(institutionStore, userStore) {
           await fs.promises.writeFile(filePath, Buffer.from(await response.arrayBuffer()));
 
           worker.image = `/worker_images/${fileName}`;
-        } catch (imgErr) {
-          console.error('Failed to download worker image:', imgErr);
+        } catch {
+          // ignore image download errors
         }
       }
 
@@ -262,10 +255,8 @@ module.exports = function(institutionStore, userStore) {
         userStore.saveUsers(users);
       }
 
-      console.log(`Hired worker ${worker.name} at ${inst.name}`);
       res.json({ ok: true });
-    } catch (error) {
-      console.error('Worker hiring error:', error);
+    } catch {
       res.status(500).json({ error: 'Failed to hire worker' });
     }
   });
@@ -280,8 +271,7 @@ module.exports = function(institutionStore, userStore) {
       }
 
       res.json({ workforce: inst.workforce || [] });
-    } catch (error) {
-      console.error('Get workforce error:', error);
+    } catch {
       res.status(500).json({ error: 'Failed to get workforce' });
     }
   });
@@ -291,8 +281,7 @@ module.exports = function(institutionStore, userStore) {
       const { email, name } = req.params;
       const chat = chatManager.getChat(email, name);
       res.json({ messages: chat.messages });
-    } catch (error) {
-      console.error('Get chat error:', error);
+    } catch {
       res.status(500).json({ error: 'Failed to get chat' });
     }
   });
@@ -302,8 +291,7 @@ module.exports = function(institutionStore, userStore) {
       const id = Number(req.params.id);
       const proposals = institutionStore.getProposals(id);
       res.json({ proposals });
-    } catch (err) {
-      console.error('Get proposals error:', err);
+    } catch {
       res.status(500).json({ error: 'failed' });
     }
   });
@@ -316,8 +304,7 @@ module.exports = function(institutionStore, userStore) {
       const proposal = institutionStore.updateProposal(id, index, { status });
       chatManager.resolveProposal(id, index, status);
       res.json({ proposal });
-    } catch (err) {
-      console.error('Update proposal error', err);
+    } catch {
       res.status(500).json({ error: 'failed' });
     }
   });

@@ -194,7 +194,7 @@ wss.on('connection', (ws, req) => {
         }
       }
      } catch (err) {
-       console.error('Invalid message', err);
+       // Error is ignored for invalid message to prevent console noise
      }
    });
 
@@ -206,6 +206,4 @@ wss.on('connection', (ws, req) => {
  });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-});
+server.listen(PORT);

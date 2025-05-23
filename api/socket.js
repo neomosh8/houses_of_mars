@@ -18,8 +18,8 @@ try {
 function saveData() {
   try {
     fs.writeFileSync(DATA_FILE, JSON.stringify(userData, null, 2));
-  } catch (err) {
-    console.error('Error saving user data:', err);
+  } catch {
+    // ignore persistence errors
   }
 }
 

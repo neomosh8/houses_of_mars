@@ -12,7 +12,6 @@ module.exports = function(client, verifySid) {
         .verifications.create({ channel: 'email', to: email });
       res.json({ status: 'pending' });
     } catch (e) {
-      console.error('verify start error', e);
       res.status(500).json({ error: 'failed to start verification' });
     }
   });
