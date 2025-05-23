@@ -1853,6 +1853,13 @@ function updateStatImages() {
             }
         }
 
+        if (model.position.y < -300) {
+          model.position.y = 60;
+          velocity.y = 0;
+          groundY = null;
+          onGround = false;
+        }
+
         // Camera follow
         updateCamera(dt);
         updateGhostInstitution();

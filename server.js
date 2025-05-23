@@ -110,8 +110,10 @@ wss.on('connection', (ws, req) => {
      try {
        const data = JSON.parse(message);
       if (data.type === 'state') {
+        const pos = Array.isArray(data.position) ? data.position.slice(0, 3) : [0, 0, 0];
+        if (pos.length >= 2 && pos[1] < -300) pos[1] = 60;
         states.set(id, {
-          position: data.position,
+          position: pos,
           rotation: data.rotation,
           moving: data.moving,
           health: data.health,
@@ -121,7 +123,7 @@ wss.on('connection', (ws, req) => {
         });
         const users = userStore.loadUsers();
         if (users[email]) {
-          users[email].position = data.position;
+          users[email].position = pos;
           users[email].health = data.health;
           users[email].hydration = data.hydration;
           users[email].oxygen = data.oxygen;
@@ -134,7 +136,7 @@ wss.on('connection', (ws, req) => {
           {
             type: 'update',
             id,
-            position: data.position,
+            position: pos,
             rotation: data.rotation,
             moving: data.moving,
             health: data.health,
