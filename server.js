@@ -33,7 +33,7 @@ const INSTITUTION_PRICES = {
 const loginRoute = require('./api/login')(client, verifySid);
 const verifyRoute = require('./api/verify')(client, verifySid, userStore);
 const stateRoute = require('./api/state')(userStore);
-const workforceRoute = require('./api/workforce')(institutionStore, userStore);
+const workforceRoute = require('./api/workforce')(institutionStore, userStore, engine, broadcast);
 chatManager.initFromInstitutions(institutionStore.getInstitutions());
 
 app.use('/api/login', loginRoute);
@@ -184,8 +184,8 @@ wss.on('connection', (ws, req) => {
             scale: data.scale
           };
           const instId = institutionStore.addInstitution(inst);
-          inst.id = instId;
-          broadcast({ type: 'addInstitution', institution: inst });
+          const storedInst = institutionStore.getInstitution(instId);
+          broadcast({ type: 'addInstitution', institution: storedInst });
           if (ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ type: 'money', money: user.money }));
           }

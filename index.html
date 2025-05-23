@@ -547,6 +547,14 @@ function updateStatImages() {
         removeRemotePlayer(msg.id);
       } else if (msg.type === 'addInstitution') {
         createInstitution(msg.institution, true);
+      } else if (msg.type === 'updateInstitution') {
+        const inst = institutionDataMap[msg.id];
+        if (inst) {
+          inst.extraEffects = msg.extraEffects || inst.extraEffects || {};
+          if (inst.owner === playerEmail && msg.gains) {
+            ownedInstitutions.push(msg.gains);
+          }
+        }
       } else if (msg.type === 'money') {
         playerMoney = msg.money;
         updateMoneyDisplay();
@@ -639,12 +647,13 @@ function updateStatImages() {
       obj.rotation.y = inst.rotation || 0;
       scene.add(obj);
       institutionsMap[inst.id] = obj;
-      institutionDataMap[inst.id] = { ...inst, effects: def.effects, workforce: inst.workforce || [] };
+      institutionDataMap[inst.id] = { ...inst, effects: def.effects, workforce: inst.workforce || [], extraEffects: inst.extraEffects || {}};
       obj.traverse(o => { o.userData.institutionId = inst.id; });
       const box = new THREE.Box3().setFromObject(obj);
       institutionBoxes.push({ id: inst.id, box });
-      if (inst.owner === playerEmail && def.effects) {
-        ownedInstitutions.push(def.effects);
+      if (inst.owner === playerEmail) {
+        if (def.effects) ownedInstitutions.push(def.effects);
+        if (inst.extraEffects) ownedInstitutions.push(inst.extraEffects);
       }
       if (animate) {
         const startY = obj.position.y + 5;
@@ -679,7 +688,12 @@ function updateStatImages() {
     Object.values(institutionDataMap).forEach(d => {
       if (d.owner === instData.owner && d.name === instData.name) count++;
     });
-    const effects = def.effects || {};
+    const effects = Object.assign({}, def.effects || {});
+    if (instData.extraEffects) {
+      for (const k of Object.keys(instData.extraEffects)) {
+        effects[k] = (effects[k] || 0) + instData.extraEffects[k];
+      }
+    }
     const lines = [];
     Object.keys(effects).forEach(k => {
       lines.push(`${k}: +${effects[k]} (${(effects[k]*count).toFixed(2)} total)`);
