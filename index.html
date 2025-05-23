@@ -860,7 +860,20 @@ function updateStatImages() {
             data.messages.forEach(m => {
               const box = document.createElement('div');
               box.className = 'chat-msg';
-              box.textContent = `${m.worker}: ${m.text}`;
+              let text = m.text;
+              if (typeof m.text === 'object' && m.text !== null) {
+                text = m.text.dialogue || '';
+                if (m.text.is_proposal && m.text.proposal) {
+                  const p = m.text.proposal;
+                  const parts = [];
+                  if (p.title) parts.push(`Title: ${p.title}`);
+                  if (p.description) parts.push(`Description: ${p.description}`);
+                  if (p.cost !== undefined) parts.push(`Cost: $${p.cost}`);
+                  const info = parts.join(' | ');
+                  if (info) text += ` (Proposal - ${info})`;
+                }
+              }
+              box.textContent = `${m.worker}: ${text}`;
               chatContainer.appendChild(box);
             });
             chatContainer.scrollTop = chatContainer.scrollHeight;
