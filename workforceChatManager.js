@@ -80,7 +80,7 @@ class WorkforceChatManager {
     }
     const response = await this.openai.responses.create({
       model: 'gpt-4.1-nano-2025-04-14',
-      input: [input],
+      input,
       instructions,
       text: { format: { type: 'text' } },
       temperature: 1.26,
@@ -108,7 +108,7 @@ class WorkforceChatManager {
       const instructions = `You are ${worker.name}, ${worker.role}. Backstory: ${worker.backstory}. Resume: ${worker.resume}.`;
       let prompt;
       if (!worker.initialized) {
-        prompt = chat.firstPrompt;
+        prompt = history ? `${history}\n${chat.firstPrompt}` : chat.firstPrompt;
       } else {
         prompt = history || chat.firstPrompt;
       }
