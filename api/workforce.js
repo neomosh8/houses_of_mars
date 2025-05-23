@@ -340,7 +340,15 @@ module.exports = function(institutionStore, userStore, engine, broadcast) {
         }
         if (result && result.feasible) {
           const scaff = SCAFF_MODELS[Math.floor(Math.random() * SCAFF_MODELS.length)];
-          const construction = { status: 'scaffolding', url: scaff.url, scale: scaff.scale };
+          const angle = Math.random() * Math.PI * 2;
+          const distance = 8 + Math.random() * 4;
+          const offset = [Math.cos(angle) * distance, 0, Math.sin(angle) * distance];
+          const construction = {
+            status: 'scaffolding',
+            url: scaff.url,
+            scale: scaff.scale,
+            offset
+          };
           institutionStore.updateInstitution(id, { construction });
           broadcast({ type: 'updateInstitution', id, construction });
 
@@ -349,7 +357,12 @@ module.exports = function(institutionStore, userStore, engine, broadcast) {
           meshy.generateModel(prompt, file)
             .then(fp => {
               const rel = path.relative(path.join(__dirname, '..'), fp).replace(/\\/g, '/');
-              const done = { status: 'completed', url: rel, scale: scaff.scale };
+              const done = {
+                status: 'completed',
+                url: rel,
+                scale: scaff.scale,
+                offset
+              };
               institutionStore.updateInstitution(id, { construction: done });
               broadcast({ type: 'updateInstitution', id, construction: done });
             })
