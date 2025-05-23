@@ -873,6 +873,18 @@ function updateStatImages() {
               }
               box.textContent = `${m.worker}: ${text}`;
               chatContainer.appendChild(box);
+              if (typeof m.text === 'object' && m.text !== null && m.text.raw) {
+                const preRaw = document.createElement('pre');
+                preRaw.className = 'chat-raw';
+                preRaw.textContent = m.text.raw;
+                chatContainer.appendChild(preRaw);
+                if (m.text.proposal) {
+                  const preObj = document.createElement('pre');
+                  preObj.className = 'chat-raw';
+                  preObj.textContent = JSON.stringify(m.text.proposal, null, 2);
+                  chatContainer.appendChild(preObj);
+                }
+              }
             });
             chatContainer.scrollTop = chatContainer.scrollHeight;
           }
