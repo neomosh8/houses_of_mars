@@ -521,6 +521,7 @@ function updateStatImages() {
   const institutionsMap = {};
   const institutionDataMap = {};
   const institutionBoxes = [];
+  const constructionBoxes = [];
   const sinking = [];
   const constructionMap = {};
 
@@ -643,32 +644,52 @@ function updateStatImages() {
     delete remotePlayers[id];
   }
 
+  function removeConstructionBoxes(id) {
+    for (let i = constructionBoxes.length - 1; i >= 0; i--) {
+      if (constructionBoxes[i].id === id) constructionBoxes.splice(i, 1);
+    }
+  }
+
   function applyConstruction(inst) {
     const existing = constructionMap[inst.id] || {};
     if (existing.scaff) scene.remove(existing.scaff);
     if (existing.final) scene.remove(existing.final);
+    removeConstructionBoxes(inst.id);
     constructionMap[inst.id] = {};
     if (!inst.construction) return;
     const loader = new GLTFLoader();
     loader.load(inst.construction.url, gltf => {
       const obj = gltf.scene;
+      const offset = Array.isArray(inst.construction.offset)
+        ? new THREE.Vector3().fromArray(inst.construction.offset)
+        : null;
       let pos = new THREE.Vector3().fromArray(inst.position);
-      const boxEntry = institutionBoxes.find(b => b.id === inst.id);
-      if (boxEntry) {
-        const size = new THREE.Vector3();
-        boxEntry.box.getSize(size);
-        const offset = new THREE.Vector3(size.x / 2 + 3, 0, 0);
-        offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), inst.rotation || 0);
+      if (offset) {
         pos.add(offset);
-        console.log('Applying construction for', inst.id, 'offset', offset);
       } else {
-        pos.x += 3; // default offset
-        console.log('Applying construction for', inst.id, 'default offset');
+        const boxEntry = institutionBoxes.find(b => b.id === inst.id);
+        if (boxEntry) {
+          const size = new THREE.Vector3();
+          boxEntry.box.getSize(size);
+          const off = new THREE.Vector3(size.x / 2 + 3, 0, 0);
+          off.applyAxisAngle(new THREE.Vector3(0, 1, 0), inst.rotation || 0);
+          pos.add(off);
+        } else {
+          pos.x += 3;
+        }
       }
-      obj.position.copy(pos);
-      obj.rotation.y = inst.rotation || 0;
+
       obj.scale.setScalar(inst.construction.scale || inst.scale || 1);
+      obj.rotation.y = inst.rotation || 0;
       scene.add(obj);
+      // ensure bottom on terrain
+      const box = new THREE.Box3().setFromObject(obj);
+      const ground = getGroundHeightAt(pos.x, pos.z);
+      obj.position.set(pos.x, ground - box.min.y, pos.z);
+
+      const cbox = new THREE.Box3().setFromObject(obj);
+      constructionBoxes.push({ id: inst.id, box: cbox });
+
       if (inst.construction.status === 'scaffolding') {
         constructionMap[inst.id].scaff = obj;
       } else {
@@ -1038,6 +1059,14 @@ function updateStatImages() {
   function updateInstitutionBoxes() {
     institutionBoxes.forEach(entry => {
       const obj = institutionsMap[entry.id];
+      if (obj) entry.box.setFromObject(obj);
+    });
+  }
+
+  function updateConstructionBoxes() {
+    constructionBoxes.forEach(entry => {
+      const c = constructionMap[entry.id];
+      const obj = c && (c.scaff || c.final);
       if (obj) entry.box.setFromObject(obj);
     });
   }
@@ -1821,6 +1850,7 @@ function updateStatImages() {
     updateParticles(dt);
     updateSinking(dt);
     updateInstitutionBoxes();
+    updateConstructionBoxes();
 
     if (mixer) mixer.update(dt);
     for (const id in remotePlayers) {
@@ -1895,6 +1925,9 @@ function updateStatImages() {
                 let blocked = false;
                 const sphere = new THREE.Sphere(proposed, 1);
                 institutionBoxes.forEach(entry => {
+                    if (entry.box.intersectsSphere(sphere)) blocked = true;
+                });
+                constructionBoxes.forEach(entry => {
                     if (entry.box.intersectsSphere(sphere)) blocked = true;
                 });
                 if (!blocked) {
