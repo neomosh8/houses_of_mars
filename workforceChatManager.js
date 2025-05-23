@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const institutionStore = require('./institutionStore');
 
 let OpenAI = null;
 try {
@@ -76,7 +77,8 @@ class WorkforceChatManager {
 
   async _query(instructions, input) {
     if (!this.openai) {
-      return '...';
+      // Fake simple JSON response
+      return { dialogue: '...', proposal: null };
     }
     const response = await this.openai.responses.create({
       model: 'gpt-4.1-nano-2025-04-14',
@@ -95,9 +97,14 @@ class WorkforceChatManager {
       response.output[0].content &&
       response.output[0].content[0]
     ) {
-      return response.output[0].content[0].text.trim();
+      const raw = response.output[0].content[0].text.trim();
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return { dialogue: raw, proposal: null };
+      }
     }
-    return '';
+    return { dialogue: '', proposal: null };
   }
 
   async _step(key) {
@@ -105,7 +112,10 @@ class WorkforceChatManager {
     if (!chat || chat.workers.length === 0) return;
     for (const worker of chat.workers) {
       const history = chat.messages.slice(-10).map(m => `${m.worker}: ${m.text}`).join('\n');
-      const instructions = `You are ${worker.name}, ${worker.role}. Backstory: ${worker.backstory}. Resume: ${worker.resume}.`;
+      let instructions = `You are ${worker.name}, ${worker.role}. Backstory: ${worker.backstory}. Resume: ${worker.resume}.`;
+      if (worker.director) {
+        instructions += ' If you agree with an idea, you may respond with a project proposal JSON object along with your dialogue.';
+      }
       let prompt;
       if (!worker.initialized) {
         prompt = history ? `${history}\n${chat.firstPrompt}` : chat.firstPrompt;
@@ -113,10 +123,17 @@ class WorkforceChatManager {
         prompt = history || chat.firstPrompt;
       }
       try {
-        const text = await this._query(instructions, prompt);
-        if (text) {
-          chat.messages.push({ worker: worker.name, text });
+        const result = await this._query(instructions, prompt);
+        if (result && result.dialogue) {
+          chat.messages.push({ worker: worker.name, text: result.dialogue });
           worker.initialized = true;
+        }
+        if (result && result.proposal && worker.director) {
+          const [owner, name] = key.split('|');
+          const inst = institutionStore.findInstitution(owner, name);
+          if (inst) {
+            institutionStore.addProposal(inst.id, result.proposal);
+          }
         }
       } catch (err) {
         console.log('Chat generation failed:', err.message);
