@@ -139,7 +139,7 @@ class WorkforceChatManager {
       let instructions = `You are ${worker.name}, ${worker.role}. Backstory: ${worker.backstory}. Resume: ${worker.resume}.`;
     if (worker.director) {
       instructions +=
-        ' When you are ready to propose, reply with JSON exactly like { "dialogue": "...", "is_proposal": true, "proposal": { "title": "Title", "description": "Details", "cost": 100, "prerequisites": [ { "type": "hire", "value": "Role" } ], "gains": { "hydration": 3, "oxygen": 5, "health": 2, "money": 10 }, "risk": "low" } }. Otherwise reply with { "dialogue": "...", "is_proposal": false, "proposal": null }. Always respond with valid JSON.';
+        ' When you are ready to propose, reply with JSON exactly like { "dialogue": "...", "is_proposal": true, "proposal": { "title": "Title", "description": "Details", "cost": 100, "prerequisites": [ { "type": "hire", "value": "Role" } ], "gains": { "hydration": 1 to 9, "oxygen": 1 to 9, "health": 1 to 9, "money": 100 to 100 }, "risk": "low" } }. Otherwise reply with { "dialogue": "...", "is_proposal": false, "proposal": null }. Always respond with valid JSON.';
     }
 
 
