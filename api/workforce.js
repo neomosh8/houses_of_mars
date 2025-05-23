@@ -23,9 +23,9 @@ const judge = require('../judge');
 const meshy = require('../meshy');
 
 const SCAFF_MODELS = [
-  { url: 'https://threejs.org/examples/models/gltf/Flamingo.glb', scale: 0.5 },
-  { url: 'https://threejs.org/examples/models/gltf/Horse.glb', scale: 0.5 },
-  { url: 'https://threejs.org/examples/models/gltf/RobotExpressive/RobotExpressive.glb', scale: 0.5 }
+  { url: 'scof1.glb', scale: 6 },
+  { url: 'scof2.glb', scale: 9 },
+  { url: 'scof3.glb', scale: 4 }
 ];
 const MODEL_DIR = path.join(__dirname, '..', 'generated_models');
 if (!fs.existsSync(MODEL_DIR)) fs.mkdirSync(MODEL_DIR);
