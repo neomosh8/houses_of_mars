@@ -6,6 +6,25 @@ const RESOLUTION = 100;
 const UPDATE_INTERVAL_MS = 60 * 1000; // 1 minute
 const SAVE_PNG = true; // set to false to disable png saving
 
+const TERRAIN_FILE = path.join(__dirname, 'terrain.gltf');
+const TERRAIN_SCALE = 50; // must match scale used in client
+
+function loadTerrainBounds() {
+  try {
+    const data = JSON.parse(fs.readFileSync(TERRAIN_FILE, 'utf8'));
+    const accessor = data.accessors && data.accessors[0];
+    if (accessor && accessor.min && accessor.max) {
+      return {
+        minX: accessor.min[0] * TERRAIN_SCALE,
+        maxX: accessor.max[0] * TERRAIN_SCALE,
+        minY: accessor.min[2] * TERRAIN_SCALE,
+        maxY: accessor.max[2] * TERRAIN_SCALE
+      };
+    }
+  } catch (err) {}
+  return { minX: 0, maxX: RESOLUTION, minY: 0, maxY: RESOLUTION };
+}
+
 // simple deterministic random generator (mulberry32)
 function createPRNG(seed) {
   let a = seed >>> 0;
@@ -50,6 +69,9 @@ class PlanetEngine {
     this.resolution = RESOLUTION;
     this.seed = 123456789;
     this.rand = createPRNG(this.seed);
+    this.bounds = loadTerrainBounds();
+    this.width = this.bounds.maxX - this.bounds.minX;
+    this.height = this.bounds.maxY - this.bounds.minY;
     this.maps = {
       temperature: this._createMap(),
       humidity: this._createMap(),
@@ -153,8 +175,11 @@ class PlanetEngine {
   }
 
   getProperties(x, y, props) {
-    const ix = Math.floor(clamp(x, 0, this.resolution - 1));
-    const iy = Math.floor(clamp(y, 0, this.resolution - 1));
+    // x and y are world coordinates relative to terrain
+    const nx = (x - this.bounds.minX) / this.width;
+    const ny = (y - this.bounds.minY) / this.height;
+    const ix = Math.floor(clamp(nx * (this.resolution - 1), 0, this.resolution - 1));
+    const iy = Math.floor(clamp(ny * (this.resolution - 1), 0, this.resolution - 1));
     const all = {
       temperature: this.maps.temperature[iy][ix],
       humidity: this.maps.humidity[iy][ix],
