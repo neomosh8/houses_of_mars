@@ -919,9 +919,11 @@ function updateStatImages() {
       container.innerHTML = '<div class="spinner" style="height:100px;color:#fff">Loading...</div>';
       try {
         const res = await fetch(`/api/workforce/proposals/${id}`);
-        if (res.ok) {
+        const hist = await fetch(`/api/workforce/proposals/history/${id}`);
+        if (res.ok && hist.ok) {
           const data = await res.json();
-          renderProposals(container, data.proposals || [], id, institutionDataMap, playerEmail);
+          const h = await hist.json();
+          renderProposals(container, data.proposals || [], id, institutionDataMap, playerEmail, h.history || []);
         }
       } catch(err){
         container.innerHTML = '<div style="color:#ff6666">Failed</div>';

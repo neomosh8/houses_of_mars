@@ -296,27 +296,44 @@ module.exports = function(institutionStore, userStore, engine, broadcast) {
     }
   });
 
+  router.get('/proposals/history/:id', (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const history = institutionStore.getProposalHistory(id);
+      res.json({ history });
+    } catch {
+      res.status(500).json({ error: 'failed' });
+    }
+  });
+
   router.post('/proposals/:id', async (req, res) => {
     try {
       const id = Number(req.params.id);
       const { index, approve } = req.body;
-      const status = approve ? 'approved' : 'denied';
-      const proposal = institutionStore.updateProposal(id, index, { status });
-      chatManager.resolveProposal(id, index, status);
 
+      const inst = institutionStore.getInstitution(id);
+      if (!inst || !inst.proposals || !inst.proposals[index]) {
+        return res.status(404).json({ error: 'not found' });
+      }
+
+      const orig = inst.proposals[index];
       let result = null;
+      let status = 'denied';
+
       if (approve) {
-        const inst = institutionStore.getInstitution(id);
-        if (inst) {
-          const [x, , z] = inst.position || [0, 0, 0];
-          const ecosystem = engine.getProperties(x, z);
-          result = await judge.judgeProposal(proposal, ecosystem);
-          if (result && result.feasible && result.gains) {
-            const extra = institutionStore.addGains(id, result.gains);
-            broadcast({ type: 'updateInstitution', id, extraEffects: extra, gains: result.gains });
-          }
+        const [x, , z] = inst.position || [0, 0, 0];
+        const ecosystem = engine.getProperties(x, z);
+        result = await judge.judgeProposal(orig, ecosystem);
+        status = result && result.feasible ? 'approved' : 'rejected';
+        if (result && result.feasible && result.gains) {
+          const extra = institutionStore.addGains(id, result.gains);
+          broadcast({ type: 'updateInstitution', id, extraEffects: extra, gains: result.gains });
         }
       }
+
+      const proposal = institutionStore.updateProposal(id, index, { status, judgeResult: result });
+      const note = result && !result.feasible ? result.gains : null;
+      chatManager.resolveProposal(id, index, status, note);
 
       res.json({ proposal, result });
     } catch (err) {
