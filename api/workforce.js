@@ -16,6 +16,8 @@ try {
   console.log('OpenAI not available:', error.message);
 }
 
+const chatManager = require('../workforceChatManager');
+
 module.exports = function(institutionStore, userStore) {
   const router = express.Router();
 
@@ -222,6 +224,7 @@ module.exports = function(institutionStore, userStore) {
 
       // Add the worker
       inst.workforce.push(worker);
+      chatManager.addWorker(inst.owner, inst.name, worker);
 
       // Update the institution
       institutionStore.updateInstitution(id, { workforce: inst.workforce });
@@ -254,6 +257,17 @@ module.exports = function(institutionStore, userStore) {
     } catch (error) {
       console.error('Get workforce error:', error);
       res.status(500).json({ error: 'Failed to get workforce' });
+    }
+  });
+
+  router.get('/chat/:email/:name', (req, res) => {
+    try {
+      const { email, name } = req.params;
+      const chat = chatManager.getChat(email, name);
+      res.json({ messages: chat.messages });
+    } catch (error) {
+      console.error('Get chat error:', error);
+      res.status(500).json({ error: 'Failed to get chat' });
     }
   });
 
