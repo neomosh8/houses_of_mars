@@ -107,17 +107,14 @@ class WorkforceChatManager {
 
     const raw =
       response?.output?.[0]?.content?.[0]?.text?.trim() || '';
-    console.log('Raw AI response:', raw);
 
     try {
       const obj = JSON.parse(raw);
       if (typeof obj.is_proposal !== 'boolean') {
         obj.is_proposal = !!obj.proposal;
       }
-      console.log('Parsed AI JSON:', obj);
       return { ...obj, raw };
     } catch {
-      console.log('Using raw text response');
       return { dialogue: raw, proposal: null, is_proposal: false, raw };
     }
   }
@@ -150,7 +147,6 @@ class WorkforceChatManager {
       const prompt = worker.director
         ? `Please respond in valid JSON only. ${basePrompt}`
         : basePrompt;
-      console.log(`Prompt for ${worker.name}:`, prompt);
 
       let result;
       try {
@@ -158,7 +154,6 @@ class WorkforceChatManager {
       } catch {
         continue;
       }
-      console.log('Result object:', result);
 
       if (result.dialogue) {
         if (worker.director) {
