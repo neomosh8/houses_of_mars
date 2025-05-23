@@ -9,7 +9,7 @@ try {
 const CHAT_FILE = path.join(__dirname, 'chatLogs.json');
 const WORKFORCE_INTERVAL_MS = 60000; // default 1 minute
 const FIRST_PROMPTS = {
-  WatOx: 'your water oxygen extraction and manufacturing expert, how do we can increase production'
+  WatOx: 'your water oxygen extraction and manufacturing expert, how do we can increase production, one sentence, conssie idea, if you have a question, need sth, make that one sentence a requrest, if not give idea, or comment'
 };
 
 class WorkforceChatManager {
