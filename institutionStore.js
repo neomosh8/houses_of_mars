@@ -30,6 +30,7 @@ function addInstitution(inst) {
   inst.id = data.nextId++;
   if (!inst.workforce) inst.workforce = [];
   if (!inst.proposals) inst.proposals = [];
+  if (!inst.proposalHistory) inst.proposalHistory = [];
   if (!inst.extraEffects) {
     inst.extraEffects = { hydration: 0, oxygen: 0, health: 0, money: 0 };
   }
@@ -56,6 +57,7 @@ function addProposal(instId, proposal) {
   const data = loadData();
   const inst = data.list.find(i => i.id === instId);
   if (!inst) return null;
+  if (!Array.isArray(inst.proposalHistory)) inst.proposalHistory = [];
   const full = {
     project: proposal.project || proposal.title || 'Project',
     description: proposal.description || '',
@@ -77,12 +79,21 @@ function getProposals(instId) {
   return inst.proposals.filter(p => p.status === 'pending');
 }
 
+function getProposalHistory(instId) {
+  const data = loadData();
+  const inst = data.list.find(i => i.id === instId);
+  if (!inst || !Array.isArray(inst.proposalHistory)) return [];
+  return inst.proposalHistory;
+}
+
 function updateProposal(instId, index, updates) {
   const data = loadData();
   const inst = data.list.find(i => i.id === instId);
   if (!inst || !inst.proposals || !inst.proposals[index]) return null;
   const proposal = Object.assign({}, inst.proposals[index], updates);
+  if (!Array.isArray(inst.proposalHistory)) inst.proposalHistory = [];
   if (proposal.status !== 'pending') {
+    inst.proposalHistory.push(proposal);
     inst.proposals.splice(index, 1);
   } else {
     inst.proposals[index] = proposal;
@@ -115,6 +126,7 @@ module.exports = {
   findInstitution,
   addProposal,
   getProposals,
+  getProposalHistory,
   updateProposal,
   addGains,
 };

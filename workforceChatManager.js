@@ -185,7 +185,7 @@ class WorkforceChatManager {
     this._save();
   }
 
-  resolveProposal(instId, index, status) {
+  resolveProposal(instId, index, status, note = null) {
     const inst = institutionStore.getInstitution(instId);
     if (!inst) return;
     const key = this._key(inst.owner, inst.name);
@@ -193,7 +193,9 @@ class WorkforceChatManager {
     if (!chat) return;
     if (chat.pendingProposal && chat.pendingProposal.instId === instId && chat.pendingProposal.index === index) {
       chat.pendingProposal = null;
-      chat.messages.push({ worker: 'System', text: `Proposal ${status}` });
+      let msg = `Proposal ${status}`;
+      if (note) msg += `: ${note}`;
+      chat.messages.push({ worker: 'System', text: msg });
       this._save();
     }
   }

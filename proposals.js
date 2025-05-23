@@ -11,14 +11,13 @@ export function checkPrerequisite(pr, playerEmail, institutionDataMap) {
   return false;
 }
 
-export function renderProposals(container, proposals, instId, institutionDataMap, playerEmail) {
+export function renderProposals(container, proposals, instId, institutionDataMap, playerEmail, history = []) {
   container.innerHTML = '';
   if (!proposals || proposals.length === 0) {
     container.innerHTML = '<div style="color:#fff">No proposals</div>';
-    return;
-  }
+  } else {
 
-  proposals.forEach((p, idx) => {
+    proposals.forEach((p, idx) => {
     const card = document.createElement('div');
     card.style.border = '1px solid #888';
     card.style.padding = '8px';
@@ -121,4 +120,32 @@ export function renderProposals(container, proposals, instId, institutionDataMap
     card.appendChild(deny);
     container.appendChild(card);
   });
+  }
+
+  if (history && history.length > 0) {
+    const header = document.createElement('div');
+    header.style.marginTop = '10px';
+    header.style.color = '#fff';
+    header.textContent = 'Past Proposals';
+    container.appendChild(header);
+    history.forEach(p => {
+      const card = document.createElement('div');
+      card.style.border = '1px solid #444';
+      card.style.padding = '6px';
+      card.style.marginBottom = '4px';
+      const title = document.createElement('div');
+      title.textContent = p.project;
+      title.style.fontWeight = 'bold';
+      card.appendChild(title);
+      const status = document.createElement('div');
+      status.textContent = `Status: ${p.status}`;
+      card.appendChild(status);
+      if (p.judgeResult && !p.judgeResult.feasible) {
+        const note = document.createElement('div');
+        note.textContent = p.judgeResult.gains;
+        card.appendChild(note);
+      }
+      container.appendChild(card);
+    });
+  }
 }
