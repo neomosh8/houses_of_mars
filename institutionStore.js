@@ -34,6 +34,7 @@ function addInstitution(inst) {
   if (!inst.extraEffects) {
     inst.extraEffects = { hydration: 0, oxygen: 0, health: 0, money: 0 };
   }
+  if (!inst.construction) inst.construction = null;
   data.list.push(inst);
   saveData(data);
   return inst.id;

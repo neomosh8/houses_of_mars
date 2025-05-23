@@ -522,6 +522,7 @@ function updateStatImages() {
   const institutionDataMap = {};
   const institutionBoxes = [];
   const sinking = [];
+  const constructionMap = {};
 
   function initNetwork() {
     socket = new WebSocket('ws://localhost:3000?email=' + encodeURIComponent(playerEmail));
@@ -553,6 +554,10 @@ function updateStatImages() {
         const inst = institutionDataMap[msg.id];
         if (inst) {
           inst.extraEffects = msg.extraEffects || inst.extraEffects || {};
+          if (msg.construction !== undefined) {
+            inst.construction = msg.construction;
+            applyConstruction(inst);
+          }
           if (inst.owner === playerEmail && msg.gains) {
             ownedInstitutions.push(msg.gains);
           }
@@ -638,6 +643,27 @@ function updateStatImages() {
     delete remotePlayers[id];
   }
 
+  function applyConstruction(inst) {
+    const existing = constructionMap[inst.id] || {};
+    if (existing.scaff) scene.remove(existing.scaff);
+    if (existing.final) scene.remove(existing.final);
+    constructionMap[inst.id] = {};
+    if (!inst.construction) return;
+    const loader = new GLTFLoader();
+    loader.load(inst.construction.url, gltf => {
+      const obj = gltf.scene;
+      obj.position.fromArray(inst.position);
+      obj.rotation.y = inst.rotation || 0;
+      obj.scale.setScalar(inst.construction.scale || inst.scale || 1);
+      scene.add(obj);
+      if (inst.construction.status === 'scaffolding') {
+        constructionMap[inst.id].scaff = obj;
+      } else {
+        constructionMap[inst.id].final = obj;
+      }
+    });
+  }
+
   function createInstitution(inst, animate) {
     const def = institutions.find(i => i.name === inst.name);
     if (!def) return;
@@ -653,6 +679,7 @@ function updateStatImages() {
       obj.traverse(o => { o.userData.institutionId = inst.id; });
       const box = new THREE.Box3().setFromObject(obj);
       institutionBoxes.push({ id: inst.id, box });
+      applyConstruction(institutionDataMap[inst.id]);
       if (inst.owner === playerEmail) {
         if (def.effects) ownedInstitutions.push(def.effects);
         if (inst.extraEffects) ownedInstitutions.push(inst.extraEffects);

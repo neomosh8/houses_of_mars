@@ -20,6 +20,15 @@ try {
 
 const chatManager = require('../workforceChatManager');
 const judge = require('../judge');
+const meshy = require('../meshy');
+
+const SCAFF_MODELS = [
+  { url: 'https://threejs.org/examples/models/gltf/Flamingo.glb', scale: 0.5 },
+  { url: 'https://threejs.org/examples/models/gltf/Horse.glb', scale: 0.5 },
+  { url: 'https://threejs.org/examples/models/gltf/RobotExpressive/RobotExpressive.glb', scale: 0.5 }
+];
+const MODEL_DIR = path.join(__dirname, '..', 'generated_models');
+if (!fs.existsSync(MODEL_DIR)) fs.mkdirSync(MODEL_DIR);
 module.exports = function(institutionStore, userStore, engine, broadcast) {
   const router = express.Router();
 
@@ -328,6 +337,23 @@ module.exports = function(institutionStore, userStore, engine, broadcast) {
         if (result && result.feasible && result.gains) {
           const extra = institutionStore.addGains(id, result.gains);
           broadcast({ type: 'updateInstitution', id, extraEffects: extra, gains: result.gains });
+        }
+        if (result && result.feasible) {
+          const scaff = SCAFF_MODELS[Math.floor(Math.random() * SCAFF_MODELS.length)];
+          const construction = { status: 'scaffolding', url: scaff.url, scale: scaff.scale };
+          institutionStore.updateInstitution(id, { construction });
+          broadcast({ type: 'updateInstitution', id, construction });
+
+          const prompt = `${orig.project || orig.title || ''} ${orig.description || ''}`.trim();
+          const file = path.join(MODEL_DIR, `inst_${id}_${Date.now()}.glb`);
+          meshy.generateModel(prompt, file)
+            .then(fp => {
+              const rel = path.relative(path.join(__dirname, '..'), fp).replace(/\\/g, '/');
+              const done = { status: 'completed', url: rel, scale: scaff.scale };
+              institutionStore.updateInstitution(id, { construction: done });
+              broadcast({ type: 'updateInstitution', id, construction: done });
+            })
+            .catch(err => console.error('Meshy generation failed:', err));
         }
       }
 
