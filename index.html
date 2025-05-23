@@ -261,6 +261,7 @@ function updateStatImages() {
   let ghostInstitution = null;
   let placingInstitution = false;
   let currentInstitution = null;
+  let institutionPopupOpen = false;
 
   function selectInstitution(inst) {
     if (ghostInstitution) {
@@ -287,6 +288,7 @@ function updateStatImages() {
   }
 
   function handleClick(event) {
+    if (institutionPopupOpen) return;
     if (placingInstitution && ghostInstitution && currentInstitution) {
       if (playerMoney < currentInstitution.price) {
         alert('Not enough money');
@@ -683,6 +685,7 @@ function updateStatImages() {
 
     const instData = institutionDataMap[id];
     if (!instData) return;
+    const isOwner = instData.owner === playerEmail;
     const def = institutions.find(i => i.name === instData.name);
     let count = 0;
     Object.values(institutionDataMap).forEach(d => {
@@ -699,7 +702,16 @@ function updateStatImages() {
       lines.push(`${k}: +${effects[k]} (${(effects[k]*count).toFixed(2)} total)`);
     });
     resDiv.textContent = lines.join(' | ');
-    ownerSpan.innerHTML = `Owner: <span id="owner-click" style="text-decoration:underline;cursor:pointer;">${instData.owner}</span>`;
+    const actionsDiv = popup.querySelector('.popup-actions');
+    if (isOwner) {
+      actionsDiv.style.display = 'flex';
+      resDiv.style.display = 'block';
+      ownerSpan.innerHTML = `Owner: <span id="owner-click" style="text-decoration:underline;cursor:pointer;">${instData.owner}</span>`;
+    } else {
+      actionsDiv.style.display = 'none';
+      resDiv.style.display = 'none';
+      ownerSpan.textContent = `Owner: ${instData.owner}`;
+    }
 
     function showInfo() {
       infoDiv.style.display = 'block';
@@ -930,22 +942,40 @@ function updateStatImages() {
       }
     }
 
-    infoTabBtn.onclick = showInfo;
-    workforceTabBtn.onclick = showWorkforce;
-    chatTabBtn.onclick = showChat;
-    proposalsTabBtn.onclick = showProposals;
+    if (isOwner) {
+      infoTabBtn.onclick = showInfo;
+      workforceTabBtn.onclick = showWorkforce;
+      chatTabBtn.onclick = showChat;
+      proposalsTabBtn.onclick = showProposals;
+    } else {
+      infoTabBtn.onclick = null;
+      workforceTabBtn.onclick = null;
+      chatTabBtn.onclick = null;
+      proposalsTabBtn.onclick = null;
+    }
 
-    popup.style.display = 'block';
-    showInfo();
-    closeBtn.onclick = () => {
+    function closePopup() {
       popup.style.display = 'none';
+      institutionPopupOpen = false;
+      document.removeEventListener('keydown', escHandler);
       if (chatInterval) {
         clearInterval(chatInterval);
         chatInterval = null;
       }
       proposalsDiv.style.display = 'none';
-    };
-    document.getElementById('owner-click').onclick = showWorkforce;
+    }
+
+    function escHandler(e) {
+      if (e.key === 'Escape') closePopup();
+    }
+
+    popup.style.display = 'block';
+    institutionPopupOpen = true;
+    showInfo();
+    document.addEventListener('keydown', escHandler);
+    closeBtn.onclick = closePopup;
+    const ownerLink = document.getElementById('owner-click');
+    if (ownerLink && isOwner) ownerLink.onclick = showWorkforce;
   }
 
   function updateSinking(dt) {
