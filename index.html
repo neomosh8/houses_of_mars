@@ -51,11 +51,9 @@
     <div id="popup-workforce" class="hidden">
       <div id="workforce-container" ></div>
     </div>
-    <div id="popup-chat" class="hidden"><div id="chat-messages"></div></div>
-    <div class="popup-actions">
+          <div class="popup-actions">
       <button id="info-tab-btn">Info</button>
       <button id="workforce-tab-btn">See Applicants</button>
-      <button id="chat-tab-btn">Chat</button>
     </div>
   </div>
   <script type="module">
@@ -653,11 +651,8 @@ function updateStatImages() {
     const popup = document.getElementById('institution-popup');
     const infoTabBtn = document.getElementById('info-tab-btn');
     const workforceTabBtn = document.getElementById('workforce-tab-btn');
-    const chatTabBtn = document.getElementById('chat-tab-btn');
     const infoDiv = document.getElementById('popup-info');
     const workforceDiv = document.getElementById('popup-workforce');
-    const chatDiv = document.getElementById('popup-chat');
-    const chatMessagesDiv = document.getElementById('chat-messages');
     const ownerSpan = document.getElementById('popup-owner');
     const resDiv = document.getElementById('popup-resources');
     const closeBtn = document.getElementById('popup-close');
@@ -823,34 +818,8 @@ function updateStatImages() {
       }
     }
 
-    async function showChat() {
-      infoDiv.style.display = 'none';
-      workforceDiv.style.display = 'none';
-      chatDiv.style.display = 'block';
-      chatMessagesDiv.textContent = 'Loading...';
-      try {
-        const res = await fetch(`/api/workforceChat/${instData.name}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: playerEmail })
-        });
-        const data = await res.json();
-        chatMessagesDiv.innerHTML = '';
-        if (Array.isArray(data.messages)) {
-          data.messages.forEach(m => {
-            const p = document.createElement('div');
-            p.textContent = `${m.sender}: ${m.content}`;
-            chatMessagesDiv.appendChild(p);
-          });
-        }
-      } catch (e) {
-        chatMessagesDiv.textContent = 'Failed to load chat';
-      }
-    }
-
     infoTabBtn.onclick = showInfo;
     workforceTabBtn.onclick = showWorkforce;
-    chatTabBtn.onclick = showChat;
 
     popup.style.display = 'block';
     showInfo();
