@@ -51,9 +51,13 @@
     <div id="popup-workforce" class="hidden">
       <div id="workforce-container" ></div>
     </div>
+    <div id="popup-chat" class="hidden">
+      <div id="chat-container"></div>
+    </div>
           <div class="popup-actions">
       <button id="info-tab-btn">Info</button>
       <button id="workforce-tab-btn">See Applicants</button>
+      <button id="chat-tab-btn">Chat</button>
     </div>
   </div>
   <script type="module">
@@ -651,11 +655,16 @@ function updateStatImages() {
     const popup = document.getElementById('institution-popup');
     const infoTabBtn = document.getElementById('info-tab-btn');
     const workforceTabBtn = document.getElementById('workforce-tab-btn');
+    const chatTabBtn = document.getElementById('chat-tab-btn');
     const infoDiv = document.getElementById('popup-info');
     const workforceDiv = document.getElementById('popup-workforce');
+    const chatDiv = document.getElementById('popup-chat');
+    const chatContainer = document.getElementById('chat-container');
     const ownerSpan = document.getElementById('popup-owner');
     const resDiv = document.getElementById('popup-resources');
     const closeBtn = document.getElementById('popup-close');
+
+    let chatInterval = null;
 
     const instData = institutionDataMap[id];
     if (!instData) return;
@@ -675,6 +684,11 @@ function updateStatImages() {
     function showInfo() {
       infoDiv.style.display = 'block';
       workforceDiv.style.display = 'none';
+      chatDiv.style.display = 'none';
+      if (chatInterval) {
+        clearInterval(chatInterval);
+        chatInterval = null;
+      }
       const carousel = document.getElementById('popup-workforce-carousel');
       carousel.innerHTML = '';
       const workers = [];
@@ -709,6 +723,11 @@ function updateStatImages() {
     async function showWorkforce() {
       infoDiv.style.display = 'none';
       workforceDiv.style.display = 'block';
+      chatDiv.style.display = 'none';
+      if (chatInterval) {
+        clearInterval(chatInterval);
+        chatInterval = null;
+      }
       const container = document.getElementById('workforce-container');
       // Immediately show loading spinner
       container.innerHTML = '<div class="spinner" style="display: flex; justify-content: center; align-items: center; height: 200px; color: #fff;">Loading applicants...</div>';
@@ -818,13 +837,45 @@ function updateStatImages() {
       }
     }
 
+    async function showChat() {
+      infoDiv.style.display = 'none';
+      workforceDiv.style.display = 'none';
+      chatDiv.style.display = 'block';
+      if (chatInterval) clearInterval(chatInterval);
+      async function load() {
+        try {
+          const res = await fetch(`/api/workforce/chat/${instData.owner}/${instData.name}`);
+          if (res.ok) {
+            const data = await res.json();
+            chatContainer.innerHTML = '';
+            data.messages.forEach(m => {
+              const box = document.createElement('div');
+              box.className = 'chat-msg';
+              box.textContent = `${m.worker}: ${m.text}`;
+              chatContainer.appendChild(box);
+            });
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+          }
+        } catch (err) {
+          console.error('Chat load error', err);
+        }
+      }
+      await load();
+      chatInterval = setInterval(load, 5000);
+    }
+
     infoTabBtn.onclick = showInfo;
     workforceTabBtn.onclick = showWorkforce;
+    chatTabBtn.onclick = showChat;
 
     popup.style.display = 'block';
     showInfo();
     closeBtn.onclick = () => {
       popup.style.display = 'none';
+      if (chatInterval) {
+        clearInterval(chatInterval);
+        chatInterval = null;
+      }
     };
     document.getElementById('owner-click').onclick = showWorkforce;
   }

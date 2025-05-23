@@ -20,6 +20,7 @@ const client = twilio(accountSid, authToken);
 
 const userStore = require('./userStore');
 const institutionStore = require('./institutionStore');
+const chatManager = require('./workforceChatManager');
 
 const INSTITUTION_PRICES = {
   WatOx: 100,
@@ -31,6 +32,7 @@ const loginRoute = require('./api/login')(client, verifySid);
 const verifyRoute = require('./api/verify')(client, verifySid, userStore);
 const stateRoute = require('./api/state')(userStore);
 const workforceRoute = require('./api/workforce')(institutionStore, userStore);
+chatManager.initFromInstitutions(institutionStore.getInstitutions());
 
 app.use('/api/login', loginRoute);
 app.use('/api/verify', verifyRoute);
