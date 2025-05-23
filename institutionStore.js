@@ -30,6 +30,9 @@ function addInstitution(inst) {
   inst.id = data.nextId++;
   if (!inst.workforce) inst.workforce = [];
   if (!inst.proposals) inst.proposals = [];
+  if (!inst.extraEffects) {
+    inst.extraEffects = { hydration: 0, oxygen: 0, health: 0, money: 0 };
+  }
   data.list.push(inst);
   saveData(data);
   return inst.id;
@@ -88,6 +91,22 @@ function updateProposal(instId, index, updates) {
   return proposal;
 }
 
+function addGains(instId, gains) {
+  const data = loadData();
+  const inst = data.list.find(i => i.id === instId);
+  if (!inst) return null;
+  if (!inst.extraEffects) {
+    inst.extraEffects = { hydration: 0, oxygen: 0, health: 0, money: 0 };
+  }
+  for (const key of ['hydration', 'oxygen', 'health', 'money']) {
+    if (gains && typeof gains[key] === 'number') {
+      inst.extraEffects[key] += gains[key];
+    }
+  }
+  saveData(data);
+  return inst.extraEffects;
+}
+
 module.exports = {
   getInstitutions,
   addInstitution,
@@ -97,4 +116,5 @@ module.exports = {
   addProposal,
   getProposals,
   updateProposal,
+  addGains,
 };

@@ -19,8 +19,8 @@ try {
 }
 
 const chatManager = require('../workforceChatManager');
-
-module.exports = function(institutionStore, userStore) {
+const judge = require('../judge');
+module.exports = function(institutionStore, userStore, engine, broadcast) {
   const router = express.Router();
 
   function randomWorker() {
@@ -296,15 +296,30 @@ module.exports = function(institutionStore, userStore) {
     }
   });
 
-  router.post('/proposals/:id', (req, res) => {
+  router.post('/proposals/:id', async (req, res) => {
     try {
       const id = Number(req.params.id);
       const { index, approve } = req.body;
       const status = approve ? 'approved' : 'denied';
       const proposal = institutionStore.updateProposal(id, index, { status });
       chatManager.resolveProposal(id, index, status);
-      res.json({ proposal });
-    } catch {
+
+      let result = null;
+      if (approve) {
+        const inst = institutionStore.getInstitution(id);
+        if (inst) {
+          const [x, , z] = inst.position || [0, 0, 0];
+          const ecosystem = engine.getProperties(x, z);
+          result = await judge.judgeProposal(proposal, ecosystem);
+          if (result && result.feasible && result.gains) {
+            const extra = institutionStore.addGains(id, result.gains);
+            broadcast({ type: 'updateInstitution', id, extraEffects: extra, gains: result.gains });
+          }
+        }
+      }
+
+      res.json({ proposal, result });
+    } catch (err) {
       res.status(500).json({ error: 'failed' });
     }
   });

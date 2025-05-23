@@ -87,11 +87,24 @@ export function renderProposals(container, proposals, instId, institutionDataMap
     }
 
     approve.onclick = async () => {
-      await fetch(`/api/workforce/proposals/${instId}`, {
+      const res = await fetch(`/api/workforce/proposals/${instId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ index: idx, approve: true })
       });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.result && data.result.gains) {
+          const inst = institutionDataMap[instId];
+          if (inst) {
+            inst.extraEffects = inst.extraEffects || {};
+            Object.assign(inst.extraEffects, data.result.gains);
+            if (inst.owner === playerEmail) {
+              ownedInstitutions.push(data.result.gains);
+            }
+          }
+        }
+      }
       card.remove();
     };
 
