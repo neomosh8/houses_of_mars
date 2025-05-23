@@ -8,20 +8,19 @@ try {
 } catch (_) {}
 
 const CHAT_FILE = path.join(__dirname, 'chatLogs.json');
-const WORKFORCE_INTERVAL_MS = 60000; // default 1 minute
+const WORKFORCE_INTERVAL_MS = 60000; // 1 minute
 const FIRST_PROMPTS = {
-  WatOx: 'your water oxygen extraction and manufacturing expert, how do we can increase production, one sentence, conssie idea, if you have a question, need sth, make that one sentence a requrest, if not give idea, or comment'
+  WatOx:
+    'You are our water-oxygen extraction expert. How can we increase production? Give one concise idea. If you need more info, ask one sentence.'
 };
 
 class WorkforceChatManager {
   constructor() {
     this.chats = this._load();
     this.intervals = {};
-    if (OpenAI && process.env.OPENAI_API_KEY) {
-      this.openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    } else {
-      this.openai = null;
-    }
+    this.openai = OpenAI && process.env.OPENAI_API_KEY
+      ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+      : null;
     for (const key of Object.keys(this.chats)) {
       if ((this.chats[key].workers || []).length > 0) {
         this._start(key);
@@ -60,17 +59,25 @@ class WorkforceChatManager {
 
   getChat(email, name) {
     const key = this._key(email, name);
-    return this.chats[key] || { messages: [], workers: [], firstPrompt: FIRST_PROMPTS[name] || 'Discuss improvements.' };
+    return this.chats[key] || {
+      messages: [],
+      workers: [],
+      firstPrompt: FIRST_PROMPTS[name] || 'Discuss improvements.',
+      pendingProposal: null
+    };
   }
 
   addWorker(email, name, worker) {
     const key = this._key(email, name);
-    let chat = this.chats[key];
-    if (!chat) {
-      chat = { messages: [], workers: [], firstPrompt: FIRST_PROMPTS[name] || 'Discuss improvements.', pendingProposal: null };
-      this.chats[key] = chat;
+    if (!this.chats[key]) {
+      this.chats[key] = {
+        messages: [],
+        workers: [],
+        firstPrompt: FIRST_PROMPTS[name] || 'Discuss improvements.',
+        pendingProposal: null
+      };
     }
-    chat.workers.push({ ...worker, initialized: false });
+    this.chats[key].workers.push({ ...worker, initialized: false });
     this._save();
     this._start(key);
   }
@@ -80,7 +87,7 @@ class WorkforceChatManager {
     this.intervals[key] = setInterval(() => this._step(key), WORKFORCE_INTERVAL_MS);
   }
 
-  async _query(instructions, input) {
+  async _query(instructions, input, isDirector) {
     if (!this.openai) {
       // Fake simple JSON response
       return { dialogue: '...', proposal: null, is_proposal: false };
@@ -89,29 +96,27 @@ class WorkforceChatManager {
       model: 'gpt-4.1-nano-2025-04-14',
       input,
       instructions,
-      text: { format: { type: 'text' } },
+      text: isDirector
+        ? { format: { type: 'json_object' } }
+        : { format: { type: 'text' } },
       temperature: 1.26,
       max_output_tokens: 2048,
       top_p: 1,
       store: false
     });
-    if (
-      response &&
-      response.output &&
-      response.output[0] &&
-      response.output[0].content &&
-      response.output[0].content[0]
-    ) {
-      const raw = response.output[0].content[0].text.trim();
-      try {
-        const obj = JSON.parse(raw);
-        if (typeof obj.is_proposal !== 'boolean') obj.is_proposal = !!obj.proposal;
-        return obj;
-      } catch {
-        return { dialogue: raw, proposal: null, is_proposal: false };
+
+    const raw =
+      response?.output?.[0]?.content?.[0]?.text?.trim() || '';
+
+    try {
+      const obj = JSON.parse(raw);
+      if (typeof obj.is_proposal !== 'boolean') {
+        obj.is_proposal = !!obj.proposal;
       }
+      return obj;
+    } catch {
+      return { dialogue: raw, proposal: null, is_proposal: false };
     }
-    return { dialogue: '', proposal: null, is_proposal: false };
   }
 
   async _step(key) {
@@ -119,34 +124,60 @@ class WorkforceChatManager {
     if (!chat || chat.workers.length === 0) return;
     if (chat.pendingProposal) return;
     for (const worker of chat.workers) {
-      const history = chat.messages.slice(-10).map(m => `${m.worker}: ${m.text}`).join('\n');
+      const history = chat.messages
+        .slice(-10)
+        .map(m => `${m.worker}: ${
+            typeof m.text === 'object'
+              ? JSON.stringify(m.text)
+              : m.text
+          }`)
+        .join('\n');
+
       let instructions = `You are ${worker.name}, ${worker.role}. Backstory: ${worker.backstory}. Resume: ${worker.resume}.`;
       if (worker.director) {
-        instructions += ' If you agree with an idea, reply with JSON {"dialogue":"...","is_proposal":true,"proposal":{...}}. '
-          + 'For normal dialogue reply with {"dialogue":"...","is_proposal":false}.';
+        instructions +=
+          ' When you are ready to propose, reply with JSON exactly like { "dialogue": "...", "is_proposal": true, "proposal": { "title": "Title", "description": "Details", "cost": 100 } }. Otherwise reply with { "dialogue": "...", "is_proposal": false, "proposal": null }.';
       }
-      let prompt;
-      if (!worker.initialized) {
-        prompt = history ? `${history}\n${chat.firstPrompt}` : chat.firstPrompt;
-      } else {
-        prompt = history || chat.firstPrompt;
-      }
+
+      const basePrompt = (!worker.initialized && history)
+        ? `${history}\n${chat.firstPrompt}`
+        : history || chat.firstPrompt;
+
+      const prompt = worker.director
+        ? `Please respond in valid JSON only. ${basePrompt}`
+        : basePrompt;
+
+      let result;
       try {
-        const result = await this._query(instructions, prompt);
-        if (result && result.dialogue) {
-          chat.messages.push({ worker: worker.name, text: result.dialogue });
-          worker.initialized = true;
-        }
-        if (result && result.is_proposal && worker.director) {
-          const [owner, name] = key.split('|');
-          const inst = institutionStore.findInstitution(owner, name);
-          if (inst) {
-            const { index } = institutionStore.addProposal(inst.id, result.proposal || {});
-            chat.pendingProposal = { instId: inst.id, index };
-          }
-        }
+        result = await this._query(instructions, prompt, worker.director);
       } catch (err) {
-        console.log('Chat generation failed:', err.message);
+        console.error('Chat generation failed:', err);
+        continue;
+      }
+
+      if (result.dialogue) {
+        if (worker.director) {
+          chat.messages.push({
+            worker: worker.name,
+            text: {
+              dialogue: result.dialogue,
+              is_proposal: result.is_proposal,
+              proposal: result.proposal || null
+            }
+          });
+        } else {
+          chat.messages.push({ worker: worker.name, text: result.dialogue });
+        }
+        worker.initialized = true;
+      }
+
+      if (worker.director && result.is_proposal) {
+        const [owner, instName] = key.split('|');
+        const inst = institutionStore.findInstitution(owner, instName);
+        if (inst) {
+          const { index } = institutionStore.addProposal(inst.id, result.proposal);
+          chat.pendingProposal = { instId: inst.id, index };
+        }
       }
     }
     this._save();
