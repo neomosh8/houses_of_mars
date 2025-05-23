@@ -652,7 +652,20 @@ function updateStatImages() {
     const loader = new GLTFLoader();
     loader.load(inst.construction.url, gltf => {
       const obj = gltf.scene;
-      obj.position.fromArray(inst.position);
+      let pos = new THREE.Vector3().fromArray(inst.position);
+      const boxEntry = institutionBoxes.find(b => b.id === inst.id);
+      if (boxEntry) {
+        const size = new THREE.Vector3();
+        boxEntry.box.getSize(size);
+        const offset = new THREE.Vector3(size.x / 2 + 3, 0, 0);
+        offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), inst.rotation || 0);
+        pos.add(offset);
+        console.log('Applying construction for', inst.id, 'offset', offset);
+      } else {
+        pos.x += 3; // default offset
+        console.log('Applying construction for', inst.id, 'default offset');
+      }
+      obj.position.copy(pos);
       obj.rotation.y = inst.rotation || 0;
       obj.scale.setScalar(inst.construction.scale || inst.scale || 1);
       scene.add(obj);
