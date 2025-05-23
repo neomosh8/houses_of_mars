@@ -54,9 +54,11 @@ function addProposal(instId, proposal) {
   const inst = data.list.find(i => i.id === instId);
   if (!inst) return null;
   if (!inst.proposals) inst.proposals = [];
-  inst.proposals.push(proposal);
+  const p = { status: 'pending', ...proposal };
+  inst.proposals.push(p);
+  const index = inst.proposals.length - 1;
   saveData(data);
-  return proposal;
+  return { proposal: p, index };
 }
 
 function getProposals(instId) {

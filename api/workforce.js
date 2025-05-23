@@ -312,7 +312,9 @@ module.exports = function(institutionStore, userStore) {
     try {
       const id = Number(req.params.id);
       const { index, approve } = req.body;
-      const proposal = institutionStore.updateProposal(id, index, { status: approve ? 'approved' : 'denied' });
+      const status = approve ? 'approved' : 'denied';
+      const proposal = institutionStore.updateProposal(id, index, { status });
+      chatManager.resolveProposal(id, index, status);
       res.json({ proposal });
     } catch (err) {
       console.error('Update proposal error', err);
