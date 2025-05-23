@@ -34,7 +34,7 @@ function addInstitution(inst) {
   if (!inst.extraEffects) {
     inst.extraEffects = { hydration: 0, oxygen: 0, health: 0, money: 0 };
   }
-  if (!inst.construction) inst.construction = null;
+  if (!Array.isArray(inst.constructions)) inst.constructions = [];
   data.list.push(inst);
   saveData(data);
   return inst.id;
@@ -68,9 +68,10 @@ function addProposal(instId, proposal) {
     risk: proposal.risk || null,
     status: 'pending'
   };
-  inst.proposals = [full];
+  if (!Array.isArray(inst.proposals)) inst.proposals = [];
+  inst.proposals.push(full);
   saveData(data);
-  return { proposal: full, index: 0 };
+  return { proposal: full, index: inst.proposals.length - 1 };
 }
 
 function getProposals(instId) {
@@ -103,6 +104,25 @@ function updateProposal(instId, index, updates) {
   return proposal;
 }
 
+function addConstruction(instId, construction) {
+  const data = loadData();
+  const inst = data.list.find(i => i.id === instId);
+  if (!inst) return null;
+  if (!Array.isArray(inst.constructions)) inst.constructions = [];
+  inst.constructions.push(construction);
+  saveData(data);
+  return inst.constructions.length - 1;
+}
+
+function updateConstruction(instId, index, updates) {
+  const data = loadData();
+  const inst = data.list.find(i => i.id === instId);
+  if (!inst || !inst.constructions || !inst.constructions[index]) return null;
+  Object.assign(inst.constructions[index], updates);
+  saveData(data);
+  return inst.constructions[index];
+}
+
 function addGains(instId, gains) {
   const data = loadData();
   const inst = data.list.find(i => i.id === instId);
@@ -129,5 +149,7 @@ module.exports = {
   getProposals,
   getProposalHistory,
   updateProposal,
+  addConstruction,
+  updateConstruction,
   addGains,
 };
