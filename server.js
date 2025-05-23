@@ -1,4 +1,6 @@
 require('dotenv').config();
+const PlanetEngine = require('./planetEngine');
+const engine = new PlanetEngine('.', true); // saves PNGs in the current directory
 
 const http = require('http');
 const path = require('path');
