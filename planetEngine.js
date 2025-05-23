@@ -3,7 +3,7 @@ const path = require('path');
 const zlib = require('zlib');
 
 const RESOLUTION = 100;
-const UPDATE_INTERVAL_MS =   1000; // 1 minute
+const UPDATE_INTERVAL_MS = 60 * 1000; // 1 minute
 const SAVE_PNG = true; // set to false to disable png saving
 
 // simple deterministic random generator (mulberry32)
