@@ -30,12 +30,13 @@ const INSTITUTION_PRICES = {
 const loginRoute = require('./api/login')(client, verifySid);
 const verifyRoute = require('./api/verify')(client, verifySid, userStore);
 const stateRoute = require('./api/state')(userStore);
-const workforceRoute = require('./api/workforce')(institutionStore, userStore);
-
+const workforceRoute = require("./api/workforce")(institutionStore, userStore);
+const workforceChatRoute = require("./api/workforceChat")();
 app.use('/api/login', loginRoute);
 app.use('/api/verify', verifyRoute);
 app.use('/api/state', stateRoute);
 app.use('/api/workforce', workforceRoute);
+app.use('/api/workforceChat', workforceChatRoute);
 
  const clients = new Map(); // id -> ws
  const states = new Map();  // id -> { position, rotation, moving }
