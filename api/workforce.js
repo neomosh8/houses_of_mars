@@ -349,8 +349,8 @@ module.exports = function(institutionStore, userStore, engine, broadcast) {
             scale: scaff.scale,
             offset
           };
-          institutionStore.updateInstitution(id, { construction });
-          broadcast({ type: 'updateInstitution', id, construction });
+          const idx = institutionStore.addConstruction(id, construction);
+          broadcast({ type: 'updateInstitution', id, construction, index: idx });
 
           const prompt = `${orig.project || orig.title || ''} ${orig.description || ''}`.trim();
           const file = path.join(MODEL_DIR, `inst_${id}_${Date.now()}.glb`);
@@ -363,8 +363,8 @@ module.exports = function(institutionStore, userStore, engine, broadcast) {
                 scale: scaff.scale,
                 offset
               };
-              institutionStore.updateInstitution(id, { construction: done });
-              broadcast({ type: 'updateInstitution', id, construction: done });
+              institutionStore.updateConstruction(id, idx, done);
+              broadcast({ type: 'updateInstitution', id, construction: done, index: idx });
             })
             .catch(err => console.error('Meshy generation failed:', err));
         }

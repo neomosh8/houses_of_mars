@@ -523,7 +523,7 @@ function updateStatImages() {
   const institutionBoxes = [];
   const constructionBoxes = [];
   const sinking = [];
-  const constructionMap = {};
+  const constructionMap = {}; // id -> array of {scaff, final}
 
   function initNetwork() {
     socket = new WebSocket('ws://localhost:3000?email=' + encodeURIComponent(playerEmail));
@@ -556,7 +556,8 @@ function updateStatImages() {
         if (inst) {
           inst.extraEffects = msg.extraEffects || inst.extraEffects || {};
           if (msg.construction !== undefined) {
-            inst.construction = msg.construction;
+            if (!Array.isArray(inst.constructions)) inst.constructions = [];
+            inst.constructions[msg.index] = msg.construction;
             applyConstruction(inst);
           }
           if (inst.owner === playerEmail && msg.gains) {
@@ -651,50 +652,55 @@ function updateStatImages() {
   }
 
   function applyConstruction(inst) {
-    const existing = constructionMap[inst.id] || {};
-    if (existing.scaff) scene.remove(existing.scaff);
-    if (existing.final) scene.remove(existing.final);
+    const existing = constructionMap[inst.id] || [];
+    existing.forEach(e => {
+      if (e.scaff) scene.remove(e.scaff);
+      if (e.final) scene.remove(e.final);
+    });
     removeConstructionBoxes(inst.id);
-    constructionMap[inst.id] = {};
-    if (!inst.construction) return;
-    const loader = new GLTFLoader();
-    loader.load(inst.construction.url, gltf => {
-      const obj = gltf.scene;
-      const offset = Array.isArray(inst.construction.offset)
-        ? new THREE.Vector3().fromArray(inst.construction.offset)
-        : null;
-      let pos = new THREE.Vector3().fromArray(inst.position);
-      if (offset) {
-        pos.add(offset);
-      } else {
-        const boxEntry = institutionBoxes.find(b => b.id === inst.id);
-        if (boxEntry) {
-          const size = new THREE.Vector3();
-          boxEntry.box.getSize(size);
-          const off = new THREE.Vector3(size.x / 2 + 3, 0, 0);
-          off.applyAxisAngle(new THREE.Vector3(0, 1, 0), inst.rotation || 0);
-          pos.add(off);
+    constructionMap[inst.id] = [];
+    if (!Array.isArray(inst.constructions)) return;
+    inst.constructions.forEach((c, idx) => {
+      if (!c) return;
+      const loader = new GLTFLoader();
+      loader.load(c.url, gltf => {
+        const obj = gltf.scene;
+        const offset = Array.isArray(c.offset)
+          ? new THREE.Vector3().fromArray(c.offset)
+          : null;
+        let pos = new THREE.Vector3().fromArray(inst.position);
+        if (offset) {
+          pos.add(offset);
         } else {
-          pos.x += 3;
+          const boxEntry = institutionBoxes.find(b => b.id === inst.id);
+          if (boxEntry) {
+            const size = new THREE.Vector3();
+            boxEntry.box.getSize(size);
+            const off = new THREE.Vector3(size.x / 2 + 3, 0, 0);
+            off.applyAxisAngle(new THREE.Vector3(0, 1, 0), inst.rotation || 0);
+            pos.add(off);
+          } else {
+            pos.x += 3;
+          }
         }
-      }
 
-      obj.scale.setScalar(inst.construction.scale || inst.scale || 1);
-      obj.rotation.y = inst.rotation || 0;
-      scene.add(obj);
-      // ensure bottom on terrain
-      const box = new THREE.Box3().setFromObject(obj);
-      const ground = getGroundHeightAt(pos.x, pos.z);
-      obj.position.set(pos.x, ground - box.min.y, pos.z);
+        obj.scale.setScalar(c.scale || inst.scale || 1);
+        obj.rotation.y = inst.rotation || 0;
+        scene.add(obj);
+        const box = new THREE.Box3().setFromObject(obj);
+        const ground = getGroundHeightAt(pos.x, pos.z);
+        obj.position.set(pos.x, ground - box.min.y, pos.z);
 
-      const cbox = new THREE.Box3().setFromObject(obj);
-      constructionBoxes.push({ id: inst.id, box: cbox });
+        const cbox = new THREE.Box3().setFromObject(obj);
+        constructionBoxes.push({ id: inst.id, index: idx, box: cbox });
 
-      if (inst.construction.status === 'scaffolding') {
-        constructionMap[inst.id].scaff = obj;
-      } else {
-        constructionMap[inst.id].final = obj;
-      }
+        if (!constructionMap[inst.id][idx]) constructionMap[inst.id][idx] = {};
+        if (c.status === 'scaffolding') {
+          constructionMap[inst.id][idx].scaff = obj;
+        } else {
+          constructionMap[inst.id][idx].final = obj;
+        }
+      });
     });
   }
 
@@ -709,7 +715,8 @@ function updateStatImages() {
       obj.rotation.y = inst.rotation || 0;
       scene.add(obj);
       institutionsMap[inst.id] = obj;
-      institutionDataMap[inst.id] = { ...inst, effects: def.effects, workforce: inst.workforce || [], extraEffects: inst.extraEffects || {}};
+      const cons = inst.constructions || (inst.construction ? [inst.construction] : []);
+      institutionDataMap[inst.id] = { ...inst, effects: def.effects, workforce: inst.workforce || [], extraEffects: inst.extraEffects || {}, constructions: cons };
       obj.traverse(o => { o.userData.institutionId = inst.id; });
       const box = new THREE.Box3().setFromObject(obj);
       institutionBoxes.push({ id: inst.id, box });
@@ -1065,7 +1072,8 @@ function updateStatImages() {
 
   function updateConstructionBoxes() {
     constructionBoxes.forEach(entry => {
-      const c = constructionMap[entry.id];
+      const list = constructionMap[entry.id];
+      const c = list && list[entry.index];
       const obj = c && (c.scaff || c.final);
       if (obj) entry.box.setFromObject(obj);
     });
