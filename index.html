@@ -146,7 +146,6 @@ function updateStatImages() {
   fadeSwap(oxygenImg, oxySrc);
 
   // Debug logging to help track issues
-  console.log(`Stats - Health: ${health} (${healthPct.toFixed(1)}%), Hydration: ${hydration} (${hydPct.toFixed(1)}%), Oxygen: ${oxygen} (${oxyPct.toFixed(1)}%)`);
 }
 
   function updateMoneyDisplay() {
@@ -832,7 +831,6 @@ function updateStatImages() {
                 alert('Failed to hire worker');
               }
             } catch (err) {
-              console.error('Hire error:', err);
               alert('Failed to hire worker');
             }
           };
@@ -840,7 +838,6 @@ function updateStatImages() {
           container.appendChild(card);
         });
       } catch (err) {
-        console.error('Failed to load workforce:', err);
         container.innerHTML = '<div style="color: #ff6666; text-align: center;">Failed to load applicants. Please try again.</div>';
       }
     }
@@ -879,7 +876,6 @@ function updateStatImages() {
             chatContainer.scrollTop = chatContainer.scrollHeight;
           }
         } catch (err) {
-          console.error('Chat load error', err);
         }
       }
       await load();
@@ -1082,7 +1078,6 @@ function updateStatImages() {
   // Function to check if all textures are loaded and apply them
   function checkTexturesAndApply() {
     if (texturesLoaded.diffuse && texturesLoaded.bump && texturesLoaded.spec) {
-      console.log("All textures loaded - ready to apply");
       if (gltfTerrain) {
         applyTexturesToTerrain(gltfTerrain);
       }
@@ -1093,7 +1088,6 @@ function updateStatImages() {
   textureLoader.load(
     'mars_ground.png',
     (texture) => {
-      console.log("Mars diffuse texture loaded successfully.");
       texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
       texture.repeat.set(baseTextureRepeat, baseTextureRepeat);
       texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
@@ -1104,7 +1098,6 @@ function updateStatImages() {
     },
     undefined,
     (error) => {
-      console.error("Error loading Mars diffuse texture:", error);
       texturesLoaded.diffuse = true; // Mark as done even if error
       checkTexturesAndApply();
     }
@@ -1114,7 +1107,6 @@ function updateStatImages() {
   textureLoader.load(
     'mars_ground_bump.png', // Adjust filename to match your bump map
     (texture) => {
-      console.log("Mars bump map loaded successfully.");
       texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
       texture.repeat.set(baseTextureRepeat, baseTextureRepeat);
       texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
@@ -1125,7 +1117,6 @@ function updateStatImages() {
     },
     undefined,
     (error) => {
-      console.error("Error loading Mars bump map:", error);
       texturesLoaded.bump = true; // Mark as done even if error
       checkTexturesAndApply();
     }
@@ -1135,7 +1126,6 @@ function updateStatImages() {
   textureLoader.load(
     'mars_ground_spec.png', // Adjust filename to match your specular map
     (texture) => {
-      console.log("Mars specular map loaded successfully.");
       texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
       texture.repeat.set(baseTextureRepeat, baseTextureRepeat);
       texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
@@ -1146,7 +1136,6 @@ function updateStatImages() {
     },
     undefined,
     (error) => {
-      console.error("Error loading Mars specular map:", error);
       texturesLoaded.spec = true; // Mark as done even if error
       checkTexturesAndApply();
     }
@@ -1157,14 +1146,12 @@ function updateStatImages() {
   textureLoader.load(
     'dust.png',
     (texture) => {
-      console.log("Dust particle texture loaded successfully.");
       dustTexture = texture;
       // Initialize dust particles system once texture is loaded
       initDustParticles();
     },
     undefined,
     (error) => {
-      console.error("Error loading dust particle texture:", error);
       // Create a fallback texture - a simple circle
       const canvas = document.createElement('canvas');
       canvas.width = 64;
@@ -1192,7 +1179,6 @@ function updateStatImages() {
 
   // Helper function to apply textures to terrain
   function applyTexturesToTerrain(terrain) {
-    console.log("Applying textures to terrain...");
     terrain.traverse(o => {
       if (o.isMesh) {
         // Create a new material with all textures
@@ -1207,7 +1193,6 @@ function updateStatImages() {
         });
         o.receiveShadow = true; // Make sure terrain receives shadows
         o.material.needsUpdate = true;
-        console.log("Textures applied to mesh:", o.name || "unnamed mesh");
       }
     });
   }
@@ -1218,7 +1203,6 @@ function updateStatImages() {
   let dustParticles = []; // Array of active particles
 
   function initDustParticles() {
-    console.log("Initializing dust particle system...");
 
     // Create a simple points material using the dust texture
     const particleMaterial = new THREE.PointsMaterial({
@@ -1281,13 +1265,11 @@ function updateStatImages() {
     particleSystem.frustumCulled = false; // Prevent particles from disappearing at edge of view
     scene.add(particleSystem);
 
-    console.log("Dust particle system initialized with", MAX_PARTICLES, "particles");
   }
 
   // Create new active particles
   function emitDustParticle(position, count = 5) {
     if (!particleSystem) {
-      console.warn("Cannot emit particles - system not initialized");
       return;
     }
 
@@ -1340,7 +1322,6 @@ function updateStatImages() {
     particleSystem.geometry.attributes.position.needsUpdate = true;
     particleSystem.geometry.attributes.size.needsUpdate = true;
 
-    console.log(`Emitted ${emitted} dust particles at (${position.x.toFixed(1)}, ${position.y.toFixed(1)}, ${position.z.toFixed(1)})`);
   }
 
   // Update particles every frame
@@ -1475,7 +1456,6 @@ function updateStatImages() {
     },
     undefined,
     (error) => {
-      console.error('Error loading GLTF ground:', error);
       // Create a fallback terrain with some hills
       createFallbackTerrain();
     }
@@ -1534,7 +1514,6 @@ function updateStatImages() {
     // Add to terrainMeshes for raycasting
     terrainMeshes.push(fallbackGround);
 
-    console.log("Added fallback procedural terrain with hills.");
 
     // Position the model if it's already loaded
     if (model) {
@@ -1584,8 +1563,6 @@ function updateStatImages() {
       runAction = mixer.clipAction(animations.find(a => a.name === 'Run'));
       playerAnimations = animations;
 
-      if (!idleAction) console.warn("Idle animation not found!");
-      if (!runAction) console.warn("Run animation not found!");
 
       // Set up animation events for dust particles
       if (runAction) {
@@ -1613,7 +1590,6 @@ function updateStatImages() {
       handlePendingRemotePlayers();
     },
     undefined,
-    err => console.error('GLTF load error (Player):', err)
   );
 
   // Calculate foot positions based on model
@@ -1647,7 +1623,6 @@ function updateStatImages() {
     emitDustParticle(footPositions.left, 10); // Emit more particles for better visibility
     emitDustParticle(footPositions.right, 10);
 
-    console.log("Emitting dust particles at feet positions");
   }
 
   /**
@@ -1671,12 +1646,10 @@ function updateStatImages() {
     if (intersects.length > 0) {
       // We found ground - but we won't teleport to it
       // Just let gravity do its work in the animation loop
-      console.log(`Ground found ${intersects[0].distance} units below character.`);
 
       // We're not on ground yet - we're still falling
       onGround = false;
     } else {
-      console.warn("No ground found below character!");
     }
   }
 
@@ -1727,7 +1700,6 @@ function updateStatImages() {
 
       // Handle initial ground contact
       if (!onGround) {
-        console.log("Ground contact detected!");
           velocity.y = 0;
           onGround = true;
 
@@ -1904,7 +1876,6 @@ function updateStatImages() {
 
                         // Debug log for dust emission
                         if (isMovingForward && onGround) {
-                            console.log("Character moving: emitting dust particles");
                         }
                     }
                 }
@@ -1944,7 +1915,6 @@ function updateStatImages() {
       }
 
       if (activeCount > 0 && model) {
-        console.log(`Active particles: ${activeCount}, Character position: (${model.position.x.toFixed(1)}, ${model.position.y.toFixed(1)}, ${model.position.z.toFixed(1)})`);
       }
     }
 
