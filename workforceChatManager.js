@@ -8,7 +8,7 @@ try {
 } catch (_) {}
 
 const CHAT_FILE = path.join(__dirname, 'chatLogs.json');
-const WORKFORCE_INTERVAL_MS = 60000; // 1 minute
+const WORKFORCE_INTERVAL_MS = 1000; // 1 minute
 const FIRST_PROMPTS = {
   WatOx:
     'You are our water-oxygen extraction expert. How can we increase production? Give one concise idea. If you need more info, ask one sentence.'
