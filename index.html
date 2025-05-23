@@ -54,10 +54,14 @@
     <div id="popup-chat" class="hidden">
       <div id="chat-container"></div>
     </div>
+    <div id="popup-proposals" class="hidden">
+      <div id="proposals-container"></div>
+    </div>
           <div class="popup-actions">
       <button id="info-tab-btn">Info</button>
       <button id="workforce-tab-btn">See Applicants</button>
       <button id="chat-tab-btn">Chat</button>
+      <button id="proposals-tab-btn">Proposals</button>
     </div>
   </div>
   <script type="module">
@@ -656,9 +660,11 @@ function updateStatImages() {
     const infoTabBtn = document.getElementById('info-tab-btn');
     const workforceTabBtn = document.getElementById('workforce-tab-btn');
     const chatTabBtn = document.getElementById('chat-tab-btn');
+    const proposalsTabBtn = document.getElementById('proposals-tab-btn');
     const infoDiv = document.getElementById('popup-info');
     const workforceDiv = document.getElementById('popup-workforce');
     const chatDiv = document.getElementById('popup-chat');
+    const proposalsDiv = document.getElementById('popup-proposals');
     const chatContainer = document.getElementById('chat-container');
     const ownerSpan = document.getElementById('popup-owner');
     const resDiv = document.getElementById('popup-resources');
@@ -685,6 +691,7 @@ function updateStatImages() {
       infoDiv.style.display = 'block';
       workforceDiv.style.display = 'none';
       chatDiv.style.display = 'none';
+      proposalsDiv.style.display = 'none';
       if (chatInterval) {
         clearInterval(chatInterval);
         chatInterval = null;
@@ -713,7 +720,7 @@ function updateStatImages() {
         img.style.height = '80px';
         item.appendChild(img);
         const name = document.createElement('div');
-        name.textContent = w.name;
+        name.textContent = w.name + (w.director ? ' \u2605' : '');
         name.style.fontSize = '12px';
         item.appendChild(name);
         carousel.appendChild(item);
@@ -724,6 +731,7 @@ function updateStatImages() {
       infoDiv.style.display = 'none';
       workforceDiv.style.display = 'block';
       chatDiv.style.display = 'none';
+      proposalsDiv.style.display = 'none';
       if (chatInterval) {
         clearInterval(chatInterval);
         chatInterval = null;
@@ -767,7 +775,7 @@ function updateStatImages() {
           front.style.backgroundImage = `url(${w.image})`;
           front.style.backgroundSize = 'cover';
           front.style.backgroundPosition = 'center';
-          front.textContent = w.name;
+          front.textContent = w.name + (w.director ? ' \u2605' : '');
           front.style.display = 'flex';
           front.style.alignItems = 'flex-end';
           front.style.justifyContent = 'center';
@@ -790,7 +798,7 @@ function updateStatImages() {
           back.style.overflowY = 'auto';
           back.style.boxSizing = 'border-box';
           back.innerHTML = `
-            <div style="margin-bottom: 8px;"><strong>${w.role}</strong></div>
+            <div style="margin-bottom: 8px;"><strong>${w.role}${w.director ? ' \u2605' : ''}</strong></div>
             <div style="margin-bottom: 8px; font-size: 11px;">${w.backstory}</div>
             <div style="margin-bottom: 8px; font-size: 11px;">${w.resume}</div>
             <div style="font-weight: bold;">Wage: $${w.wage}/day</div>
@@ -841,6 +849,7 @@ function updateStatImages() {
       infoDiv.style.display = 'none';
       workforceDiv.style.display = 'none';
       chatDiv.style.display = 'block';
+      proposalsDiv.style.display = 'none';
       if (chatInterval) clearInterval(chatInterval);
       async function load() {
         try {
@@ -851,7 +860,7 @@ function updateStatImages() {
             data.messages.forEach(m => {
               const box = document.createElement('div');
               box.className = 'chat-msg';
-              box.textContent = `${m.worker}: ${m.text}`;
+              box.textContent = `${m.worker}: ${m.text}` + (m.isProposal ? ' [PROPOSAL]' : '');
               chatContainer.appendChild(box);
             });
             chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -864,9 +873,92 @@ function updateStatImages() {
       chatInterval = setInterval(load, 5000);
     }
 
+    async function showProposals() {
+      infoDiv.style.display = 'none';
+      workforceDiv.style.display = 'none';
+      chatDiv.style.display = 'none';
+      proposalsDiv.style.display = 'block';
+      if (chatInterval) { clearInterval(chatInterval); chatInterval = null; }
+      const container = document.getElementById('proposals-container');
+      container.innerHTML = '<div class="spinner" style="height:100px;color:#fff">Loading...</div>';
+      try {
+        const res = await fetch(`/api/workforce/proposals/${id}`);
+        if (res.ok) {
+          const data = await res.json();
+          container.innerHTML = '';
+          if (!data.proposals || data.proposals.length === 0) {
+            container.innerHTML = '<div style="color:#fff">No proposals</div>';
+            return;
+          }
+          data.proposals.forEach((p, idx) => {
+            if (p.status && p.status !== 'pending') return;
+            const card = document.createElement('div');
+            card.style.border = '1px solid #888';
+            card.style.padding = '8px';
+            card.style.marginBottom = '6px';
+            const title = document.createElement('div');
+            title.textContent = p.project;
+            title.style.fontWeight = 'bold';
+            card.appendChild(title);
+            const desc = document.createElement('div');
+            desc.textContent = p.description;
+            card.appendChild(desc);
+            const table = document.createElement('table');
+            (p.prerequisites||[]).forEach(pr => {
+              const row = document.createElement('tr');
+              const name = document.createElement('td');
+              name.textContent = pr.type + ': ' + pr.value;
+              const action = document.createElement('td');
+              const btn = document.createElement('button');
+              btn.textContent = 'Check';
+              btn.onclick = () => {
+                let ok = false;
+                if (pr.type === 'hire') {
+                  ok = Object.values(institutionDataMap).some(d => d.owner === playerEmail && Array.isArray(d.workforce) && d.workforce.some(w => w.role === pr.value));
+                } else if (pr.type === 'institution') {
+                  ok = Object.values(institutionDataMap).some(d => d.owner === playerEmail && d.name === pr.value);
+                }
+                btn.textContent = ok ? 'Done' : 'Not Found';
+                btn.disabled = true;
+                checkReady();
+              };
+              row.appendChild(name);
+              row.appendChild(action);
+              action.appendChild(btn);
+              table.appendChild(row);
+            });
+            card.appendChild(table);
+            const approve = document.createElement('button');
+            approve.textContent = 'Approve';
+            approve.disabled = true;
+            const deny = document.createElement('button');
+            deny.textContent = 'Deny';
+            function checkReady() {
+              const all = [...table.querySelectorAll('button')].every(b => b.disabled);
+              if (all) approve.disabled = false;
+            }
+            approve.onclick = async () => {
+              await fetch(`/api/workforce/proposals/${id}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ index: idx, approve: true }) });
+              card.remove();
+            };
+            deny.onclick = async () => {
+              await fetch(`/api/workforce/proposals/${id}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ index: idx, approve: false }) });
+              card.remove();
+            };
+            card.appendChild(approve);
+            card.appendChild(deny);
+            container.appendChild(card);
+          });
+        }
+      } catch(err){
+        container.innerHTML = '<div style="color:#ff6666">Failed</div>';
+      }
+    }
+
     infoTabBtn.onclick = showInfo;
     workforceTabBtn.onclick = showWorkforce;
     chatTabBtn.onclick = showChat;
+    proposalsTabBtn.onclick = showProposals;
 
     popup.style.display = 'block';
     showInfo();
@@ -876,6 +968,7 @@ function updateStatImages() {
         clearInterval(chatInterval);
         chatInterval = null;
       }
+      proposalsDiv.style.display = 'none';
     };
     document.getElementById('owner-click').onclick = showWorkforce;
   }

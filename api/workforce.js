@@ -45,7 +45,7 @@ module.exports = function(institutionStore, userStore) {
       'Research background in terraforming technologies.'
     ];
 
-    return {
+    const worker = {
       name: names[Math.floor(Math.random() * names.length)],
       role: roles[Math.floor(Math.random() * roles.length)],
       image: 'https://placehold.co/150x200?text=Worker',
@@ -58,6 +58,9 @@ module.exports = function(institutionStore, userStore) {
         health: Math.random() < 0.3 ? -0.5 : 0,
       }
     };
+    worker.director = Math.random() < 0.2;
+    if (worker.director) worker.wage = Math.floor(worker.wage * 1.5);
+    return worker;
   }
 
   async function generateWorkerWithAI(institutionName) {
@@ -291,6 +294,33 @@ module.exports = function(institutionStore, userStore) {
     } catch (error) {
       console.error('Get chat error:', error);
       res.status(500).json({ error: 'Failed to get chat' });
+    }
+  });
+
+  router.get('/proposals/:id', (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const proposals = institutionStore.getProposals(id);
+      res.json({ proposals });
+    } catch (err) {
+      console.error('Get proposals error:', err);
+      res.status(500).json({ error: 'failed' });
+    }
+  });
+
+  router.post('/proposals/:id', (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const { index, approve } = req.body;
+      const proposal = institutionStore.updateProposal(id, index, { status: approve ? 'approved' : 'denied' });
+      const inst = institutionStore.getInstitution(id);
+      if (inst && proposal) {
+        chatManager.addSystemMessage(inst.owner, inst.name, `Proposal '${proposal.project}' ${approve ? 'approved' : 'denied'}.`);
+      }
+      res.json({ proposal });
+    } catch (err) {
+      console.error('Update proposal error', err);
+      res.status(500).json({ error: 'failed' });
     }
   });
 

@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const institutionStore = require('./institutionStore');
 
 let OpenAI = null;
 try {
@@ -69,6 +70,15 @@ class WorkforceChatManager {
     this._start(key);
   }
 
+  addSystemMessage(email, name, text) {
+    const key = this._key(email, name);
+    if (!this.chats[key]) {
+      this.chats[key] = { messages: [], workers: [], firstPrompt: FIRST_PROMPTS[name] || 'Discuss improvements.' };
+    }
+    this.chats[key].messages.push({ worker: 'System', text, isProposal: false });
+    this._save();
+  }
+
   _start(key) {
     if (this.intervals[key]) return;
     this.intervals[key] = setInterval(() => this._step(key), WORKFORCE_INTERVAL_MS);
@@ -76,7 +86,8 @@ class WorkforceChatManager {
 
   async _query(instructions, input) {
     if (!this.openai) {
-      return '...';
+      // Fake simple JSON response
+      return { dialogue: '...', is_proposal: false, proposal: null };
     }
     const response = await this.openai.responses.create({
       model: 'gpt-4.1-nano-2025-04-14',
@@ -95,17 +106,32 @@ class WorkforceChatManager {
       response.output[0].content &&
       response.output[0].content[0]
     ) {
-      return response.output[0].content[0].text.trim();
+      const raw = response.output[0].content[0].text.trim();
+      try {
+        const obj = JSON.parse(raw);
+        if (typeof obj.is_proposal !== 'boolean') obj.is_proposal = false;
+        return obj;
+      } catch {
+        return { dialogue: raw, is_proposal: false, proposal: null };
+      }
     }
-    return '';
+    return { dialogue: '', is_proposal: false, proposal: null };
   }
 
   async _step(key) {
     const chat = this.chats[key];
     if (!chat || chat.workers.length === 0) return;
+    const [owner, instName] = key.split('|');
+    const inst = institutionStore.findInstitution(owner, instName);
+    if (inst && (inst.proposals || []).some(p => p.status === 'pending')) {
+      return;
+    }
     for (const worker of chat.workers) {
       const history = chat.messages.slice(-10).map(m => `${m.worker}: ${m.text}`).join('\n');
-      const instructions = `You are ${worker.name}, ${worker.role}. Backstory: ${worker.backstory}. Resume: ${worker.resume}.`;
+      let instructions = `You are ${worker.name}, ${worker.role}. Backstory: ${worker.backstory}. Resume: ${worker.resume}.`;
+      if (worker.director) {
+        instructions += ' Respond only in JSON with keys dialogue, is_proposal, and proposal. If you agree with an idea, set is_proposal true and fill the proposal object.';
+      }
       let prompt;
       if (!worker.initialized) {
         prompt = history ? `${history}\n${chat.firstPrompt}` : chat.firstPrompt;
@@ -113,10 +139,13 @@ class WorkforceChatManager {
         prompt = history || chat.firstPrompt;
       }
       try {
-        const text = await this._query(instructions, prompt);
-        if (text) {
-          chat.messages.push({ worker: worker.name, text });
+        const result = await this._query(instructions, prompt);
+        if (result && result.dialogue) {
+          chat.messages.push({ worker: worker.name, text: result.dialogue, isProposal: !!result.is_proposal });
           worker.initialized = true;
+        }
+        if (result && result.is_proposal && result.proposal && worker.director && inst) {
+          institutionStore.addProposal(inst.id, { ...result.proposal, status: 'pending' });
         }
       } catch (err) {
         console.log('Chat generation failed:', err.message);
