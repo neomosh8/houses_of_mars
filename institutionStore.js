@@ -53,27 +53,39 @@ function addProposal(instId, proposal) {
   const data = loadData();
   const inst = data.list.find(i => i.id === instId);
   if (!inst) return null;
-  if (!inst.proposals) inst.proposals = [];
-  const p = { status: 'pending', ...proposal };
-  inst.proposals.push(p);
-  const index = inst.proposals.length - 1;
+  const full = {
+    project: proposal.project || proposal.title || 'Project',
+    description: proposal.description || '',
+    prerequisites: Array.isArray(proposal.prerequisites) ? proposal.prerequisites : [],
+    cost: proposal.cost || 0,
+    gains: proposal.gains || {},
+    risk: proposal.risk || null,
+    status: 'pending'
+  };
+  inst.proposals = [full];
   saveData(data);
-  return { proposal: p, index };
+  return { proposal: full, index: 0 };
 }
 
 function getProposals(instId) {
   const data = loadData();
   const inst = data.list.find(i => i.id === instId);
-  return inst && inst.proposals ? inst.proposals : [];
+  if (!inst || !Array.isArray(inst.proposals)) return [];
+  return inst.proposals.filter(p => p.status === 'pending');
 }
 
 function updateProposal(instId, index, updates) {
   const data = loadData();
   const inst = data.list.find(i => i.id === instId);
   if (!inst || !inst.proposals || !inst.proposals[index]) return null;
-  Object.assign(inst.proposals[index], updates);
+  const proposal = Object.assign({}, inst.proposals[index], updates);
+  if (proposal.status !== 'pending') {
+    inst.proposals.splice(index, 1);
+  } else {
+    inst.proposals[index] = proposal;
+  }
   saveData(data);
-  return inst.proposals[index];
+  return proposal;
 }
 
 module.exports = {
