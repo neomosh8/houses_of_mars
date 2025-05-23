@@ -1,6 +1,8 @@
 require('dotenv').config();
 
 const express = require('express');
+const fs = require('fs');
+const path = require('path');
 // Set to true to skip AI image generation and use placeholder images
 const USE_PLACEHOLDER_IMAGES = false;
 // Updated OpenAI import and initialization
@@ -203,7 +205,7 @@ module.exports = function(institutionStore, userStore) {
     }
   });
 
-  router.post('/hire/:id', (req, res) => {
+  router.post('/hire/:id', async (req, res) => {
     try {
       const id = Number(req.params.id);
       const worker = req.body.worker;
@@ -220,6 +222,27 @@ module.exports = function(institutionStore, userStore) {
       // Initialize workforce array if it doesn't exist
       if (!inst.workforce) {
         inst.workforce = [];
+      }
+
+      // If the worker image is a remote URL, download it locally
+      if (worker.image && worker.image.startsWith('http')) {
+        try {
+          const imagesDir = path.join(__dirname, '..', 'worker_images');
+          await fs.promises.mkdir(imagesDir, { recursive: true });
+
+          const url = new URL(worker.image);
+          const ext = path.extname(url.pathname) || '.jpg';
+          const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`;
+          const filePath = path.join(imagesDir, fileName);
+
+          const response = await fetch(worker.image);
+          if (!response.ok) throw new Error(`failed to fetch ${worker.image}`);
+          await fs.promises.writeFile(filePath, Buffer.from(await response.arrayBuffer()));
+
+          worker.image = `/worker_images/${fileName}`;
+        } catch (imgErr) {
+          console.error('Failed to download worker image:', imgErr);
+        }
       }
 
       // Add the worker
