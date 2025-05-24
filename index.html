@@ -321,7 +321,11 @@ function updateStatImages() {
       const box = new THREE.Box3().setFromObject(ghostInstitution);
       const height = box.max.y - box.min.y;
       const ground = getGroundHeightAt(ghostInstitution.position.x, ghostInstitution.position.z);
-      const targetY = ground - height * 0.2;
+      // Flatten the terrain under the institution before placing it
+      const radius = Math.max(box.max.x - box.min.x, box.max.z - box.min.z) * 0.6;
+      flattenTerrain(ghostInstitution.position.x, ghostInstitution.position.z, radius, ground);
+      const newGround = getGroundHeightAt(ghostInstitution.position.x, ghostInstitution.position.z);
+      const targetY = newGround - height * 0.2;
       const data = {
         type: 'addInstitution',
         name: currentInstitution.name,
@@ -382,6 +386,30 @@ function updateStatImages() {
       return hits[0].point.y;
     }
     return 0;
+  }
+
+  function flattenTerrain(x, z, radius, height) {
+    const target = new THREE.Vector3();
+    const inv = new THREE.Matrix4();
+    terrainMeshes.forEach(mesh => {
+      const geom = mesh.geometry;
+      if (!geom || !geom.attributes || !geom.attributes.position) return;
+      const pos = geom.attributes.position;
+      inv.copy(mesh.matrixWorld).invert();
+      for (let i = 0; i < pos.count; i++) {
+        target.fromBufferAttribute(pos, i);
+        target.applyMatrix4(mesh.matrixWorld);
+        const dx = target.x - x;
+        const dz = target.z - z;
+        if (dx * dx + dz * dz <= radius * radius) {
+          target.y = height;
+          target.applyMatrix4(inv);
+          pos.setXYZ(i, target.x, target.y, target.z);
+        }
+      }
+      pos.needsUpdate = true;
+      geom.computeVertexNormals();
+    });
   }
 
   function updateStats() {
@@ -743,6 +771,10 @@ function updateStatImages() {
       obj.scale.setScalar(inst.scale || def.scale || 1);
       obj.position.fromArray(inst.position);
       obj.rotation.y = inst.rotation || 0;
+      const boxTmp = new THREE.Box3().setFromObject(obj);
+      const radius = Math.max(boxTmp.max.x - boxTmp.min.x, boxTmp.max.z - boxTmp.min.z) * 0.6;
+      const ground = getGroundHeightAt(inst.position[0], inst.position[2]);
+      flattenTerrain(inst.position[0], inst.position[2], radius, ground);
       scene.add(obj);
       if (def.animated && gltf.animations && gltf.animations.length > 0) {
         const mix = new THREE.AnimationMixer(obj);
