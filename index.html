@@ -292,6 +292,9 @@ function updateStatImages() {
     loader.load(inst.url, gltf => {
       ghostInstitution = gltf.scene;
       ghostInstitution.scale.setScalar(inst.scale || 1);
+      const box = new THREE.Box3().setFromObject(ghostInstitution);
+      const size = box.getSize(new THREE.Vector3());
+      ghostInstitution.userData.safeDistance = Math.max(size.x, size.z) * 1.5;
       ghostInstitution.traverse(o => {
         if (o.isMesh) {
           o.material = o.material.clone();
@@ -378,7 +381,8 @@ function updateStatImages() {
 
   function updateGhostInstitution() {
     if (!placingInstitution || !ghostInstitution || !model) return;
-    const offset = new THREE.Vector3(0, 3, -20);
+    const distance = ghostInstitution.userData.safeDistance || 20;
+    const offset = new THREE.Vector3(0, 3, -distance);
     offset.applyQuaternion(model.quaternion);
     const target = model.position.clone().add(offset);
     ghostInstitution.position.copy(target);
