@@ -1173,6 +1173,35 @@ function updateStatImages() {
   secondaryLight.castShadow = false; // Optional shadow from secondary light
   scene.add(secondaryLight);
 
+  // --- Day/Night Cycle Settings ---
+  const DAY_DURATION = 120;   // seconds of daylight
+  const NIGHT_DURATION = 120; // seconds of night
+  const CYCLE_DURATION = DAY_DURATION + NIGHT_DURATION;
+  const SUN_RADIUS = 50;
+  const MAX_SUN_INTENSITY = 1.8;
+  let dayNightTimer = 0;
+  const daySkyColor = new THREE.Color(marsSkyColor);
+  const nightSkyColor = new THREE.Color(0x050505);
+
+  function updateDayNightCycle(dt) {
+    dayNightTimer = (dayNightTimer + dt) % CYCLE_DURATION;
+    const angle = (dayNightTimer / CYCLE_DURATION) * Math.PI * 2;
+
+    // Sun position follows a circular path
+    sun.position.set(Math.cos(angle) * SUN_RADIUS, Math.sin(angle) * SUN_RADIUS, 0);
+    sun.lookAt(0, 0, 0);
+
+    // Daylight intensity based on sun height
+    const daylight = Math.max(0, Math.sin(angle));
+    sun.intensity = daylight * MAX_SUN_INTENSITY;
+    secondaryLight.intensity = daylight;
+    hemiLight.intensity = 0.2 + daylight;
+
+    const skyColor = daySkyColor.clone().lerp(nightSkyColor, 1 - daylight);
+    renderer.setClearColor(skyColor);
+    scene.fog.color.copy(skyColor);
+  }
+
   // Ground Textures - Load first before terrain
   const textureLoader = new THREE.TextureLoader();
   let diffuseMap = null;
@@ -1891,6 +1920,8 @@ function updateStatImages() {
   function animate() {
     requestAnimationFrame(animate);
     const dt = clock.getDelta();
+
+    updateDayNightCycle(dt);
 
     // Update particles
     updateParticles(dt);
