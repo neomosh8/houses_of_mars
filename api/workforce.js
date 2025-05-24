@@ -340,9 +340,20 @@ module.exports = function(institutionStore, userStore, engine, broadcast) {
         }
         if (result && result.feasible) {
           const scaff = SCAFF_MODELS[Math.floor(Math.random() * SCAFF_MODELS.length)];
-          const angle = Math.random() * Math.PI * 2;
-          const distance = 8 + Math.random() * 4;
-          const offset = [Math.cos(angle) * distance, 0, Math.sin(angle) * distance];
+          const existing = Array.isArray(inst.constructions) ? inst.constructions : [];
+          function getOffset() {
+            const angle = Math.random() * Math.PI * 2;
+            const distance = 8 + Math.random() * 4;
+            return [Math.cos(angle) * distance, 0, Math.sin(angle) * distance];
+          }
+          let offset = getOffset();
+          for (let a = 0; a < 20; a++) {
+            const [ox, , oz] = offset;
+            const ok = !existing.some(c => Array.isArray(c.offset) &&
+              Math.hypot((c.offset[0] || 0) - ox, (c.offset[2] || 0) - oz) < 4);
+            if (ok) break;
+            offset = getOffset();
+          }
           const construction = {
             status: 'scaffolding',
             url: scaff.url,

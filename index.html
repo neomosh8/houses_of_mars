@@ -767,26 +767,29 @@ function updateStatImages() {
           : null;
         let pos = new THREE.Vector3().fromArray(inst.position);
         if (offset) {
+          offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), inst.rotation || 0);
           pos.add(offset);
         } else {
           const boxEntry = institutionBoxes.find(b => b.id === inst.id);
           if (boxEntry) {
             const size = new THREE.Vector3();
             boxEntry.box.getSize(size);
-            const off = new THREE.Vector3(size.x / 2 + 3, 0, 0);
+            const off = new THREE.Vector3(size.x / 2 + 5, 0, 0);
             off.applyAxisAngle(new THREE.Vector3(0, 1, 0), inst.rotation || 0);
             pos.add(off);
           } else {
-            pos.x += 3;
+            pos.x += 5;
           }
         }
 
         obj.scale.setScalar(c.scale || inst.scale || 1);
         obj.rotation.y = inst.rotation || 0;
         scene.add(obj);
-        const box = new THREE.Box3().setFromObject(obj);
+        const boxTmp = new THREE.Box3().setFromObject(obj);
+        const radius = Math.max(boxTmp.max.x - boxTmp.min.x, boxTmp.max.z - boxTmp.min.z) * 0.6;
         const ground = getGroundHeightAt(pos.x, pos.z);
-        obj.position.set(pos.x, ground - box.min.y, pos.z);
+        flattenTerrain(pos.x, pos.z, radius, ground);
+        obj.position.set(pos.x, ground - boxTmp.min.y, pos.z);
 
         const cbox = new THREE.Box3().setFromObject(obj);
         constructionBoxes.push({ id: inst.id, index: idx, box: cbox });
@@ -811,16 +814,23 @@ function updateStatImages() {
       const loader = new GLTFLoader();
       loader.load(w.model, gltf => {
         const obj = gltf.scene;
-        let pos = new THREE.Vector3().fromArray(inst.position);
-        pos.x += 4 + idx * 2;
-        const ground = getGroundHeightAt(pos.x, pos.z);
-        obj.position.set(pos.x, ground, pos.z);
+        const offset = Array.isArray(w.offset)
+          ? new THREE.Vector3().fromArray(w.offset)
+          : new THREE.Vector3(6 + idx * 2, 0, 0);
+        offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), inst.rotation || 0);
+        const pos = new THREE.Vector3().fromArray(inst.position).add(offset);
         obj.scale.setScalar(w.scale || 1);
+        obj.rotation.y = inst.rotation || 0;
+        scene.add(obj);
+        const boxTmp = new THREE.Box3().setFromObject(obj);
+        const radius = Math.max(boxTmp.max.x - boxTmp.min.x, boxTmp.max.z - boxTmp.min.z) * 0.6;
+        const ground = getGroundHeightAt(pos.x, pos.z);
+        flattenTerrain(pos.x, pos.z, radius, ground);
+        obj.position.set(pos.x, ground - boxTmp.min.y, pos.z);
         obj.traverse(o => {
           o.userData.weaponInstId = inst.id;
           o.userData.weaponIndex = idx;
         });
-        scene.add(obj);
         weaponMap[inst.id][idx] = { obj, data: w };
       });
     });

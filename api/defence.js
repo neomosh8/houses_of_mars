@@ -31,12 +31,19 @@ module.exports = function(store, broadcast) {
         const force = p.force || 0;
         const fuel = p.fuel || 0;
         const movement = weight > 0 ? (force / weight) * fuel : 0;
+        function getOffset() {
+          const angle = Math.random() * Math.PI * 2;
+          const distance = 8 + Math.random() * 4;
+          return [Math.cos(angle) * distance, 0, Math.sin(angle) * distance];
+        }
+        const offset = getOffset();
         const weapon = {
           name: prop.name,
           model: SCAFF.url,
           movement,
           status: 'scaffolding',
           scale: SCAFF.scale,
+          offset,
         };
         const wIdx = store.addWeapon(id, weapon);
         broadcast({ type: 'updateWeapon', id, weapon, index: wIdx });
