@@ -875,6 +875,17 @@ function updateStatImages() {
           o.userData.weaponIndex = idx;
         });
         weaponMap[inst.id][idx] = { obj, data: w };
+
+        // Debug: log weapon placement when the generated model is loaded
+        console.log('[DEBUG] Weapon model loaded', {
+          institution: inst.id,
+          index: idx,
+          position: {
+            x: obj.position.x,
+            y: obj.position.y,
+            z: obj.position.z
+          }
+        });
       }, undefined, () => {
         if (inst.weapons[idx] !== w) return;
         const obj = createPlaceholder(w.scale || 1, 0xff0000);
@@ -902,6 +913,24 @@ function updateStatImages() {
     clone.position.copy(start);
     scene.add(clone);
     projectiles.push({ obj: clone, tech, cat, params, start, target, stage: 0, speed: 0 });
+
+    // Debug: log weapon firing start information
+    console.log('[DEBUG] Fire weapon', {
+      weaponTech: tech,
+      weaponCategory: cat,
+      params,
+      characterPosition: {
+        x: target.x,
+        y: target.y,
+        z: target.z
+      },
+      startPosition: {
+        x: start.x,
+        y: start.y,
+        z: start.z
+      },
+      animation: activeAction && activeAction._clip ? activeAction._clip.name : 'none'
+    });
   }
 
   function fireAllWeapons() {
@@ -2054,6 +2083,15 @@ function updateStatImages() {
       });
       scene.add(model);
 
+      // Debug: log when player model is loaded and its starting position
+      console.log('[DEBUG] Player model loaded', {
+        position: {
+          x: startPosition[0],
+          y: startPosition[1],
+          z: startPosition[2]
+        }
+      });
+
       // Position the model based on saved state
       model.position.set(startPosition[0], startPosition[1], startPosition[2]);
 
@@ -2159,7 +2197,10 @@ function updateStatImages() {
   window.addEventListener('keydown', e => {
     const key = e.code.toLowerCase().replace('key', '').replace('arrow','');
     if (keys.hasOwnProperty(key)) keys[key] = true;
-    if (e.code === 'KeyK') fireAllWeapons();
+    if (e.code === 'KeyK') {
+      console.log('[DEBUG] Key K pressed');
+      fireAllWeapons();
+    }
   });
   window.addEventListener('keyup', e => {
     const key = e.code.toLowerCase().replace('key', '').replace('arrow','');
