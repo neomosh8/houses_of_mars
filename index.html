@@ -761,6 +761,7 @@ function updateStatImages() {
       if (!c) return;
       const loader = new GLTFLoader();
       loader.load(c.url, gltf => {
+        if (inst.constructions[idx] !== c) return; // ignore outdated load
         const obj = gltf.scene;
         const offset = Array.isArray(c.offset)
           ? new THREE.Vector3().fromArray(c.offset)
@@ -813,6 +814,7 @@ function updateStatImages() {
       if (!w || !w.model) return;
       const loader = new GLTFLoader();
       loader.load(w.model, gltf => {
+        if (inst.weapons[idx] !== w) return; // ignore outdated load
         const obj = gltf.scene;
         const offset = Array.isArray(w.offset)
           ? new THREE.Vector3().fromArray(w.offset)
