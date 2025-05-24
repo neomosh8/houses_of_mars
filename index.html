@@ -57,11 +57,15 @@
     <div id="popup-proposals" class="hidden">
       <div id="proposals-container"></div>
     </div>
+    <div id="popup-weapons" class="hidden">
+      <div id="weapons-container"></div>
+    </div>
           <div class="popup-actions">
       <button id="info-tab-btn">Info</button>
       <button id="workforce-tab-btn">See Applicants</button>
       <button id="chat-tab-btn">Chat</button>
       <button id="proposals-tab-btn">Proposals</button>
+      <button id="weapons-tab-btn">Weapon Catalogue</button>
     </div>
   </div>
   <script type="module">
@@ -73,6 +77,7 @@
   import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
   import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
   import { renderProposals } from './proposals.js';
+  import { renderDefProposals } from './defProposals.js';
 
 
   let playerEmail = null;
@@ -215,6 +220,15 @@ function updateStatImages() {
       price: 150,
       effects: { money: 1 },
       animated: true
+    },
+    {
+      name: 'Defence Base',
+      url: 'defba.glb',
+      thumbnail: 'https://placehold.co/100x100?text=DefBase',
+      scale: 1,
+      price: 300,
+      effects: {},
+      animated: false
     }
   ];
 
@@ -362,6 +376,23 @@ function updateStatImages() {
       }
       if (obj && obj.userData && obj.userData.institutionId !== undefined) {
         showInstitutionPopup(obj.userData.institutionId);
+        return;
+      }
+    }
+
+    const wObjs = [];
+    Object.values(weaponMap).forEach(arr => arr.forEach(w => { if (w && w.obj) wObjs.push(w.obj); }));
+    const wHits = raycaster.intersectObjects(wObjs, true);
+    if (wHits.length > 0) {
+      let obj = wHits[0].object;
+      while (obj && obj.userData && obj.userData.weaponInstId === undefined) {
+        obj = obj.parent;
+      }
+      if (obj && obj.userData && obj.userData.weaponInstId !== undefined) {
+        const iid = obj.userData.weaponInstId;
+        const idx = obj.userData.weaponIndex;
+        const w = weaponMap[iid] && weaponMap[iid][idx];
+        if (w) alert('Using weapon ' + (w.data.name || '')); // placeholder
       }
     }
   }
@@ -582,6 +613,7 @@ function updateStatImages() {
   const constructionBoxes = [];
   const sinking = [];
   const constructionMap = {}; // id -> array of {scaff, final}
+  const weaponMap = {}; // id -> array of weapon objects
 
   function initNetwork() {
     socket = new WebSocket('ws://localhost:3000?email=' + encodeURIComponent(playerEmail));
@@ -621,6 +653,13 @@ function updateStatImages() {
           if (inst.owner === playerEmail && msg.gains) {
             ownedInstitutions.push(msg.gains);
           }
+        }
+      } else if (msg.type === 'updateWeapon') {
+        const inst = institutionDataMap[msg.id];
+        if (inst) {
+          if (!Array.isArray(inst.weapons)) inst.weapons = [];
+          inst.weapons[msg.index] = msg.weapon;
+          applyWeapons(inst);
         }
       } else if (msg.type === 'money') {
         playerMoney = msg.money;
@@ -762,6 +801,31 @@ function updateStatImages() {
     });
   }
 
+  function applyWeapons(inst) {
+    const existing = weaponMap[inst.id] || [];
+    existing.forEach(w => { if (w.obj) scene.remove(w.obj); });
+    weaponMap[inst.id] = [];
+    if (!Array.isArray(inst.weapons)) return;
+    inst.weapons.forEach((w, idx) => {
+      if (!w || !w.model) return;
+      const loader = new GLTFLoader();
+      loader.load(w.model, gltf => {
+        const obj = gltf.scene;
+        let pos = new THREE.Vector3().fromArray(inst.position);
+        pos.x += 4 + idx * 2;
+        const ground = getGroundHeightAt(pos.x, pos.z);
+        obj.position.set(pos.x, ground, pos.z);
+        obj.scale.setScalar(w.scale || 1);
+        obj.traverse(o => {
+          o.userData.weaponInstId = inst.id;
+          o.userData.weaponIndex = idx;
+        });
+        scene.add(obj);
+        weaponMap[inst.id][idx] = { obj, data: w };
+      });
+    });
+  }
+
   function createInstitution(inst, animate) {
     const def = institutions.find(i => i.name === inst.name);
     if (!def) return;
@@ -790,6 +854,7 @@ function updateStatImages() {
       const box = new THREE.Box3().setFromObject(obj);
       institutionBoxes.push({ id: inst.id, box });
       applyConstruction(institutionDataMap[inst.id]);
+      applyWeapons(institutionDataMap[inst.id]);
       if (inst.owner === playerEmail) {
         if (def.effects) ownedInstitutions.push(def.effects);
         if (inst.extraEffects) ownedInstitutions.push(inst.extraEffects);
@@ -809,10 +874,12 @@ function updateStatImages() {
     const workforceTabBtn = document.getElementById('workforce-tab-btn');
     const chatTabBtn = document.getElementById('chat-tab-btn');
     const proposalsTabBtn = document.getElementById('proposals-tab-btn');
+    const weaponsTabBtn = document.getElementById('weapons-tab-btn');
     const infoDiv = document.getElementById('popup-info');
     const workforceDiv = document.getElementById('popup-workforce');
     const chatDiv = document.getElementById('popup-chat');
     const proposalsDiv = document.getElementById('popup-proposals');
+    const weaponsDiv = document.getElementById('popup-weapons');
     const chatContainer = document.getElementById('chat-container');
     const ownerSpan = document.getElementById('popup-owner');
     const resDiv = document.getElementById('popup-resources');
@@ -855,6 +922,7 @@ function updateStatImages() {
       workforceDiv.style.display = 'none';
       chatDiv.style.display = 'none';
       proposalsDiv.style.display = 'none';
+      weaponsDiv.style.display = 'none';
       if (chatInterval) {
         clearInterval(chatInterval);
         chatInterval = null;
@@ -895,6 +963,7 @@ function updateStatImages() {
       workforceDiv.style.display = 'block';
       chatDiv.style.display = 'none';
       proposalsDiv.style.display = 'none';
+      weaponsDiv.style.display = 'none';
       if (chatInterval) {
         clearInterval(chatInterval);
         chatInterval = null;
@@ -1011,6 +1080,7 @@ function updateStatImages() {
       workforceDiv.style.display = 'none';
       chatDiv.style.display = 'block';
       proposalsDiv.style.display = 'none';
+      weaponsDiv.style.display = 'none';
       if (chatInterval) clearInterval(chatInterval);
       async function load() {
         try {
@@ -1063,18 +1133,57 @@ function updateStatImages() {
       workforceDiv.style.display = 'none';
       chatDiv.style.display = 'none';
       proposalsDiv.style.display = 'block';
+      weaponsDiv.style.display = 'none';
       if (chatInterval) { clearInterval(chatInterval); chatInterval = null; }
       const container = document.getElementById('proposals-container');
       container.innerHTML = '<div class="spinner" style="height:100px;color:#fff">Loading...</div>';
       try {
-        const res = await fetch(`/api/workforce/proposals/${id}`);
-        const hist = await fetch(`/api/workforce/proposals/history/${id}`);
-        if (res.ok && hist.ok) {
-          const data = await res.json();
-          const h = await hist.json();
-          renderProposals(container, data.proposals || [], id, institutionDataMap, playerEmail, h.history || []);
+        if (instData.name === 'Defence Base') {
+          const res = await fetch(`/api/defence/proposals/${id}`);
+          if (res.ok) {
+            const data = await res.json();
+            renderDefProposals(container, data.proposals || [], id);
+          }
+        } else {
+          const res = await fetch(`/api/workforce/proposals/${id}`);
+          const hist = await fetch(`/api/workforce/proposals/history/${id}`);
+          if (res.ok && hist.ok) {
+            const data = await res.json();
+            const h = await hist.json();
+            renderProposals(container, data.proposals || [], id, institutionDataMap, playerEmail, h.history || []);
+          }
         }
       } catch(err){
+        container.innerHTML = '<div style="color:#ff6666">Failed</div>';
+      }
+    }
+
+    async function showWeapons() {
+      infoDiv.style.display = 'none';
+      workforceDiv.style.display = 'none';
+      chatDiv.style.display = 'none';
+      proposalsDiv.style.display = 'none';
+      weaponsDiv.style.display = 'block';
+      if (chatInterval) { clearInterval(chatInterval); chatInterval = null; }
+      const container = document.getElementById('weapons-container');
+      container.innerHTML = '<div class="spinner" style="height:100px;color:#fff">Loading...</div>';
+      try {
+        const res = await fetch(`/api/defence/weapons/${id}`);
+        if (res.ok) {
+          const data = await res.json();
+          container.innerHTML = '';
+          (data.weapons || []).forEach(w => {
+            const div = document.createElement('div');
+            div.textContent = `${w.name} - movement ${w.movement.toFixed(2)}`;
+            div.className = 'weapon-entry';
+            div.onclick = () => alert('Using weapon ' + w.name);
+            container.appendChild(div);
+          });
+          if (!data.weapons || data.weapons.length === 0) {
+            container.textContent = 'No weapons';
+          }
+        }
+      } catch {
         container.innerHTML = '<div style="color:#ff6666">Failed</div>';
       }
     }
@@ -1084,11 +1193,20 @@ function updateStatImages() {
       workforceTabBtn.onclick = showWorkforce;
       chatTabBtn.onclick = showChat;
       proposalsTabBtn.onclick = showProposals;
+      if (instData.name === 'Defence Base') {
+        weaponsTabBtn.style.display = 'inline-block';
+        weaponsTabBtn.onclick = showWeapons;
+      } else {
+        weaponsTabBtn.style.display = 'none';
+        weaponsTabBtn.onclick = null;
+      }
     } else {
       infoTabBtn.onclick = null;
       workforceTabBtn.onclick = null;
       chatTabBtn.onclick = null;
       proposalsTabBtn.onclick = null;
+      weaponsTabBtn.onclick = null;
+      weaponsTabBtn.style.display = 'none';
     }
 
     function closePopup() {
@@ -1100,6 +1218,7 @@ function updateStatImages() {
         chatInterval = null;
       }
       proposalsDiv.style.display = 'none';
+      weaponsDiv.style.display = 'none';
     }
 
     function escHandler(e) {

@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const institutionStore = require('./institutionStore');
+const defenceStore = require('./defenceBaseStore');
 
 let OpenAI = null;
 try {
@@ -11,7 +12,9 @@ const CHAT_FILE = path.join(__dirname, 'chatLogs.json');
 const WORKFORCE_INTERVAL_MS = 2000; // 1 minute
 const FIRST_PROMPTS = {
   WatOx:
-    'You are employee in water-oxygen extraction facility in mars. How can we increase production? Give one concise idea. the idea should be either a device, or a facility/building. specification should be clear. i dont want plan or approach. i want machines or buildings/facilities If you need more info, ask one sentence. do not output more than 2 sentences ever. help shape ideas , start from broad and help your parties to specify and make project idea tangible and concrete. based on your expertise and resume, be creative.'
+    'You are employee in water-oxygen extraction facility in mars. How can we increase production? Give one concise idea. the idea should be either a device, or a facility/building. specification should be clear. i dont want plan or approach. i want machines or buildings/facilities If you need more info, ask one sentence. do not output more than 2 sentences ever. help shape ideas , start from broad and help your parties to specify and make project idea tangible and concrete. based on your expertise and resume, be creative.',
+  'Defence Base':
+    'You are a defence engineer on Mars. Suggest new weapons or defence systems. Keep responses short. When you are ready to propose, output JSON exactly like { "dialogue": "...", "is_proposal": true, "defprop": { "name": "Name", "look": "description for model", "category": "attack", "technology": "laser", "parameters": { "weight": 10, "ammo": 20, "force": 5, "fuel": 3 } } }. Otherwise reply with { "dialogue": "...", "is_proposal": false }. Always respond with valid JSON.'
 };
 
 class WorkforceChatManager {
@@ -111,7 +114,7 @@ class WorkforceChatManager {
     try {
       const obj = JSON.parse(raw);
       if (typeof obj.is_proposal !== 'boolean') {
-        obj.is_proposal = !!obj.proposal;
+        obj.is_proposal = !!obj.proposal || !!obj.defprop;
       }
       return { ...obj, raw };
     } catch {
@@ -124,6 +127,8 @@ class WorkforceChatManager {
     if (!chat || chat.workers.length === 0) return;
     if (chat.pendingProposal) return;
     for (const worker of chat.workers) {
+      const [owner, instName] = key.split('|');
+      const inst = institutionStore.findInstitution(owner, instName);
       const history = chat.messages
         .slice(-10)
         .map(m => `${m.worker}: ${
@@ -135,8 +140,13 @@ class WorkforceChatManager {
 
       let instructions = `You are ${worker.name}, ${worker.role}. Backstory: ${worker.backstory}. Resume: ${worker.resume}.`;
     if (worker.director) {
-      instructions +=
-        ' When you are ready to propose, reply with JSON exactly like { "dialogue": "...", "is_proposal": true, "proposal": { "title": "Title", "description": "Details", "cost": 100, "prerequisites": [ { "type": "hire", "value": "Role" } ], "gains": { "hydration": 1 to 9, "oxygen": 1 to 9, "health": 1 to 9, "money": 100 to 100 }, "risk": "low" } }. Otherwise reply with { "dialogue": "...", "is_proposal": false, "proposal": null }. Always respond with valid JSON.';
+      if (inst && inst.name === 'Defence Base') {
+        instructions +=
+          ' When you are ready to propose, reply with JSON exactly like { "dialogue": "...", "is_proposal": true, "defprop": { "name": "Name", "look": "description for model", "category": "attack", "technology": "laser", "parameters": { "weight": 10, "ammo": 20, "force": 5, "fuel": 3 } } }. Otherwise reply with { "dialogue": "...", "is_proposal": false }. Always respond with valid JSON.';
+      } else {
+        instructions +=
+          ' When you are ready to propose, reply with JSON exactly like { "dialogue": "...", "is_proposal": true, "proposal": { "title": "Title", "description": "Details", "cost": 100, "prerequisites": [ { "type": "hire", "value": "Role" } ], "gains": { "hydration": 1 to 9, "oxygen": 1 to 9, "health": 1 to 9, "money": 100 to 100 }, "risk": "low" } }. Otherwise reply with { "dialogue": "...", "is_proposal": false, "proposal": null }. Always respond with valid JSON.';
+      }
     }
 
 
@@ -176,9 +186,15 @@ class WorkforceChatManager {
         const [owner, instName] = key.split('|');
         const inst = institutionStore.findInstitution(owner, instName);
         if (inst) {
-          const { index } = institutionStore.addProposal(inst.id, result.proposal);
-          chat.pendingProposal = { instId: inst.id, index };
-          console.log(`Proposal recorded for ${inst.name} at index ${index}`);
+          if (inst.name === 'Defence Base' && result.defprop) {
+            const idx = defenceStore.addProposal(inst.id, result.defprop);
+            chat.pendingProposal = { instId: inst.id, index: idx };
+            console.log(`Defence proposal recorded for ${inst.name} at index ${idx}`);
+          } else if (result.proposal) {
+            const { index } = institutionStore.addProposal(inst.id, result.proposal);
+            chat.pendingProposal = { instId: inst.id, index };
+            console.log(`Proposal recorded for ${inst.name} at index ${index}`);
+          }
         }
       }
     }
