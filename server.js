@@ -26,7 +26,7 @@ const chatManager = require('./workforceChatManager');
 
 const INSTITUTION_PRICES = {
   WatOx: 100,
-  Lab: 200,
+  agriFood: 200,
   Depot: 150
 };
 
