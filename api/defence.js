@@ -4,7 +4,7 @@ const meshy = require('../meshy');
 
 module.exports = function(store, broadcast) {
   const router = express.Router();
-  const SCAFF = { url: 'scof1.glb', scale: 1 };
+  const SCAFF = { url: 'scof1.glb', scale: 10 };
 
   router.get('/proposals/:id', (req, res) => {
     try {
