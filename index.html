@@ -319,13 +319,16 @@ function updateStatImages() {
         return;
       }
       const box = new THREE.Box3().setFromObject(ghostInstitution);
-      const height = box.max.y - box.min.y;
-      const ground = getGroundHeightAt(ghostInstitution.position.x, ghostInstitution.position.z);
+      const ground = getGroundHeightAt(
+        ghostInstitution.position.x,
+        ghostInstitution.position.z
+      );
       // Flatten the terrain under the institution before placing it
       const radius = Math.max(box.max.x - box.min.x, box.max.z - box.min.z) * 0.6;
       flattenTerrain(ghostInstitution.position.x, ghostInstitution.position.z, radius, ground);
       const newGround = getGroundHeightAt(ghostInstitution.position.x, ghostInstitution.position.z);
-      const targetY = newGround - height * 0.2;
+      // Align the bottom of the model with the ground
+      const targetY = newGround - box.min.y;
       const data = {
         type: 'addInstitution',
         name: currentInstitution.name,
@@ -1121,7 +1124,21 @@ function updateStatImages() {
       const s = sinking[i];
       s.t += dt * 5;
       if (s.emit > 0.05 || s.t === 0) {
-        emitDustParticle(s.obj.position, 5);
+        const box = new THREE.Box3().setFromObject(s.obj);
+        const cx = (box.min.x + box.max.x) / 2;
+        const cz = (box.min.z + box.max.z) / 2;
+        const y = box.min.y;
+        const points = [
+          new THREE.Vector3(box.min.x, y, box.min.z),
+          new THREE.Vector3(box.min.x, y, box.max.z),
+          new THREE.Vector3(box.max.x, y, box.min.z),
+          new THREE.Vector3(box.max.x, y, box.max.z),
+          new THREE.Vector3(cx, y, box.min.z),
+          new THREE.Vector3(cx, y, box.max.z),
+          new THREE.Vector3(box.min.x, y, cz),
+          new THREE.Vector3(box.max.x, y, cz)
+        ];
+        points.forEach(p => emitDustParticle(p, 3));
         s.emit = 0;
       }
       s.emit += dt;
