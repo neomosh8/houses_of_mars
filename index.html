@@ -692,6 +692,7 @@ function updateStatImages() {
   oxygenImg.dataset.current = icons.oxygen_full;
 
   updateMoneyDisplay();
+  resetPlayerPosition();
 }
     });
   }
@@ -1737,6 +1738,37 @@ function updateStatImages() {
   // Array to store all terrain meshes for raycasting
   const terrainMeshes = [];
 
+  // Helper to find closest ground point using multiple raycasts
+  function getClosestGround(position) {
+    const offsets = [
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(characterRadius, 0, 0),
+      new THREE.Vector3(-characterRadius, 0, 0),
+      new THREE.Vector3(0, 0, characterRadius),
+      new THREE.Vector3(0, 0, -characterRadius)
+    ];
+
+    let closest = null;
+    offsets.forEach(off => {
+      const origin = position.clone().add(off).add(new THREE.Vector3(0, characterHeight / 2, 0));
+      raycaster.set(origin, new THREE.Vector3(0, -1, 0));
+      const hits = raycaster.intersectObjects(terrainMeshes, true);
+      if (hits.length > 0 && (!closest || hits[0].distance < closest.distance)) {
+        closest = hits[0];
+      }
+    });
+    return closest;
+  }
+
+  function resetPlayerPosition() {
+    if (!model) return;
+    model.position.set(startPosition[0], startPosition[1], startPosition[2]);
+    velocity.set(0, 0, 0);
+    groundY = null;
+    onGround = false;
+    findGroundBelow();
+  }
+
   groundLoader.load(
     'terrain_s.gltf', // Replace this with the path to your ground GLTF file
     (gltf) => {
@@ -1871,6 +1903,7 @@ function updateStatImages() {
 
       // Position the model based on saved state
       model.position.set(startPosition[0], startPosition[1], startPosition[2]);
+      resetPlayerPosition();
 
       // Setup animations
       mixer = new THREE.AnimationMixer(model);
@@ -1948,18 +1981,9 @@ function updateStatImages() {
   function findGroundBelow() {
     if (!model || terrainMeshes.length === 0) return;
 
-    // Use the actual current position of the model
-    const origin = model.position.clone();
+    const hit = getClosestGround(model.position);
 
-    // Cast ray downward from current position
-    raycaster.set(
-      origin,
-      new THREE.Vector3(0, -1, 0) // Direction straight down
-    );
-
-    const intersects = raycaster.intersectObjects(terrainMeshes, true);
-
-    if (intersects.length > 0) {
+    if (hit) {
       // We found ground - but we won't teleport to it
       // Just let gravity do its work in the animation loop
 
@@ -2002,17 +2026,10 @@ function updateStatImages() {
   function checkGroundContact() {
     if (!model) return;
 
-    // Origin is at character's feet plus half height (center of character)
-    const origin = model.position.clone();
-    origin.y += characterHeight / 2;
+    const hit = getClosestGround(model.position);
 
-    // Cast ray downward
-    raycaster.set(origin, new THREE.Vector3(0, -1, 0));
-    const intersects = raycaster.intersectObjects(terrainMeshes, true);
-
-    // Check if we're on or near ground
-    if (intersects.length > 0 && intersects[0].distance <= groundCheckDistance) {
-      const groundPosition = intersects[0].point.y;
+    if (hit && hit.distance <= groundCheckDistance) {
+      const groundPosition = hit.point.y;
 
       // Handle initial ground contact
       if (!onGround) {
@@ -2046,16 +2063,10 @@ function updateStatImages() {
     // Only check terrain alignment if we're on the ground
     if (!onGround) return;
 
-    // Origin at character's feet
-    const origin = model.position.clone();
-    origin.y += 0.5 * characterHeight; // Start from middle of character
+    const hit = getClosestGround(model.position);
 
-    // Cast ray downward
-    raycaster.set(origin, new THREE.Vector3(0, -1, 0));
-    const intersects = raycaster.intersectObjects(terrainMeshes, true);
-
-    if (intersects.length > 0) {
-      const targetY = intersects[0].point.y;
+    if (hit) {
+      const targetY = hit.point.y;
 
       // Smooth interpolation of height change for walking on uneven terrain
       if (groundY === null) {
@@ -2179,17 +2190,32 @@ function updateStatImages() {
 
                 const proposed = model.position.clone().add(moveDir.clone().multiplyScalar(speed * dt));
                 let blocked = false;
+                let insideBox = null;
                 const sphereCenter = proposed.clone();
                 sphereCenter.y += characterHeight / 2;
                 const sphere = new THREE.Sphere(sphereCenter, characterRadius);
                 institutionBoxes.forEach(entry => {
-                    if (entry.box.intersectsSphere(sphere)) blocked = true;
+                    if (entry.box.intersectsSphere(sphere)) {
+                        blocked = true;
+                        if (entry.box.containsPoint(sphereCenter)) insideBox = entry.box;
+                    }
                 });
                 constructionBoxes.forEach(entry => {
-                    if (entry.box.intersectsSphere(sphere)) blocked = true;
+                    if (entry.box.intersectsSphere(sphere)) {
+                        blocked = true;
+                        if (entry.box.containsPoint(sphereCenter)) insideBox = entry.box;
+                    }
                 });
                 if (!blocked) {
                     model.position.copy(proposed);
+                } else if (insideBox) {
+                    const center = insideBox.getCenter(new THREE.Vector3());
+                    const dir = sphereCenter.clone().sub(center).setY(0).normalize();
+                    if (dir.lengthSq() === 0) dir.set(1, 0, 0);
+                    const sizeX = insideBox.max.x - insideBox.min.x;
+                    const sizeZ = insideBox.max.z - insideBox.min.z;
+                    const pushDist = Math.max(sizeX, sizeZ) / 2 + characterRadius + 0.01;
+                    model.position.set(center.x + dir.x * pushDist, model.position.y, center.z + dir.z * pushDist);
                 }
 
                 // Update terrain alignment after horizontal movement
@@ -2215,10 +2241,7 @@ function updateStatImages() {
         }
 
         if (model.position.y < -100) {
-          model.position.y = 60;
-          velocity.y = 0;
-          groundY = null;
-          onGround = false;
+          resetPlayerPosition();
         }
 
         // Camera follow
