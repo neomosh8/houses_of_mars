@@ -72,19 +72,8 @@
   import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
   import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
   import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
-  import { OBB } from 'three/addons/math/OBB.js';
   import { renderProposals } from './proposals.js';
 
-  function setOBBFromObject(obb, object) {
-    object.updateWorldMatrix(true, false);
-    const box = new THREE.Box3().setFromObject(object);
-    const center = box.getCenter(new THREE.Vector3());
-    const halfSize = box.getSize(new THREE.Vector3()).multiplyScalar(0.5);
-    const rotation = new THREE.Matrix3().setFromMatrix4(object.matrixWorld);
-    obb.center.copy(center);
-    obb.halfSize.copy(halfSize);
-    obb.rotation.copy(rotation);
-  }
 
   let playerEmail = null;
   let playerMoney = 0;
@@ -760,8 +749,7 @@ function updateStatImages() {
         const ground = getGroundHeightAt(pos.x, pos.z);
         obj.position.set(pos.x, ground - box.min.y, pos.z);
 
-        const cbox = new OBB();
-        setOBBFromObject(cbox, obj);
+        const cbox = new THREE.Box3().setFromObject(obj);
         constructionBoxes.push({ id: inst.id, index: idx, box: cbox });
 
         if (!constructionMap[inst.id][idx]) constructionMap[inst.id][idx] = {};
@@ -799,8 +787,7 @@ function updateStatImages() {
       const cons = inst.constructions || (inst.construction ? [inst.construction] : []);
       institutionDataMap[inst.id] = { ...inst, effects: def.effects, workforce: inst.workforce || [], extraEffects: inst.extraEffects || {}, constructions: cons };
       obj.traverse(o => { o.userData.institutionId = inst.id; });
-      const box = new OBB();
-      setOBBFromObject(box, obj);
+      const box = new THREE.Box3().setFromObject(obj);
       institutionBoxes.push({ id: inst.id, box });
       applyConstruction(institutionDataMap[inst.id]);
       if (inst.owner === playerEmail) {
@@ -1162,7 +1149,7 @@ function updateStatImages() {
   function updateInstitutionBoxes() {
     institutionBoxes.forEach(entry => {
       const obj = institutionsMap[entry.id];
-      if (obj) setOBBFromObject(entry.box, obj);
+      if (obj) entry.box.setFromObject(obj);
     });
   }
 
@@ -1171,7 +1158,7 @@ function updateStatImages() {
       const list = constructionMap[entry.id];
       const c = list && list[entry.index];
       const obj = c && (c.scaff || c.final);
-      if (obj) setOBBFromObject(entry.box, obj);
+      if (obj) entry.box.setFromObject(obj);
     });
   }
 
@@ -1726,6 +1713,7 @@ function updateStatImages() {
   let activeAction;
   const modelScale = 1.2;
   const characterHeight = 1.8 * modelScale; // Approximate height of character
+  const characterRadius = 0.5 * modelScale; // Radius used for collision checks
   let playerAnimations = null;
 
   // Track foot positions for dust particles
@@ -2062,7 +2050,9 @@ function updateStatImages() {
 
                 const proposed = model.position.clone().add(moveDir.clone().multiplyScalar(speed * dt));
                 let blocked = false;
-                const sphere = new THREE.Sphere(proposed, 1);
+                const sphereCenter = proposed.clone();
+                sphereCenter.y += characterHeight / 2;
+                const sphere = new THREE.Sphere(sphereCenter, characterRadius);
                 institutionBoxes.forEach(entry => {
                     if (entry.box.intersectsSphere(sphere)) blocked = true;
                 });
