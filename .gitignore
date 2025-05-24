@@ -10,3 +10,6 @@ watox.png
 institutions.json
 *.png
 *.glb
+*.json
+terrain_s.bin
+terrain_s.gltf

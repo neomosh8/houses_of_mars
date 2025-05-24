@@ -220,9 +220,9 @@ function updateStatImages() {
     },
     {
       name: 'Depot',
-      url: 'https://threejs.org/examples/models/gltf/RobotExpressive/RobotExpressive.glb',
+      url: 'base.glb',
       thumbnail: 'https://placehold.co/100x100?text=Depot',
-      scale: 0.8,
+      scale: 0.5,
       price: 150,
       effects: { money: 1 },
       animated: true
@@ -1564,7 +1564,7 @@ function updateStatImages() {
   const terrainMeshes = [];
 
   groundLoader.load(
-    'terrain.gltf', // Replace this with the path to your ground GLTF file
+    'terrain_s.gltf', // Replace this with the path to your ground GLTF file
     (gltf) => {
       gltfTerrain = gltf.scene;
 
