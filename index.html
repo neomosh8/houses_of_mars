@@ -1726,6 +1726,7 @@ function updateStatImages() {
   let activeAction;
   const modelScale = 1.2;
   const characterHeight = 1.8 * modelScale; // Approximate height of character
+  const characterRadius = 0.5 * modelScale; // Radius used for collision checks
   let playerAnimations = null;
 
   // Track foot positions for dust particles
@@ -2062,7 +2063,9 @@ function updateStatImages() {
 
                 const proposed = model.position.clone().add(moveDir.clone().multiplyScalar(speed * dt));
                 let blocked = false;
-                const sphere = new THREE.Sphere(proposed, 1);
+                const sphereCenter = proposed.clone();
+                sphereCenter.y += characterHeight / 2;
+                const sphere = new THREE.Sphere(sphereCenter, characterRadius);
                 institutionBoxes.forEach(entry => {
                     if (entry.box.intersectsSphere(sphere)) blocked = true;
                 });
