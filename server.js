@@ -22,24 +22,28 @@ const client = twilio(accountSid, authToken);
 
 const userStore = require('./userStore');
 const institutionStore = require('./institutionStore');
+const defenceStore = require('./defenceBaseStore');
 const chatManager = require('./workforceChatManager');
 
 const INSTITUTION_PRICES = {
   WatOx: 100,
   agriFood: 200,
-  Depot: 150
+  Depot: 150,
+  'Defence Base': 300
 };
 
 const loginRoute = require('./api/login')(client, verifySid);
 const verifyRoute = require('./api/verify')(client, verifySid, userStore);
 const stateRoute = require('./api/state')(userStore);
 const workforceRoute = require('./api/workforce')(institutionStore, userStore, engine, broadcast);
+const defenceRoute = require('./api/defence')(defenceStore, broadcast);
 chatManager.initFromInstitutions(institutionStore.getInstitutions());
 
 app.use('/api/login', loginRoute);
 app.use('/api/verify', verifyRoute);
 app.use('/api/state', stateRoute);
 app.use('/api/workforce', workforceRoute);
+app.use('/api/defence', defenceRoute);
 
  const clients = new Map(); // id -> ws
  const states = new Map();  // id -> { position, rotation, moving }
@@ -90,7 +94,12 @@ wss.on('connection', (ws, req) => {
   for (const [pid, state] of states.entries()) {
     players.push({ id: pid, ...state });
   }
-  const institutions = institutionStore.getInstitutions();
+  const institutions = institutionStore.getInstitutions().map(inst => {
+    if (inst.name === 'Defence Base') {
+      return { ...inst, weapons: defenceStore.getWeapons(inst.id) };
+    }
+    return inst;
+  });
   ws.send(
     JSON.stringify({
       type: 'welcome',
@@ -187,7 +196,10 @@ wss.on('connection', (ws, req) => {
           };
           const instId = institutionStore.addInstitution(inst);
           const storedInst = institutionStore.getInstitution(instId);
-          broadcast({ type: 'addInstitution', institution: storedInst });
+          const instData = storedInst.name === 'Defence Base'
+            ? { ...storedInst, weapons: defenceStore.getWeapons(instId) }
+            : storedInst;
+          broadcast({ type: 'addInstitution', institution: instData });
           if (ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ type: 'money', money: user.money }));
           }
