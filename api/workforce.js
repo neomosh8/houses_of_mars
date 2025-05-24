@@ -4,7 +4,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 // Set to true to skip AI image generation and use placeholder images
-const USE_PLACEHOLDER_IMAGES = false;
+const USE_PLACEHOLDER_IMAGES = true;
 // Updated OpenAI import and initialization
 let openai = null;
 try {
