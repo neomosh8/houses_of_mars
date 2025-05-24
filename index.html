@@ -326,9 +326,14 @@ function updateStatImages() {
       // Flatten the terrain under the institution before placing it
       const radius = Math.max(box.max.x - box.min.x, box.max.z - box.min.z) * 0.6;
       flattenTerrain(ghostInstitution.position.x, ghostInstitution.position.z, radius, ground);
-      const newGround = getGroundHeightAt(ghostInstitution.position.x, ghostInstitution.position.z);
+      const newGround = getGroundHeightAt(
+        ghostInstitution.position.x,
+        ghostInstitution.position.z
+      );
       // Align the bottom of the model with the ground
-      const targetY = newGround - box.min.y;
+      const offsetY = box.min.y - ghostInstitution.position.y;
+      const targetY = newGround - offsetY;
+
       const data = {
         type: 'addInstitution',
         name: currentInstitution.name,
