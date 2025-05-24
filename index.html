@@ -78,8 +78,12 @@
   function setOBBFromObject(obb, object) {
     object.updateWorldMatrix(true, false);
     const box = new THREE.Box3().setFromObject(object);
-    obb.fromBox3(box);
-    obb.applyMatrix4(object.matrixWorld);
+    const center = box.getCenter(new THREE.Vector3());
+    const halfSize = box.getSize(new THREE.Vector3()).multiplyScalar(0.5);
+    const rotation = new THREE.Matrix3().setFromMatrix4(object.matrixWorld);
+    obb.center.copy(center);
+    obb.halfSize.copy(halfSize);
+    obb.rotation.copy(rotation);
   }
 
   let playerEmail = null;
