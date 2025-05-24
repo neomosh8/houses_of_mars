@@ -189,11 +189,9 @@ class WorkforceChatManager {
           if (inst.name === 'Defence Base' && result.defprop) {
             const idx = defenceStore.addProposal(inst.id, result.defprop);
             chat.pendingProposal = { instId: inst.id, index: idx };
-            console.log(`Defence proposal recorded for ${inst.name} at index ${idx}`);
           } else if (result.proposal) {
             const { index } = institutionStore.addProposal(inst.id, result.proposal);
             chat.pendingProposal = { instId: inst.id, index };
-            console.log(`Proposal recorded for ${inst.name} at index ${index}`);
           }
         }
       }
