@@ -77,6 +77,7 @@
   import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
   import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
   import { renderProposals } from './proposals.js';
+  import { renderDefProposals } from './defProposals.js';
 
 
   let playerEmail = null;
@@ -1137,12 +1138,20 @@ function updateStatImages() {
       const container = document.getElementById('proposals-container');
       container.innerHTML = '<div class="spinner" style="height:100px;color:#fff">Loading...</div>';
       try {
-        const res = await fetch(`/api/workforce/proposals/${id}`);
-        const hist = await fetch(`/api/workforce/proposals/history/${id}`);
-        if (res.ok && hist.ok) {
-          const data = await res.json();
-          const h = await hist.json();
-          renderProposals(container, data.proposals || [], id, institutionDataMap, playerEmail, h.history || []);
+        if (instData.name === 'Defence Base') {
+          const res = await fetch(`/api/defence/proposals/${id}`);
+          if (res.ok) {
+            const data = await res.json();
+            renderDefProposals(container, data.proposals || [], id);
+          }
+        } else {
+          const res = await fetch(`/api/workforce/proposals/${id}`);
+          const hist = await fetch(`/api/workforce/proposals/history/${id}`);
+          if (res.ok && hist.ok) {
+            const data = await res.json();
+            const h = await hist.json();
+            renderProposals(container, data.proposals || [], id, institutionDataMap, playerEmail, h.history || []);
+          }
         }
       } catch(err){
         container.innerHTML = '<div style="color:#ff6666">Failed</div>';
