@@ -4,7 +4,9 @@ const meshy = require('../meshy');
 
 module.exports = function(store, broadcast) {
   const router = express.Router();
-  const SCAFF = { url: 'scof1.glb', scale: 10 };
+  // Default scaffolding model for new weapons. A scale of 6 keeps
+  // generated weapons at a reasonable size if no scale is provided.
+  const SCAFF = { url: 'scof1.glb', scale: 6 };
 
   router.get('/proposals/:id', (req, res) => {
     try {
@@ -53,7 +55,13 @@ module.exports = function(store, broadcast) {
         const file = path.join(__dirname, '..', fileRel);
         meshy.generateModel(prompt, file)
           .then(() => {
-            const final = { ...weapon, model: fileRel.replace(/\\/g, '/'), status: 'completed' };
+            const final = {
+              ...weapon,
+              model: fileRel.replace(/\\/g, '/'),
+              status: 'completed',
+              // Ensure all generated weapons include a scale property
+              scale: weapon.scale || 6,
+            };
             store.updateWeapon(id, wIdx, final);
             broadcast({ type: 'updateWeapon', id, weapon: final, index: wIdx });
           })
