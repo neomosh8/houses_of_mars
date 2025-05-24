@@ -333,6 +333,7 @@ function updateStatImages() {
       // Align the bottom of the model with the ground
       const offsetY = box.min.y - ghostInstitution.position.y;
       const targetY = newGround - offsetY;
+
       const data = {
         type: 'addInstitution',
         name: currentInstitution.name,
