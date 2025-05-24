@@ -46,6 +46,11 @@ module.exports = function(store, broadcast) {
           status: 'scaffolding',
           scale: SCAFF.scale,
           offset,
+          // preserve important details from the proposal so the client
+          // knows how the weapon should behave
+          category: prop.category,
+          technology: prop.technology,
+          parameters: prop.parameters,
         };
         const wIdx = store.addWeapon(id, weapon);
         broadcast({ type: 'updateWeapon', id, weapon, index: wIdx });
@@ -61,6 +66,9 @@ module.exports = function(store, broadcast) {
               status: 'completed',
               // Ensure all generated weapons include a scale property
               scale: weapon.scale || 6,
+              category: prop.category,
+              technology: prop.technology,
+              parameters: prop.parameters,
             };
             store.updateWeapon(id, wIdx, final);
             broadcast({ type: 'updateWeapon', id, weapon: final, index: wIdx });
