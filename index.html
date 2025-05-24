@@ -194,7 +194,8 @@ function updateStatImages() {
       thumbnail: 'watox.png',
       scale: 7,
       price: 100,
-      effects: { hydration: 0.5, oxygen: 0.5 }
+      effects: { hydration: 0.5, oxygen: 0.5 },
+      animated: false
     },
     {
       name: 'agriFood',
@@ -202,7 +203,8 @@ function updateStatImages() {
       thumbnail: 'https://placehold.co/100x100?text=Lab',
       scale: 2,
       price: 200,
-      effects: { health: 0.2 }
+      effects: { health: 0.2 },
+      animated: false
     },
     {
       name: 'Depot',
@@ -210,7 +212,8 @@ function updateStatImages() {
       thumbnail: 'https://placehold.co/100x100?text=Depot',
       scale: 0.8,
       price: 150,
-      effects: { money: 1 }
+      effects: { money: 1 },
+      animated: true
     }
   ];
 
@@ -259,6 +262,7 @@ function updateStatImages() {
   }
 
   let ghostInstitution = null;
+  let ghostMixer = null;
   let placingInstitution = false;
   let currentInstitution = null;
   let institutionPopupOpen = false;
@@ -267,6 +271,10 @@ function updateStatImages() {
     if (ghostInstitution) {
       scene.remove(ghostInstitution);
       ghostInstitution = null;
+      if (ghostMixer) {
+        ghostMixer.stopAllAction();
+        ghostMixer = null;
+      }
     }
     const loader = new GLTFLoader();
     loader.load(inst.url, gltf => {
@@ -281,6 +289,10 @@ function updateStatImages() {
           o.receiveShadow = true;
         }
       });
+      if (inst.animated && gltf.animations && gltf.animations.length > 0) {
+        ghostMixer = new THREE.AnimationMixer(ghostInstitution);
+        gltf.animations.forEach(a => ghostMixer.clipAction(a).play());
+      }
       scene.add(ghostInstitution);
       placingInstitution = true;
       currentInstitution = inst;
@@ -310,6 +322,10 @@ function updateStatImages() {
       }
       scene.remove(ghostInstitution);
       ghostInstitution = null;
+      if (ghostMixer) {
+        ghostMixer.stopAllAction();
+        ghostMixer = null;
+      }
       placingInstitution = false;
       currentInstitution = null;
       return;
@@ -519,6 +535,7 @@ function updateStatImages() {
   const remotePlayers = {};
   const pendingRemotePlayers = [];
   const institutionsMap = {};
+  const institutionMixers = {};
   const institutionDataMap = {};
   const institutionBoxes = [];
   const constructionBoxes = [];
@@ -714,6 +731,13 @@ function updateStatImages() {
       obj.position.fromArray(inst.position);
       obj.rotation.y = inst.rotation || 0;
       scene.add(obj);
+      if (def.animated && gltf.animations && gltf.animations.length > 0) {
+        const mix = new THREE.AnimationMixer(obj);
+        gltf.animations.forEach(anim => {
+          mix.clipAction(anim).play();
+        });
+        institutionMixers[inst.id] = mix;
+      }
       institutionsMap[inst.id] = obj;
       const cons = inst.constructions || (inst.construction ? [inst.construction] : []);
       institutionDataMap[inst.id] = { ...inst, effects: def.effects, workforce: inst.workforce || [], extraEffects: inst.extraEffects || {}, constructions: cons };
@@ -1864,6 +1888,10 @@ function updateStatImages() {
     for (const id in remotePlayers) {
       remotePlayers[id].mixer.update(dt);
     }
+    for (const id in institutionMixers) {
+      institutionMixers[id].update(dt);
+    }
+    if (ghostMixer) ghostMixer.update(dt);
 
     if (model && terrainMeshes.length > 0) {
         // PHYSICS - Apply gravity if not on ground
