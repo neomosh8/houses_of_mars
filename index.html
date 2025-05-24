@@ -96,6 +96,14 @@ const icons = {
   oxygen_low: 'o2low.png'
 };
 
+  function createPlaceholder(scale = 1, color = 0x5555ff) {
+    const geom = new THREE.BoxGeometry(1, 1, 1);
+    const mat = new THREE.MeshStandardMaterial({ color });
+    const mesh = new THREE.Mesh(geom, mat);
+    mesh.scale.setScalar(scale);
+    return mesh;
+  }
+
   const healthImg = document.getElementById('health-img');
   const hydrationImg = document.getElementById('hydration-img');
   const oxygenImg = document.getElementById('oxygen-img');
@@ -801,6 +809,38 @@ function updateStatImages() {
         } else {
           constructionMap[inst.id][idx].final = obj;
         }
+      }, undefined, () => {
+        if (inst.constructions[idx] !== c) return;
+        const obj = createPlaceholder(c.scale || inst.scale || 1, 0x888888);
+        const offset = Array.isArray(c.offset)
+          ? new THREE.Vector3().fromArray(c.offset)
+          : null;
+        let pos = new THREE.Vector3().fromArray(inst.position);
+        if (offset) {
+          offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), inst.rotation || 0);
+          pos.add(offset);
+        } else {
+          const boxEntry = institutionBoxes.find(b => b.id === inst.id);
+          if (boxEntry) {
+            const size = new THREE.Vector3();
+            boxEntry.box.getSize(size);
+            const off = new THREE.Vector3(size.x / 2 + 5, 0, 0);
+            off.applyAxisAngle(new THREE.Vector3(0, 1, 0), inst.rotation || 0);
+            pos.add(off);
+          } else {
+            pos.x += 5;
+          }
+        }
+        obj.position.copy(pos);
+        scene.add(obj);
+        const cbox = new THREE.Box3().setFromObject(obj);
+        constructionBoxes.push({ id: inst.id, index: idx, box: cbox });
+        if (!constructionMap[inst.id][idx]) constructionMap[inst.id][idx] = {};
+        if (c.status === 'scaffolding') {
+          constructionMap[inst.id][idx].scaff = obj;
+        } else {
+          constructionMap[inst.id][idx].final = obj;
+        }
       });
     });
   }
@@ -833,6 +873,18 @@ function updateStatImages() {
           o.userData.weaponInstId = inst.id;
           o.userData.weaponIndex = idx;
         });
+        weaponMap[inst.id][idx] = { obj, data: w };
+      }, undefined, () => {
+        if (inst.weapons[idx] !== w) return;
+        const obj = createPlaceholder(w.scale || 1, 0xff0000);
+        const offset = Array.isArray(w.offset)
+          ? new THREE.Vector3().fromArray(w.offset)
+          : new THREE.Vector3(6 + idx * 2, 0, 0);
+        offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), inst.rotation || 0);
+        const pos = new THREE.Vector3().fromArray(inst.position).add(offset);
+        obj.position.copy(pos);
+        obj.rotation.y = inst.rotation || 0;
+        scene.add(obj);
         weaponMap[inst.id][idx] = { obj, data: w };
       });
     });
@@ -877,6 +929,17 @@ function updateStatImages() {
         obj.position.y = startY;
         sinking.push({ obj, start: startY, end: endY, t: 0, emit: 0 });
       }
+    }, undefined, () => {
+      const obj = createPlaceholder(inst.scale || def.scale || 1, 0x00aa00);
+      obj.position.fromArray(inst.position);
+      obj.rotation.y = inst.rotation || 0;
+      scene.add(obj);
+      institutionsMap[inst.id] = obj;
+      const box = new THREE.Box3().setFromObject(obj);
+      institutionBoxes.push({ id: inst.id, box });
+      institutionDataMap[inst.id] = { ...inst, effects: def.effects, workforce: inst.workforce || [], extraEffects: inst.extraEffects || {}, constructions: inst.constructions || [] };
+      applyConstruction(institutionDataMap[inst.id]);
+      applyWeapons(institutionDataMap[inst.id]);
     });
   }
 
