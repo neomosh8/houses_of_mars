@@ -295,6 +295,18 @@ module.exports = function(institutionStore, userStore, engine, broadcast) {
     }
   });
 
+  router.post('/chat/:email/:name', (req, res) => {
+    try {
+      const { email, name } = req.params;
+      const { text } = req.body;
+      if (!text) return res.status(400).json({ error: 'text required' });
+      chatManager.addUserMessage(email, name, text);
+      res.json({ ok: true });
+    } catch {
+      res.status(500).json({ error: 'Failed to send message' });
+    }
+  });
+
   router.get('/proposals/:id', (req, res) => {
     try {
       const id = Number(req.params.id);

@@ -1,6 +1,7 @@
 const express = require('express');
 const path = require('path');
 const meshy = require('../meshy');
+const chatManager = require('../workforceChatManager');
 
 module.exports = function(store, broadcast) {
   const router = express.Router();
@@ -78,6 +79,7 @@ module.exports = function(store, broadcast) {
       }
 
       store.updateProposal(id, index, { status });
+      chatManager.resolveProposal(id, index, status);
       res.json({ status });
     } catch {
       res.status(500).json({ error: 'failed' });
