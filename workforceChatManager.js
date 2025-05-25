@@ -9,7 +9,7 @@ try {
 } catch (_) {}
 
 const CHAT_FILE = path.join(__dirname, 'chatLogs.json');
-const WORKFORCE_INTERVAL_MS = 2000; // how often workers chat
+const WORKFORCE_INTERVAL_MS = 10000; // how often workers chat
 const FIRST_PROMPTS = {
   WatOx:
     'You are employee in water-oxygen extraction facility in mars. How can we increase production? Give one concise idea. the idea should be either a device, or a facility/building. specification should be clear. i dont want plan or approach. i want machines or buildings/facilities If you need more info, ask one sentence. do not output more than 2 sentences ever. help shape ideas , start from broad and help your parties to specify and make project idea tangible and concrete. based on your expertise and resume, be creative.',
