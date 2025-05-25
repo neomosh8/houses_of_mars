@@ -503,10 +503,11 @@ function updateStatImages() {
 
   function applyInstitutionEffects() {
     ownedInstitutions.forEach(e => {
-      if (e.hydration) hydration = Math.min(hydration + e.hydration, 1000);
-      if (e.oxygen) oxygen = Math.min(oxygen + e.oxygen, 1000);
-      if (e.health) health = Math.min(health + e.health, 1000);
-      if (e.money) {
+      if (!e || typeof e !== 'object') return;
+      if (typeof e.hydration === 'number') hydration = Math.min(hydration + e.hydration, 1000);
+      if (typeof e.oxygen === 'number') oxygen = Math.min(oxygen + e.oxygen, 1000);
+      if (typeof e.health === 'number') health = Math.min(health + e.health, 1000);
+      if (typeof e.money === 'number') {
         playerMoney += e.money;
         updateMoneyDisplay();
       }
@@ -686,7 +687,12 @@ function updateStatImages() {
             inst.constructions[msg.index] = msg.construction;
             applyConstruction(inst);
           }
-          if (inst.owner === playerEmail && msg.gains) {
+          if (
+            inst.owner === playerEmail &&
+            msg.gains &&
+            typeof msg.gains === 'object' &&
+            !Array.isArray(msg.gains)
+          ) {
             ownedInstitutions.push(msg.gains);
           }
         }
@@ -1184,12 +1190,17 @@ function updateStatImages() {
     const effects = Object.assign({}, def.effects || {});
     if (instData.extraEffects) {
       for (const k of Object.keys(instData.extraEffects)) {
-        effects[k] = (effects[k] || 0) + instData.extraEffects[k];
+        const val = instData.extraEffects[k];
+        if (typeof val === 'number' && isFinite(val)) {
+          effects[k] = (effects[k] || 0) + val;
+        }
       }
     }
     const lines = [];
     Object.keys(effects).forEach(k => {
-      lines.push(`${k}: +${effects[k]} (${(effects[k]*count).toFixed(2)} total)`);
+      if (typeof effects[k] === 'number' && isFinite(effects[k])) {
+        lines.push(`${k}: +${effects[k]} (${(effects[k] * count).toFixed(2)} total)`);
+      }
     });
     resDiv.textContent = lines.join(' | ');
     const actionsDiv = popup.querySelector('.popup-actions');
