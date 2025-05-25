@@ -88,6 +88,8 @@
   let playerMoney = 0;
   let startPosition = [70, 100, -50];
 
+  const ENABLE_LATTICE = false; // Set to true to display 3D lattice
+
 const icons = {
   health_full: 'healthfull.png',
   health_half: 'healthhalf.png',
@@ -192,6 +194,7 @@ function updateStatImages() {
       playerEmail = email;
       document.getElementById('login-container').style.display = 'none';
       initNetwork();
+      if (ENABLE_LATTICE) initLattice();
       updateMoneyDisplay();
       return true;
     } catch {
@@ -566,6 +569,7 @@ function updateStatImages() {
     localStorage.setItem('playerEmail', email);
     document.getElementById('login-container').style.display = 'none';
     initNetwork();
+    if (ENABLE_LATTICE) initLattice();
     updateMoneyDisplay();
   }
 
@@ -651,6 +655,8 @@ function updateStatImages() {
   const institutionSounds = {}; // id -> THREE.PositionalAudio
   const weaponSounds = {}; // instId -> array of sounds
   let footstepSound = null;
+  let latticeGroup = null;
+  let latticeMaterial = null;
 
   function initNetwork() {
     socket = new WebSocket('ws://localhost:3000?email=' + encodeURIComponent(playerEmail));
@@ -2143,9 +2149,61 @@ function updateStatImages() {
 
 
     // Position the model if it's already loaded
-    if (model) {
+  if (model) {
       findGroundBelow();
     }
+  }
+
+  function initLattice() {
+    const radius = 20;
+    const positions = [];
+    for (let x = -radius; x <= radius; x++) {
+      for (let y = -radius; y <= radius; y++) {
+        positions.push(x, y, -radius, x, y, radius);
+      }
+    }
+    for (let x = -radius; x <= radius; x++) {
+      for (let z = -radius; z <= radius; z++) {
+        positions.push(x, -radius, z, x, radius, z);
+      }
+    }
+    for (let y = -radius; y <= radius; y++) {
+      for (let z = -radius; z <= radius; z++) {
+        positions.push(-radius, y, z, radius, y, z);
+      }
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    latticeMaterial = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      uniforms: {
+        playerPos: { value: new THREE.Vector3() },
+        baseOpacity: { value: 0.5 },
+        fadeRadius: { value: radius }
+      },
+      vertexShader: `
+        uniform vec3 playerPos;
+        varying float vDist;
+        void main() {
+          vec3 worldPos = (modelMatrix * vec4(position, 1.0)).xyz;
+          vDist = distance(worldPos, playerPos);
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform float baseOpacity;
+        uniform float fadeRadius;
+        varying float vDist;
+        void main() {
+          float a = baseOpacity * max(0.0, 1.0 - vDist / fadeRadius);
+          if (a <= 0.0) discard;
+          gl_FragColor = vec4(1.0, 1.0, 1.0, a);
+        }
+      `
+    });
+    latticeGroup = new THREE.LineSegments(geometry, latticeMaterial);
+    scene.add(latticeGroup);
   }
 
   // Player model and animations
@@ -2428,6 +2486,16 @@ function updateStatImages() {
     camera.lookAt(lookAtPoint);
   }
 
+  function updateLattice() {
+    if (!model || !latticeGroup) return;
+    latticeMaterial.uniforms.playerPos.value.copy(model.position);
+    latticeGroup.position.set(
+      Math.floor(model.position.x),
+      Math.floor(model.position.y),
+      Math.floor(model.position.z)
+    );
+  }
+
   function animate() {
     requestAnimationFrame(animate);
     const dt = clock.getDelta();
@@ -2565,6 +2633,7 @@ function updateStatImages() {
 
         // Camera follow
         updateCamera(dt);
+        if (ENABLE_LATTICE) updateLattice();
         updateGhostInstitution();
         if (!dead) {
           sendState();
