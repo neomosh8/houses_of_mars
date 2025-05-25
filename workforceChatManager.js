@@ -9,7 +9,7 @@ try {
 } catch (_) {}
 
 const CHAT_FILE = path.join(__dirname, 'chatLogs.json');
-const WORKFORCE_INTERVAL_MS = 2000; // 1 minute
+const WORKFORCE_INTERVAL_MS = 2000; // how often workers chat
 const FIRST_PROMPTS = {
   WatOx:
     'You are employee in water-oxygen extraction facility in mars. How can we increase production? Give one concise idea. the idea should be either a device, or a facility/building. specification should be clear. i dont want plan or approach. i want machines or buildings/facilities If you need more info, ask one sentence. do not output more than 2 sentences ever. help shape ideas , start from broad and help your parties to specify and make project idea tangible and concrete. based on your expertise and resume, be creative.',
@@ -34,9 +34,11 @@ class WorkforceChatManager {
   _load() {
     try {
       const data = JSON.parse(fs.readFileSync(CHAT_FILE, 'utf8'));
-      // ensure pendingProposal key for each chat
       Object.values(data).forEach(chat => {
-        if (!('pendingProposal' in chat)) chat.pendingProposal = null;
+        if (!Array.isArray(chat.messages)) chat.messages = [];
+        if (!Array.isArray(chat.workers)) chat.workers = [];
+        chat.nextIndex = chat.nextIndex || 0;
+        chat.workers.sort((a, b) => (a.director === b.director ? 0 : a.director ? 1 : -1));
       });
       return data;
     } catch {
@@ -65,8 +67,8 @@ class WorkforceChatManager {
     return this.chats[key] || {
       messages: [],
       workers: [],
-      firstPrompt: FIRST_PROMPTS[name] || 'Discuss improvements.',
-      pendingProposal: null
+      nextIndex: 0,
+      firstPrompt: FIRST_PROMPTS[name] || 'Discuss improvements.'
     };
   }
 
@@ -76,18 +78,35 @@ class WorkforceChatManager {
       this.chats[key] = {
         messages: [],
         workers: [],
-        firstPrompt: FIRST_PROMPTS[name] || 'Discuss improvements.',
-        pendingProposal: null
+        nextIndex: 0,
+        firstPrompt: FIRST_PROMPTS[name] || 'Discuss improvements.'
       };
     }
     this.chats[key].workers.push({ ...worker, initialized: false });
+    this.chats[key].workers.sort((a,b)=> (a.director===b.director?0:(a.director?1:-1)));
     this._save();
     this._start(key);
   }
 
   _start(key) {
     if (this.intervals[key]) return;
+    if (!this.chats[key].nextIndex) this.chats[key].nextIndex = 0;
     this.intervals[key] = setInterval(() => this._step(key), WORKFORCE_INTERVAL_MS);
+  }
+
+  addUserMessage(email, name, text) {
+    const key = this._key(email, name);
+    if (!this.chats[key]) {
+      this.chats[key] = {
+        messages: [],
+        workers: [],
+        nextIndex: 0,
+        firstPrompt: FIRST_PROMPTS[name] || 'Discuss improvements.'
+      };
+    }
+    this.chats[key].messages.push({ worker: 'User', text });
+    this._save();
+    this._start(key);
   }
 
   async _query(instructions, input, isDirector) {
@@ -125,10 +144,10 @@ class WorkforceChatManager {
   async _step(key) {
     const chat = this.chats[key];
     if (!chat || chat.workers.length === 0) return;
-    if (chat.pendingProposal) return;
-    for (const worker of chat.workers) {
-      const [owner, instName] = key.split('|');
-      const inst = institutionStore.findInstitution(owner, instName);
+    const worker = chat.workers[chat.nextIndex % chat.workers.length];
+    chat.nextIndex = (chat.nextIndex + 1) % chat.workers.length;
+    const [owner, instName] = key.split('|');
+    const inst = institutionStore.findInstitution(owner, instName);
       const history = chat.messages
         .slice(-10)
         .map(m => `${m.worker}: ${
@@ -158,21 +177,22 @@ class WorkforceChatManager {
         ? `Please respond in valid JSON only. ${basePrompt}`
         : basePrompt;
 
-      let result;
-      try {
-        result = await this._query(instructions, prompt, worker.director);
-      } catch {
-        continue;
-      }
+    let result;
+    try {
+      result = await this._query(instructions, prompt, worker.director);
+    } catch {
+      return;
+    }
 
       if (result.dialogue) {
+        const propData = result.proposal || result.defprop || null;
         if (worker.director) {
           chat.messages.push({
             worker: worker.name,
             text: {
               dialogue: result.dialogue,
               is_proposal: result.is_proposal,
-              proposal: result.proposal || null,
+              proposal: propData,
               raw: result.raw
             }
           });
@@ -180,22 +200,15 @@ class WorkforceChatManager {
           chat.messages.push({ worker: worker.name, text: result.dialogue });
         }
         worker.initialized = true;
-      }
 
-      if (worker.director && result.is_proposal) {
-        const [owner, instName] = key.split('|');
-        const inst = institutionStore.findInstitution(owner, instName);
-        if (inst) {
-          if (inst.name === 'Defence Base' && result.defprop) {
-            const idx = defenceStore.addProposal(inst.id, result.defprop);
-            chat.pendingProposal = { instId: inst.id, index: idx };
-          } else if (result.proposal) {
-            const { index } = institutionStore.addProposal(inst.id, result.proposal);
-            chat.pendingProposal = { instId: inst.id, index };
+        if (result.is_proposal && propData && inst) {
+          if (inst.name === 'Defence Base') {
+            defenceStore.addProposal(inst.id, propData);
+          } else {
+            institutionStore.addProposal(inst.id, propData);
           }
         }
       }
-    }
     this._save();
   }
 
@@ -205,13 +218,10 @@ class WorkforceChatManager {
     const key = this._key(inst.owner, inst.name);
     const chat = this.chats[key];
     if (!chat) return;
-    if (chat.pendingProposal && chat.pendingProposal.instId === instId && chat.pendingProposal.index === index) {
-      chat.pendingProposal = null;
-      let msg = `Proposal ${status}`;
-      if (note) msg += `: ${note}`;
-      chat.messages.push({ worker: 'System', text: msg });
-      this._save();
-    }
+    let msg = `Proposal ${status}`;
+    if (note) msg += `: ${note}`;
+    chat.messages.push({ worker: 'System', text: msg });
+    this._save();
   }
 }
 
