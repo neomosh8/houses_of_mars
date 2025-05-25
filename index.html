@@ -240,6 +240,21 @@ function updateStatImages() {
     }
   ];
 
+  const institutionAudioFiles = {
+    'WatOx': 'watox.mp3',
+    'agriFood': 'agrifood.mp3',
+    'Depot': 'depot.mp3',
+    'Defence Base': 'defence_base.mp3'
+  };
+
+  const weaponAudioFiles = {
+    laser: 'laser.mp3',
+    bullet: 'bullet.mp3',
+    missile: 'missile.mp3',
+    drone: 'drone.mp3',
+    kamikaze: 'kamikaze.mp3'
+  };
+
   const panel = document.getElementById('institution-panel');
   const panelTab = panel.querySelector('.panel-tab');
   const panelContent = document.getElementById('institution-content');
@@ -586,6 +601,11 @@ function updateStatImages() {
   renderer.toneMappingExposure = 1.0;
   document.body.appendChild(renderer.domElement);
 
+  // --- Audio setup ---
+  const listener = new THREE.AudioListener();
+  camera.add(listener);
+  const audioLoader = new THREE.AudioLoader();
+
   // Post-processing setup for bloom
   const composer = new EffectComposer(renderer);
   const renderPass = new RenderPass(scene, camera);
@@ -623,6 +643,9 @@ function updateStatImages() {
   const constructionMap = {}; // id -> array of {scaff, final}
   const weaponMap = {}; // id -> array of weapon objects
   const projectiles = []; // active fired weapon objects
+  const institutionSounds = {}; // id -> THREE.PositionalAudio
+  const weaponSounds = {}; // instId -> array of sounds
+  let footstepSound = null;
 
   function initNetwork() {
     socket = new WebSocket('ws://localhost:3000?email=' + encodeURIComponent(playerEmail));
@@ -862,10 +885,26 @@ function updateStatImages() {
           : new THREE.Vector3(6 + idx * 2, 0, 0);
         offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), inst.rotation || 0);
         const pos = new THREE.Vector3().fromArray(inst.position).add(offset);
-        obj.scale.setScalar(w.scale || 1);
-        obj.rotation.y = inst.rotation || 0;
-        scene.add(obj);
-        const boxTmp = new THREE.Box3().setFromObject(obj);
+      obj.scale.setScalar(w.scale || 1);
+      obj.rotation.y = inst.rotation || 0;
+      scene.add(obj);
+
+      const techFile = weaponAudioFiles[(w.technology || '').toLowerCase()];
+      if (techFile) {
+        const wsound = new THREE.PositionalAudio(listener);
+        audioLoader.load(techFile, buffer => {
+          wsound.setBuffer(buffer);
+          wsound.setLoop(true);
+          wsound.setRefDistance(15);
+          wsound.setVolume(1);
+          wsound.play();
+        });
+        obj.add(wsound);
+        if (!weaponSounds[inst.id]) weaponSounds[inst.id] = [];
+        weaponSounds[inst.id][idx] = wsound;
+      }
+
+      const boxTmp = new THREE.Box3().setFromObject(obj);
         const radius = Math.max(boxTmp.max.x - boxTmp.min.x, boxTmp.max.z - boxTmp.min.z) * 0.6;
         const ground = getGroundHeightAt(pos.x, pos.z);
         flattenTerrain(pos.x, pos.z, radius, ground);
@@ -1053,6 +1092,21 @@ function updateStatImages() {
       const ground = getGroundHeightAt(inst.position[0], inst.position[2]);
       flattenTerrain(inst.position[0], inst.position[2], radius, ground);
       scene.add(obj);
+
+      const instAudioFile = institutionAudioFiles[inst.name];
+      if (instAudioFile) {
+        const sound = new THREE.PositionalAudio(listener);
+        audioLoader.load(instAudioFile, buffer => {
+          sound.setBuffer(buffer);
+          sound.setLoop(true);
+          sound.setRefDistance(20);
+          sound.setVolume(1);
+          sound.play();
+        });
+        obj.add(sound);
+        institutionSounds[inst.id] = sound;
+      }
+
       if (def.animated && gltf.animations && gltf.animations.length > 0) {
         const mix = new THREE.AnimationMixer(obj);
         gltf.animations.forEach(anim => {
@@ -2083,6 +2137,17 @@ function updateStatImages() {
       });
       scene.add(model);
 
+      // Footstep audio attached to the player
+      footstepSound = new THREE.PositionalAudio(listener);
+      audioLoader.load('footstep.mp3', buffer => {
+        footstepSound.setBuffer(buffer);
+        footstepSound.setLoop(true);
+        footstepSound.setRefDistance(5);
+        footstepSound.setVolume(0);
+        footstepSound.play();
+      });
+      model.add(footstepSound);
+
       // Debug: log when player model is loaded and its starting position
       console.log('[DEBUG] Player model loaded', {
         position: {
@@ -2439,6 +2504,11 @@ function updateStatImages() {
                 // Switch to idle when not moving
                 switchAnimation(idleAction);
                 isMovingForward = false;
+            }
+
+            if (footstepSound) {
+                const vol = (isMovingForward && onGround) ? 1 : 0;
+                footstepSound.setVolume(vol);
             }
         }
 
