@@ -99,7 +99,13 @@ export function renderProposals(container, proposals, instId, institutionDataMap
       });
       if (res.ok) {
         const data = await res.json();
-        if (data.result && data.result.gains) {
+        if (
+          data.result &&
+          data.result.feasible &&
+          data.result.gains &&
+          typeof data.result.gains === 'object' &&
+          !Array.isArray(data.result.gains)
+        ) {
           const inst = institutionDataMap[instId];
           if (inst) {
             inst.extraEffects = inst.extraEffects || {};
