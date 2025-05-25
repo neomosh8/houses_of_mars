@@ -11,7 +11,7 @@ export function checkPrerequisite(pr, playerEmail, institutionDataMap) {
   return false;
 }
 
-export function renderProposals(container, proposals, instId, institutionDataMap, playerEmail, history = []) {
+export function renderProposals(container, proposals, instId, institutionDataMap, playerEmail, ownedInstitutions, history = []) {
   container.innerHTML = '';
   if (!proposals || proposals.length === 0) {
     container.innerHTML = '<div style="color:#fff">No proposals</div>';
