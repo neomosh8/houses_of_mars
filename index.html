@@ -658,7 +658,9 @@ function updateStatImages() {
       const msg = JSON.parse(e.data);
       if (msg.type === 'welcome') {
         clientId = msg.id;
-        msg.players.forEach(p => createRemotePlayer(p.id, p));
+        msg.players.forEach(p => {
+          if (p.id !== clientId) createRemotePlayer(p.id, p);
+        });
         if (msg.institutions) {
           msg.institutions.forEach(i => createInstitution(i, false));
         }
