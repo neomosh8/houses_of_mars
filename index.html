@@ -1096,13 +1096,17 @@ function updateStatImages() {
       const instAudioFile = institutionAudioFiles[inst.name];
       if (instAudioFile) {
         const sound = new THREE.PositionalAudio(listener);
-        audioLoader.load(instAudioFile, buffer => {
-          sound.setBuffer(buffer);
-          sound.setLoop(true);
-          sound.setRefDistance(20);
-          sound.setVolume(1);
-          sound.play();
-        });
+       audioLoader.load(instAudioFile, buffer => {
+      sound.setLoop(true);
+      sound.setRefDistance(1);
+      sound.setRolloffFactor(10.0);
+      sound.setMaxDistance(10);
+      sound.setVolume(1);
+      sound.setBuffer(buffer);
+      if (sound.isPlaying) sound.stop();
+      sound.play();
+    });
+
         obj.add(sound);
         institutionSounds[inst.id] = sound;
       }
@@ -2139,7 +2143,7 @@ function updateStatImages() {
 
       // Footstep audio attached to the player
       footstepSound = new THREE.PositionalAudio(listener);
-      audioLoader.load('footstep.mp3', buffer => {
+      audioLoader.load('walking.mp3', buffer => {
         footstepSound.setBuffer(buffer);
         footstepSound.setLoop(true);
         footstepSound.setRefDistance(5);

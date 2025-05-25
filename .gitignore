@@ -15,3 +15,5 @@ institutions.json
 terrain_s.bin
 terrain_s.gltf
 WATOX.glb
+*.mp3
+walking.mp3
