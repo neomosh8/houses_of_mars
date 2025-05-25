@@ -185,13 +185,14 @@ class WorkforceChatManager {
     }
 
       if (result.dialogue) {
+        const propData = result.proposal || result.defprop || null;
         if (worker.director) {
           chat.messages.push({
             worker: worker.name,
             text: {
               dialogue: result.dialogue,
               is_proposal: result.is_proposal,
-              proposal: result.proposal || null,
+              proposal: propData,
               raw: result.raw
             }
           });
@@ -199,18 +200,15 @@ class WorkforceChatManager {
           chat.messages.push({ worker: worker.name, text: result.dialogue });
         }
         worker.initialized = true;
-      }
 
-
-    if (worker.director && result.is_proposal) {
-      if (inst) {
-        if (inst.name === 'Defence Base' && result.defprop) {
-          defenceStore.addProposal(inst.id, result.defprop);
-        } else if (result.proposal) {
-          institutionStore.addProposal(inst.id, result.proposal);
+        if (result.is_proposal && propData && inst) {
+          if (inst.name === 'Defence Base') {
+            defenceStore.addProposal(inst.id, propData);
+          } else {
+            institutionStore.addProposal(inst.id, propData);
+          }
         }
       }
-    }
     this._save();
   }
 
