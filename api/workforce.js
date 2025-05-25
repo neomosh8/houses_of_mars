@@ -29,7 +29,7 @@ const SCAFF_MODELS = [
 ];
 const MODEL_DIR = path.join(__dirname, '..', 'generated_models');
 if (!fs.existsSync(MODEL_DIR)) fs.mkdirSync(MODEL_DIR);
-module.exports = function(institutionStore, userStore, engine, broadcast) {
+module.exports = function(institutionStore, userStore, engine, broadcast, sendToEmail) {
   const router = express.Router();
 
   function randomWorker() {
@@ -338,10 +338,23 @@ module.exports = function(institutionStore, userStore, engine, broadcast) {
       }
 
       const orig = inst.proposals[index];
+      let updatedMoney = null;
       let result = null;
       let status = 'denied';
 
       if (approve) {
+        if (orig.cost) {
+          const users = userStore.loadUsers();
+          const user = users[inst.owner];
+          if (user) {
+            user.money = Math.max((user.money || 0) - orig.cost, 0);
+            updatedMoney = user.money;
+            userStore.saveUsers(users);
+            if (typeof sendToEmail === 'function') {
+              sendToEmail(inst.owner, { type: 'money', money: user.money });
+            }
+          }
+        }
         const [x, , z] = inst.position || [0, 0, 0];
         const ecosystem = engine.getProperties(x, z);
         result = await judge.judgeProposal(orig, ecosystem);
@@ -397,7 +410,7 @@ module.exports = function(institutionStore, userStore, engine, broadcast) {
       const note = result && !result.feasible ? result.gains : null;
       chatManager.resolveProposal(id, index, status, note);
 
-      res.json({ proposal, result });
+      res.json({ proposal, result, money: updatedMoney });
     } catch (err) {
       res.status(500).json({ error: 'failed' });
     }

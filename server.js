@@ -35,7 +35,16 @@ const INSTITUTION_PRICES = {
 const loginRoute = require('./api/login')(client, verifySid);
 const verifyRoute = require('./api/verify')(client, verifySid, userStore);
 const stateRoute = require('./api/state')(userStore);
-const workforceRoute = require('./api/workforce')(institutionStore, userStore, engine, broadcast);
+function sendToEmail(email, data) {
+  const msg = JSON.stringify(data);
+  for (const [id, ws] of clients.entries()) {
+    if (emails.get(id) === email && ws.readyState === WebSocket.OPEN) {
+      ws.send(msg);
+    }
+  }
+}
+
+const workforceRoute = require('./api/workforce')(institutionStore, userStore, engine, broadcast, sendToEmail);
 const defenceRoute = require('./api/defence')(defenceStore, broadcast);
 chatManager.initFromInstitutions(institutionStore.getInstitutions());
 

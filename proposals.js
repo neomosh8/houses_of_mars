@@ -79,6 +79,9 @@ export function renderProposals(container, proposals, instId, institutionDataMap
     approve.disabled = true;
     const deny = document.createElement('button');
     deny.textContent = 'Deny';
+    const statusDiv = document.createElement('div');
+    statusDiv.style.marginTop = '4px';
+    statusDiv.style.fontSize = '12px';
 
     function checkReady() {
       const all = [...table.querySelectorAll('button')].every(b => b.disabled);
@@ -86,6 +89,9 @@ export function renderProposals(container, proposals, instId, institutionDataMap
     }
 
     approve.onclick = async () => {
+      approve.disabled = true;
+      deny.disabled = true;
+      approve.textContent = 'Loading...';
       const res = await fetch(`/api/workforce/proposals/${instId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -103,8 +109,19 @@ export function renderProposals(container, proposals, instId, institutionDataMap
             }
           }
         }
+        if (data.result && data.result.feasible) {
+          approve.textContent = 'Started';
+          approve.style.backgroundColor = '#0a0';
+          statusDiv.textContent = 'Status: approved';
+        } else {
+          approve.textContent = 'Project failed';
+          approve.style.backgroundColor = '#a00';
+          statusDiv.textContent = 'Status: rejected';
+        }
+      } else {
+        approve.textContent = 'Error';
+        approve.style.backgroundColor = '#a00';
       }
-      card.remove();
     };
 
     deny.onclick = async () => {
@@ -118,6 +135,7 @@ export function renderProposals(container, proposals, instId, institutionDataMap
 
     card.appendChild(approve);
     card.appendChild(deny);
+    card.appendChild(statusDiv);
     container.appendChild(card);
   });
   }
