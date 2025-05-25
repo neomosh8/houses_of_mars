@@ -53,6 +53,10 @@
     </div>
     <div id="popup-chat" class="hidden">
       <div id="chat-container"></div>
+      <div id="chat-input-row">
+        <input id="chat-input" type="text" placeholder="Type message" />
+        <button id="chat-send">Send</button>
+      </div>
     </div>
     <div id="popup-proposals" class="hidden">
       <div id="proposals-container"></div>
@@ -1364,6 +1368,9 @@ function updateStatImages() {
       proposalsDiv.style.display = 'none';
       weaponsDiv.style.display = 'none';
       if (chatInterval) clearInterval(chatInterval);
+      const input = document.getElementById('chat-input');
+      const sendBtn = document.getElementById('chat-send');
+      let lastHeight = 0;
       async function load() {
         try {
           const res = await fetch(`/api/workforce/chat/${instData.owner}/${instData.name}`);
@@ -1401,13 +1408,33 @@ function updateStatImages() {
                 }
               }
             });
-            chatContainer.scrollTop = chatContainer.scrollHeight;
+            if (chatContainer.scrollHeight !== lastHeight) {
+              chatContainer.scrollTop = chatContainer.scrollHeight;
+              lastHeight = chatContainer.scrollHeight;
+            }
           }
         } catch (err) {
         }
       }
       await load();
       chatInterval = setInterval(load, 5000);
+
+      async function send() {
+        const text = input.value.trim();
+        if (!text) return;
+        input.value = '';
+        await fetch(`/api/workforce/chat/${instData.owner}/${instData.name}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text })
+        });
+        await load();
+      }
+
+      sendBtn.onclick = send;
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') send();
+      });
     }
 
     async function showProposals() {
