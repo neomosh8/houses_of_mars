@@ -201,13 +201,14 @@ class WorkforceChatManager {
         worker.initialized = true;
       }
 
-    if (worker.director && result.is_proposal && inst) {
-      if (inst.name === 'Defence Base') {
-        const prop = result.defprop || result.proposal;
-        if (prop) defenceStore.addProposal(inst.id, prop);
-      } else {
-        const prop = result.proposal || result.defprop;
-        if (prop) institutionStore.addProposal(inst.id, prop);
+
+    if (worker.director && result.is_proposal) {
+      if (inst) {
+        if (inst.name === 'Defence Base' && result.defprop) {
+          defenceStore.addProposal(inst.id, result.defprop);
+        } else if (result.proposal) {
+          institutionStore.addProposal(inst.id, result.proposal);
+        }
       }
     }
     this._save();
