@@ -10,6 +10,7 @@ try {
 
 const CHAT_FILE = path.join(__dirname, 'chatLogs.json');
 const WORKFORCE_INTERVAL_MS = 10000; // how often workers chat
+const USER_BUFFER_MS = 1000; // short delay after user message
 const FIRST_PROMPTS = {
   WatOx:
     'You are employee in water-oxygen extraction facility in mars. How can we increase production? Give one concise idea. the idea should be either a device, or a facility/building. specification should be clear. i dont want plan or approach. i want machines or buildings/facilities If you need more info, ask one sentence. do not output more than 2 sentences ever. help shape ideas , start from broad and help your parties to specify and make project idea tangible and concrete. based on your expertise and resume, be creative.',
@@ -20,7 +21,7 @@ const FIRST_PROMPTS = {
 class WorkforceChatManager {
   constructor() {
     this.chats = this._load();
-    this.intervals = {};
+    this.timers = {};
     this.openai = OpenAI && process.env.OPENAI_API_KEY
       ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
       : null;
@@ -38,6 +39,7 @@ class WorkforceChatManager {
         if (!Array.isArray(chat.messages)) chat.messages = [];
         if (!Array.isArray(chat.workers)) chat.workers = [];
         chat.nextIndex = chat.nextIndex || 0;
+        chat.pendingReset = false;
         chat.workers.sort((a, b) => (a.director === b.director ? 0 : a.director ? 1 : -1));
       });
       return data;
@@ -68,6 +70,7 @@ class WorkforceChatManager {
       messages: [],
       workers: [],
       nextIndex: 0,
+      pendingReset: false,
       firstPrompt: FIRST_PROMPTS[name] || 'Discuss improvements.'
     };
   }
@@ -79,6 +82,7 @@ class WorkforceChatManager {
         messages: [],
         workers: [],
         nextIndex: 0,
+        pendingReset: false,
         firstPrompt: FIRST_PROMPTS[name] || 'Discuss improvements.'
       };
     }
@@ -89,9 +93,28 @@ class WorkforceChatManager {
   }
 
   _start(key) {
-    if (this.intervals[key]) return;
+    if (this.timers[key]) return;
     if (!this.chats[key].nextIndex) this.chats[key].nextIndex = 0;
-    this.intervals[key] = setInterval(() => this._step(key), WORKFORCE_INTERVAL_MS);
+    this._schedule(key, WORKFORCE_INTERVAL_MS);
+  }
+
+  _schedule(key, delay) {
+    if (this.timers[key]) clearTimeout(this.timers[key]);
+    const handle = setTimeout(() => this._runStep(key, handle), delay);
+    this.timers[key] = handle;
+  }
+
+  async _runStep(key, handle) {
+    if (this.timers[key] !== handle) return;
+    const chat = this.chats[key];
+    if (!chat || chat.workers.length === 0) return;
+    if (chat.pendingReset) {
+      chat.nextIndex = 0;
+      chat.pendingReset = false;
+    }
+    await this._step(key);
+    if (this.timers[key] !== handle) return;
+    this._schedule(key, WORKFORCE_INTERVAL_MS);
   }
 
   addUserMessage(email, name, text) {
@@ -101,12 +124,14 @@ class WorkforceChatManager {
         messages: [],
         workers: [],
         nextIndex: 0,
+        pendingReset: false,
         firstPrompt: FIRST_PROMPTS[name] || 'Discuss improvements.'
       };
     }
     this.chats[key].messages.push({ worker: 'User', text });
+    this.chats[key].pendingReset = true;
     this._save();
-    this._start(key);
+    this._schedule(key, USER_BUFFER_MS);
   }
 
   async _query(instructions, input, isDirector) {
