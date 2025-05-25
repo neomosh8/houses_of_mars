@@ -1459,7 +1459,7 @@ function updateStatImages() {
           if (res.ok && hist.ok) {
             const data = await res.json();
             const h = await hist.json();
-            renderProposals(container, data.proposals || [], id, institutionDataMap, playerEmail, h.history || []);
+            renderProposals(container, data.proposals || [], id, institutionDataMap, playerEmail, ownedInstitutions, h.history || []);
           }
         }
       } catch(err){
