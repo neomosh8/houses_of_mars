@@ -201,6 +201,7 @@ class WorkforceChatManager {
         worker.initialized = true;
       }
 
+
     if (worker.director && result.is_proposal) {
       if (inst) {
         if (inst.name === 'Defence Base' && result.defprop) {
