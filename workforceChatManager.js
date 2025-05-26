@@ -78,6 +78,7 @@ class WorkforceChatManager {
       firstPrompt: FIRST_PROMPTS[name] || 'Discuss improvements.',
       ids: [],
       currentId: null,
+
     };
     if (!this.chats[key]) this.chats[key] = chat;
     if (!chat.ids.includes(id)) chat.ids.push(id);
@@ -86,7 +87,7 @@ class WorkforceChatManager {
   }
 
   addWorker(email, name, id, worker) {
-    const key = this._key(email, name, id);
+    const key = this._key(email, name);
     if (!this.chats[key]) {
       this.chats[key] = {
         messages: [],
@@ -133,7 +134,7 @@ class WorkforceChatManager {
   }
 
   addUserMessage(email, name, id, text) {
-    const key = this._key(email, name, id);
+    const key = this._key(email, name);
     if (!this.chats[key]) {
       this.chats[key] = {
         messages: [],
