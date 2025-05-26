@@ -888,16 +888,26 @@ function updateStatImages() {
     weaponMap[inst.id] = [];
     if (!Array.isArray(inst.weapons)) return;
     inst.weapons.forEach((w, idx) => {
-      if (!w || !w.model) return;
+      if (!w) return;
+      const offset = Array.isArray(w.offset)
+        ? new THREE.Vector3().fromArray(w.offset)
+        : new THREE.Vector3(6 + idx * 2, 0, 0);
+      offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), inst.rotation || 0);
+      const pos = new THREE.Vector3().fromArray(inst.position).add(offset);
+
+      if (w.status === 'scaffolding' || !w.model) {
+        const obj = createPlaceholder(w.scale || 1, 0xff0000);
+        obj.position.copy(pos);
+        obj.rotation.y = inst.rotation || 0;
+        scene.add(obj);
+        weaponMap[inst.id][idx] = { obj, data: w };
+        return;
+      }
+
       const loader = new GLTFLoader();
       loader.load(w.model, gltf => {
         if (inst.weapons[idx] !== w) return; // ignore outdated load
         const obj = gltf.scene;
-        const offset = Array.isArray(w.offset)
-          ? new THREE.Vector3().fromArray(w.offset)
-          : new THREE.Vector3(6 + idx * 2, 0, 0);
-        offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), inst.rotation || 0);
-        const pos = new THREE.Vector3().fromArray(inst.position).add(offset);
       obj.scale.setScalar(w.scale || 1);
       obj.rotation.y = inst.rotation || 0;
       scene.add(obj);
@@ -943,15 +953,10 @@ function updateStatImages() {
       }, undefined, () => {
         if (inst.weapons[idx] !== w) return;
         const obj = createPlaceholder(w.scale || 1, 0xff0000);
-        const offset = Array.isArray(w.offset)
-          ? new THREE.Vector3().fromArray(w.offset)
-          : new THREE.Vector3(6 + idx * 2, 0, 0);
-        offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), inst.rotation || 0);
-        const pos = new THREE.Vector3().fromArray(inst.position).add(offset);
         obj.position.copy(pos);
         obj.rotation.y = inst.rotation || 0;
         scene.add(obj);
-      weaponMap[inst.id][idx] = { obj, data: w };
+        weaponMap[inst.id][idx] = { obj, data: w };
       });
     });
   }

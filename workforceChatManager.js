@@ -53,7 +53,7 @@ class WorkforceChatManager {
   }
 
   _key(email, name, id) {
-    return `${email}|${name}|${id}`;
+    return `${email}|${name}`;
   }
 
   initFromInstitutions(list) {
