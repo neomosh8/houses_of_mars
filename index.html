@@ -73,6 +73,7 @@
     </div>
   </div>
   <script type="module">
+  const DEBUG_LOG = false;
   import * as THREE from 'three';
   import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
   import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -928,15 +929,17 @@ function updateStatImages() {
         weaponMap[inst.id][idx] = { obj, data: w };
 
         // Debug: log weapon placement when the generated model is loaded
-        console.log('[DEBUG] Weapon model loaded', {
-          institution: inst.id,
-          index: idx,
-          position: {
-            x: obj.position.x,
-            y: obj.position.y,
-            z: obj.position.z
-          }
-        });
+        if (DEBUG_LOG) {
+          console.log('[DEBUG] Weapon model loaded', {
+            institution: inst.id,
+            index: idx,
+            position: {
+              x: obj.position.x,
+              y: obj.position.y,
+              z: obj.position.z
+            }
+          });
+        }
       }, undefined, () => {
         if (inst.weapons[idx] !== w) return;
         const obj = createPlaceholder(w.scale || 1, 0xff0000);
@@ -966,22 +969,24 @@ function updateStatImages() {
     projectiles.push({ obj: clone, tech, cat, params, start, target, stage: 0, speed: 0 });
 
     // Debug: log weapon firing start information
-    console.log('[DEBUG] Fire weapon', {
-      weaponTech: tech,
-      weaponCategory: cat,
-      params,
-      characterPosition: {
-        x: target.x,
-        y: target.y,
-        z: target.z
-      },
-      startPosition: {
-        x: start.x,
-        y: start.y,
-        z: start.z
-      },
-      animation: activeAction && activeAction._clip ? activeAction._clip.name : 'none'
-    });
+    if (DEBUG_LOG) {
+      console.log('[DEBUG] Fire weapon', {
+        weaponTech: tech,
+        weaponCategory: cat,
+        params,
+        characterPosition: {
+          x: target.x,
+          y: target.y,
+          z: target.z
+        },
+        startPosition: {
+          x: start.x,
+          y: start.y,
+          z: start.z
+        },
+        animation: activeAction && activeAction._clip ? activeAction._clip.name : 'none'
+      });
+    }
   }
 
   function fireAllWeapons() {
@@ -1386,7 +1391,7 @@ function updateStatImages() {
       let lastHeight = 0;
       async function load() {
         try {
-          const res = await fetch(`/api/workforce/chat/${instData.owner}/${instData.name}`);
+          const res = await fetch(`/api/workforce/chat/${id}`);
           if (res.ok) {
             const data = await res.json();
             chatContainer.innerHTML = '';
@@ -1436,7 +1441,7 @@ function updateStatImages() {
         const text = input.value.trim();
         if (!text) return;
         input.value = '';
-        await fetch(`/api/workforce/chat/${instData.owner}/${instData.name}`, {
+        await fetch(`/api/workforce/chat/${id}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text })
@@ -1459,6 +1464,7 @@ function updateStatImages() {
       if (chatInterval) { clearInterval(chatInterval); chatInterval = null; }
       const container = document.getElementById('proposals-container');
       container.innerHTML = '<div class="spinner" style="height:100px;color:#fff">Loading...</div>';
+      if (DEBUG_LOG) console.log('[DEFENCE UI] showProposals', { instId: id });
       try {
         if (instData.name === 'Defence Base') {
           const res = await fetch(`/api/defence/proposals/${id}`);
@@ -2193,13 +2199,15 @@ function updateStatImages() {
       model.add(footstepSound);
 
       // Debug: log when player model is loaded and its starting position
-      console.log('[DEBUG] Player model loaded', {
-        position: {
-          x: startPosition[0],
-          y: startPosition[1],
-          z: startPosition[2]
-        }
-      });
+      if (DEBUG_LOG) {
+        console.log('[DEBUG] Player model loaded', {
+          position: {
+            x: startPosition[0],
+            y: startPosition[1],
+            z: startPosition[2]
+          }
+        });
+      }
 
       // Position the model based on saved state
       model.position.set(startPosition[0], startPosition[1], startPosition[2]);
@@ -2307,7 +2315,7 @@ function updateStatImages() {
     const key = e.code.toLowerCase().replace('key', '').replace('arrow','');
     if (keys.hasOwnProperty(key)) keys[key] = true;
     if (e.code === 'KeyK') {
-      console.log('[DEBUG] Key K pressed');
+      if (DEBUG_LOG) console.log('[DEBUG] Key K pressed');
       fireAllWeapons();
     }
   });

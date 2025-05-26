@@ -252,7 +252,7 @@ module.exports = function(institutionStore, userStore, engine, broadcast, sendTo
 
       // Add the worker
       inst.workforce.push(worker);
-      chatManager.addWorker(inst.owner, inst.name, worker);
+      chatManager.addWorker(inst.owner, inst.name, id, worker);
 
       // Update the institution
       institutionStore.updateInstitution(id, { workforce: inst.workforce });
@@ -285,22 +285,26 @@ module.exports = function(institutionStore, userStore, engine, broadcast, sendTo
     }
   });
 
-  router.get('/chat/:email/:name', (req, res) => {
+  router.get('/chat/:id', (req, res) => {
     try {
-      const { email, name } = req.params;
-      const chat = chatManager.getChat(email, name);
+      const id = Number(req.params.id);
+      const inst = institutionStore.getInstitution(id);
+      if (!inst) return res.status(404).json({ error: 'not found' });
+      const chat = chatManager.getChat(inst.owner, inst.name, id);
       res.json({ messages: chat.messages });
     } catch {
       res.status(500).json({ error: 'Failed to get chat' });
     }
   });
 
-  router.post('/chat/:email/:name', (req, res) => {
+  router.post('/chat/:id', (req, res) => {
     try {
-      const { email, name } = req.params;
+      const id = Number(req.params.id);
       const { text } = req.body;
       if (!text) return res.status(400).json({ error: 'text required' });
-      chatManager.addUserMessage(email, name, text);
+      const inst = institutionStore.getInstitution(id);
+      if (!inst) return res.status(404).json({ error: 'not found' });
+      chatManager.addUserMessage(inst.owner, inst.name, id, text);
       res.json({ ok: true });
     } catch {
       res.status(500).json({ error: 'Failed to send message' });
