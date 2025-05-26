@@ -52,20 +52,22 @@ class WorkforceChatManager {
     fs.writeFileSync(CHAT_FILE, JSON.stringify(this.chats, null, 2));
   }
 
-  _key(email, name) {
-    return `${email}|${name}`;
+  _key(email, name, id) {
+    return `${email}|${name}|${id}`;
   }
 
   initFromInstitutions(list) {
     list.forEach(inst => {
       if (Array.isArray(inst.workforce) && inst.workforce.length > 0) {
-        inst.workforce.forEach(w => this.addWorker(inst.owner, inst.name, w));
+        inst.workforce.forEach(w =>
+          this.addWorker(inst.owner, inst.name, inst.id, w)
+        );
       }
     });
   }
 
-  getChat(email, name) {
-    const key = this._key(email, name);
+  getChat(email, name, id) {
+    const key = this._key(email, name, id);
     return this.chats[key] || {
       messages: [],
       workers: [],
@@ -75,8 +77,8 @@ class WorkforceChatManager {
     };
   }
 
-  addWorker(email, name, worker) {
-    const key = this._key(email, name);
+  addWorker(email, name, id, worker) {
+    const key = this._key(email, name, id);
     if (!this.chats[key]) {
       this.chats[key] = {
         messages: [],
@@ -117,8 +119,8 @@ class WorkforceChatManager {
     this._schedule(key, WORKFORCE_INTERVAL_MS);
   }
 
-  addUserMessage(email, name, text) {
-    const key = this._key(email, name);
+  addUserMessage(email, name, id, text) {
+    const key = this._key(email, name, id);
     if (!this.chats[key]) {
       this.chats[key] = {
         messages: [],
@@ -181,8 +183,9 @@ class WorkforceChatManager {
     if (!chat || chat.workers.length === 0) return;
     const worker = chat.workers[chat.nextIndex % chat.workers.length];
     chat.nextIndex = (chat.nextIndex + 1) % chat.workers.length;
-    const [owner, instName] = key.split('|');
-    const inst = institutionStore.findInstitution(owner, instName);
+    const [owner, instName, idStr] = key.split('|');
+    const instId = Number(idStr);
+    const inst = institutionStore.getInstitution(instId);
       const history = chat.messages
         .slice(-10)
         .map(m => `${m.worker}: ${
@@ -254,7 +257,7 @@ class WorkforceChatManager {
   resolveProposal(instId, index, status, note = null) {
     const inst = institutionStore.getInstitution(instId);
     if (!inst) return;
-    const key = this._key(inst.owner, inst.name);
+    const key = this._key(inst.owner, inst.name, instId);
     const chat = this.chats[key];
     if (!chat) return;
     let msg = `Proposal ${status}`;

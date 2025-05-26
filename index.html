@@ -1391,7 +1391,7 @@ function updateStatImages() {
       let lastHeight = 0;
       async function load() {
         try {
-          const res = await fetch(`/api/workforce/chat/${instData.owner}/${instData.name}`);
+          const res = await fetch(`/api/workforce/chat/${id}`);
           if (res.ok) {
             const data = await res.json();
             chatContainer.innerHTML = '';
@@ -1441,7 +1441,7 @@ function updateStatImages() {
         const text = input.value.trim();
         if (!text) return;
         input.value = '';
-        await fetch(`/api/workforce/chat/${instData.owner}/${instData.name}`, {
+        await fetch(`/api/workforce/chat/${id}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text })
