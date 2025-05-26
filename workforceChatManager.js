@@ -38,6 +38,8 @@ class WorkforceChatManager {
       Object.values(data).forEach(chat => {
         if (!Array.isArray(chat.messages)) chat.messages = [];
         if (!Array.isArray(chat.workers)) chat.workers = [];
+        if (!Array.isArray(chat.ids)) chat.ids = [];
+        chat.currentId = typeof chat.currentId === 'number' ? chat.currentId : (chat.ids[0] || null);
         chat.nextIndex = chat.nextIndex || 0;
         chat.pendingReset = false;
         chat.workers.sort((a, b) => (a.director === b.director ? 0 : a.director ? 1 : -1));
@@ -53,7 +55,7 @@ class WorkforceChatManager {
   }
 
   _key(email, name, id) {
-    return `${email}|${name}|${id}`;
+    return `${email}|${name}`;
   }
 
   initFromInstitutions(list) {
@@ -68,13 +70,19 @@ class WorkforceChatManager {
 
   getChat(email, name, id) {
     const key = this._key(email, name, id);
-    return this.chats[key] || {
+    const chat = this.chats[key] || {
       messages: [],
       workers: [],
       nextIndex: 0,
       pendingReset: false,
-      firstPrompt: FIRST_PROMPTS[name] || 'Discuss improvements.'
+      firstPrompt: FIRST_PROMPTS[name] || 'Discuss improvements.',
+      ids: [],
+      currentId: null,
     };
+    if (!this.chats[key]) this.chats[key] = chat;
+    if (!chat.ids.includes(id)) chat.ids.push(id);
+    chat.currentId = id;
+    return chat;
   }
 
   addWorker(email, name, id, worker) {
@@ -85,11 +93,16 @@ class WorkforceChatManager {
         workers: [],
         nextIndex: 0,
         pendingReset: false,
-        firstPrompt: FIRST_PROMPTS[name] || 'Discuss improvements.'
+        firstPrompt: FIRST_PROMPTS[name] || 'Discuss improvements.',
+        ids: [],
+        currentId: id,
       };
     }
-    this.chats[key].workers.push({ ...worker, initialized: false });
-    this.chats[key].workers.sort((a,b)=> (a.director===b.director?0:(a.director?1:-1)));
+    const chat = this.chats[key];
+    if (!chat.ids.includes(id)) chat.ids.push(id);
+    chat.currentId = id;
+    chat.workers.push({ ...worker, initialized: false });
+    chat.workers.sort((a,b)=> (a.director===b.director?0:(a.director?1:-1)));
     this._save();
     this._start(key);
   }
@@ -127,11 +140,16 @@ class WorkforceChatManager {
         workers: [],
         nextIndex: 0,
         pendingReset: false,
-        firstPrompt: FIRST_PROMPTS[name] || 'Discuss improvements.'
+        firstPrompt: FIRST_PROMPTS[name] || 'Discuss improvements.',
+        ids: [],
+        currentId: id,
       };
     }
-    this.chats[key].messages.push({ worker: 'User', text });
-    this.chats[key].pendingReset = true;
+    const chat = this.chats[key];
+    if (!chat.ids.includes(id)) chat.ids.push(id);
+    chat.currentId = id;
+    chat.messages.push({ worker: 'User', text });
+    chat.pendingReset = true;
     this._save();
     this._schedule(key, USER_BUFFER_MS);
   }
@@ -183,9 +201,14 @@ class WorkforceChatManager {
     if (!chat || chat.workers.length === 0) return;
     const worker = chat.workers[chat.nextIndex % chat.workers.length];
     chat.nextIndex = (chat.nextIndex + 1) % chat.workers.length;
-    const [owner, instName, idStr] = key.split('|');
-    const instId = Number(idStr);
-    const inst = institutionStore.getInstitution(instId);
+    const [owner, instName] = key.split('|');
+    let instId = chat.currentId;
+    let inst = institutionStore.getInstitution(instId);
+    if (!inst && chat.ids.length > 0) {
+      chat.currentId = chat.ids[0];
+      instId = chat.currentId;
+      inst = institutionStore.getInstitution(instId);
+    }
       const history = chat.messages
         .slice(-10)
         .map(m => `${m.worker}: ${
@@ -257,9 +280,11 @@ class WorkforceChatManager {
   resolveProposal(instId, index, status, note = null) {
     const inst = institutionStore.getInstitution(instId);
     if (!inst) return;
-    const key = this._key(inst.owner, inst.name, instId);
+    const key = this._key(inst.owner, inst.name);
     const chat = this.chats[key];
     if (!chat) return;
+    if (!chat.ids.includes(instId)) chat.ids.push(instId);
+    chat.currentId = instId;
     let msg = `Proposal ${status}`;
     if (note) msg += `: ${note}`;
     chat.messages.push({ worker: 'System', text: msg });
