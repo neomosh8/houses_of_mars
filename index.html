@@ -914,7 +914,11 @@ function updateStatImages() {
 
       let techKey = w.technology;
       if (Array.isArray(techKey)) techKey = techKey[0];
-      const techFile = weaponAudioFiles[(techKey || '').toLowerCase()];
+      if (techKey && typeof techKey === 'object') {
+        const keys = Object.keys(techKey);
+        techKey = keys.length ? keys[0] : '';
+      }
+      const techFile = weaponAudioFiles[(typeof techKey === 'string' ? techKey : '').toLowerCase()];
       if (techFile) {
         const wsound = new THREE.PositionalAudio(listener);
         audioLoader.load(techFile, buffer => {
@@ -968,7 +972,11 @@ function updateStatImages() {
     const params = entry.data.parameters || {};
     let tech = entry.data.technology;
     if (Array.isArray(tech)) tech = tech[0];
-    tech = (tech || '').toLowerCase();
+    if (tech && typeof tech === 'object') {
+      const keys = Object.keys(tech);
+      tech = keys.length ? keys[0] : '';
+    }
+    tech = (typeof tech === 'string' ? tech : '').toLowerCase();
     const cat = (entry.data.category || '').toLowerCase();
     const start = entry.obj.position.clone();
     const target = model.position.clone();
