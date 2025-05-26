@@ -39,7 +39,7 @@ class WorkforceChatManager {
         if (!Array.isArray(chat.messages)) chat.messages = [];
         if (!Array.isArray(chat.workers)) chat.workers = [];
         if (!Array.isArray(chat.ids)) chat.ids = [];
-        chat.currentId = typeof chat.currentId === 'number' ? chat.currentId : null;
+        chat.currentId = typeof chat.currentId === 'number' ? chat.currentId : (chat.ids[0] || null);
         chat.nextIndex = chat.nextIndex || 0;
         chat.pendingReset = false;
         chat.workers.sort((a, b) => (a.director === b.director ? 0 : a.director ? 1 : -1));
@@ -54,8 +54,7 @@ class WorkforceChatManager {
     fs.writeFileSync(CHAT_FILE, JSON.stringify(this.chats, null, 2));
   }
 
-  _key(email, name) {
-
+  _key(email, name, id) {
     return `${email}|${name}`;
   }
 
@@ -70,16 +69,21 @@ class WorkforceChatManager {
   }
 
   getChat(email, name, id) {
-    const key = this._key(email, name);
-    return this.chats[key] || {
+    const key = this._key(email, name, id);
+    const chat = this.chats[key] || {
       messages: [],
       workers: [],
       nextIndex: 0,
       pendingReset: false,
       firstPrompt: FIRST_PROMPTS[name] || 'Discuss improvements.',
-      ids: id != null ? [id] : [],
-      currentId: id != null ? id : null
+      ids: [],
+      currentId: null,
+
     };
+    if (!this.chats[key]) this.chats[key] = chat;
+    if (!chat.ids.includes(id)) chat.ids.push(id);
+    chat.currentId = id;
+    return chat;
   }
 
   addWorker(email, name, id, worker) {
@@ -92,7 +96,7 @@ class WorkforceChatManager {
         pendingReset: false,
         firstPrompt: FIRST_PROMPTS[name] || 'Discuss improvements.',
         ids: [],
-        currentId: null
+        currentId: id,
       };
     }
     const chat = this.chats[key];
@@ -139,7 +143,7 @@ class WorkforceChatManager {
         pendingReset: false,
         firstPrompt: FIRST_PROMPTS[name] || 'Discuss improvements.',
         ids: [],
-        currentId: null
+        currentId: id,
       };
     }
     const chat = this.chats[key];
@@ -199,10 +203,13 @@ class WorkforceChatManager {
     const worker = chat.workers[chat.nextIndex % chat.workers.length];
     chat.nextIndex = (chat.nextIndex + 1) % chat.workers.length;
     const [owner, instName] = key.split('|');
-    const instId = typeof chat.currentId === 'number'
-      ? chat.currentId
-      : (Array.isArray(chat.ids) && chat.ids.length > 0 ? chat.ids[0] : null);
-    const inst = instId != null ? institutionStore.getInstitution(instId) : null;
+    let instId = chat.currentId;
+    let inst = institutionStore.getInstitution(instId);
+    if (!inst && chat.ids.length > 0) {
+      chat.currentId = chat.ids[0];
+      instId = chat.currentId;
+      inst = institutionStore.getInstitution(instId);
+    }
       const history = chat.messages
         .slice(-10)
         .map(m => `${m.worker}: ${
@@ -277,6 +284,8 @@ class WorkforceChatManager {
     const key = this._key(inst.owner, inst.name);
     const chat = this.chats[key];
     if (!chat) return;
+    if (!chat.ids.includes(instId)) chat.ids.push(instId);
+    chat.currentId = instId;
     let msg = `Proposal ${status}`;
     if (note) msg += `: ${note}`;
     chat.messages.push({ worker: 'System', text: msg });
