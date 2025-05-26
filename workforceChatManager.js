@@ -55,6 +55,7 @@ class WorkforceChatManager {
   }
 
   _key(email, name) {
+
     return `${email}|${name}`;
   }
 
