@@ -162,6 +162,16 @@ class WorkforceChatManager {
       }
       return { ...obj, raw };
     } catch {
+      const match = raw.match(/\{[\s\S]*\}/);
+      if (match) {
+        try {
+          const obj = JSON.parse(match[0]);
+          if (typeof obj.is_proposal !== 'boolean') {
+            obj.is_proposal = !!obj.proposal || !!obj.defprop;
+          }
+          return { ...obj, raw };
+        } catch {}
+      }
       return { dialogue: raw, proposal: null, is_proposal: false, raw };
     }
   }
