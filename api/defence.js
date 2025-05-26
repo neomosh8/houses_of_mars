@@ -12,6 +12,7 @@ module.exports = function(store, broadcast) {
   router.get('/proposals/:id', (req, res) => {
     try {
       const id = Number(req.params.id);
+      console.log('[DEFENCE API] GET proposals', { id });
       const proposals = store.getProposals(id);
       res.json({ proposals });
     } catch {
@@ -23,6 +24,7 @@ module.exports = function(store, broadcast) {
     try {
       const id = Number(req.params.id);
       const { index, approve } = req.body;
+      console.log('[DEFENCE API] POST proposals', { id, index, approve });
       const props = store.getProposals(id);
       const prop = props[index];
       if (!prop) return res.status(404).json({ error: 'not found' });
@@ -91,6 +93,7 @@ module.exports = function(store, broadcast) {
       const id = Number(req.params.id);
       const proposal = req.body.proposal;
       if (!proposal) return res.status(400).json({ error: 'proposal required' });
+      console.log('[DEFENCE API] ADD proposal', { id, proposal });
       const idx = store.addProposal(id, proposal);
       res.json({ index: idx });
     } catch {
@@ -101,6 +104,7 @@ module.exports = function(store, broadcast) {
   router.get('/weapons/:id', (req, res) => {
     try {
       const id = Number(req.params.id);
+      console.log('[DEFENCE API] GET weapons', { id });
       const weapons = store.getWeapons(id);
       res.json({ weapons });
     } catch {

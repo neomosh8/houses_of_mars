@@ -1,5 +1,6 @@
 export function renderDefProposals(container, proposals, instId) {
   container.innerHTML = '';
+  console.log('[DEFENCE UI] renderDefProposals', { instId, count: proposals ? proposals.length : 0 });
   if (!Array.isArray(proposals) || proposals.length === 0) {
     container.innerHTML = '<div style="color:#fff">No proposals</div>';
     return;
