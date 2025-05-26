@@ -5,7 +5,8 @@ const FILE = path.join(__dirname, 'defence_base.json');
 
 function load() {
   try {
-    return JSON.parse(fs.readFileSync(FILE, 'utf8'));
+    const data = JSON.parse(fs.readFileSync(FILE, 'utf8'));
+    return data;
   } catch {
     return {};
   }
@@ -22,7 +23,9 @@ function ensure(data, id) {
 
 function getProposals(id) {
   const data = load();
-  return (data[id] && data[id].proposals) || [];
+  const list = (data[id] && data[id].proposals) || [];
+  console.log('[DEFENCE STORE] getProposals', { id, count: list.length });
+  return list;
 }
 
 function addProposal(id, proposal) {
@@ -30,6 +33,7 @@ function addProposal(id, proposal) {
   const entry = ensure(data, id);
   const full = Object.assign({ status: 'pending' }, proposal);
   entry.proposals.push(full);
+  console.log('[DEFENCE STORE] addProposal', { id, proposal: full });
   save(data);
   return entry.proposals.length - 1;
 }
@@ -44,18 +48,22 @@ function updateProposal(id, index, updates) {
     entry.proposals.splice(index, 1);
   }
   save(data);
+  console.log('[DEFENCE STORE] updateProposal', { id, index, updates });
   return p;
 }
 
 function getWeapons(id) {
   const data = load();
-  return (data[id] && data[id].weapons) || [];
+  const list = (data[id] && data[id].weapons) || [];
+  console.log('[DEFENCE STORE] getWeapons', { id, count: list.length });
+  return list;
 }
 
 function addWeapon(id, weapon) {
   const data = load();
   const entry = ensure(data, id);
   entry.weapons.push(weapon);
+  console.log('[DEFENCE STORE] addWeapon', { id, weapon });
   save(data);
   return entry.weapons.length - 1;
 }
@@ -67,6 +75,7 @@ function updateWeapon(id, index, updates) {
   if (!w) return null;
   Object.assign(w, updates);
   save(data);
+  console.log('[DEFENCE STORE] updateWeapon', { id, index, updates });
   return w;
 }
 

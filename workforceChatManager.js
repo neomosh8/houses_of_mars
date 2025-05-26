@@ -238,6 +238,10 @@ class WorkforceChatManager {
 
         if (result.is_proposal && propData && inst) {
           if (inst.name === 'Defence Base') {
+            console.log('[WORKFORCE] adding defence proposal', {
+              institution: inst.id,
+              proposal: propData
+            });
             defenceStore.addProposal(inst.id, propData);
           } else {
             institutionStore.addProposal(inst.id, propData);
