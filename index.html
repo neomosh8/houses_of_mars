@@ -912,7 +912,9 @@ function updateStatImages() {
       obj.rotation.y = inst.rotation || 0;
       scene.add(obj);
 
-      const techFile = weaponAudioFiles[(w.technology || '').toLowerCase()];
+      let techKey = w.technology;
+      if (Array.isArray(techKey)) techKey = techKey[0];
+      const techFile = weaponAudioFiles[(techKey || '').toLowerCase()];
       if (techFile) {
         const wsound = new THREE.PositionalAudio(listener);
         audioLoader.load(techFile, buffer => {
@@ -964,7 +966,9 @@ function updateStatImages() {
   function fireWeapon(entry) {
     if (!model || !entry || !entry.obj || !entry.data) return;
     const params = entry.data.parameters || {};
-    const tech = (entry.data.technology || '').toLowerCase();
+    let tech = entry.data.technology;
+    if (Array.isArray(tech)) tech = tech[0];
+    tech = (tech || '').toLowerCase();
     const cat = (entry.data.category || '').toLowerCase();
     const start = entry.obj.position.clone();
     const target = model.position.clone();
