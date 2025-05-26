@@ -17,9 +17,10 @@ export function renderDefProposals(container, proposals, instId) {
 
     const info = document.createElement('div');
     const params = p.parameters || {};
+    const tech = Array.isArray(p.technology) ? p.technology.join(', ') : (p.technology || '');
     info.innerHTML =
       `Category: ${p.category || ''}<br>` +
-      `Technology: ${p.technology || ''}<br>` +
+      `Technology: ${tech}<br>` +
       `Weight ${params.weight || 0}, Ammo ${params.ammo || 0}, ` +
       `Force ${params.force || 0}, Fuel ${params.fuel || 0}<br>` +
       `Look: ${p.look || ''}`;
