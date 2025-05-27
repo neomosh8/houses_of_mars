@@ -2207,8 +2207,7 @@ function updateStatImages() {
     gltf => {
       model = gltf.scene;
       model.scale.set(modelScale, modelScale, modelScale);
-      model.rotation.y = 0; // Initial forward direction
-
+      model.rotation.y =0
       // Setup shadow casting
       model.traverse(o => {
         if (o.isMesh) {
@@ -2360,7 +2359,7 @@ function updateStatImages() {
   });
 
   // Camera and movement settings
-  const camOffset = new THREE.Vector3(0, 2.0 * modelScale, 5.0 * modelScale);
+  const camOffset = new THREE.Vector3(0, 2.0 * modelScale, -5.0 * modelScale);
   const modelLookAtHeight = 1.5 * modelScale;
   const clock = new THREE.Clock();
   let isMovingForward = false;
@@ -2538,12 +2537,12 @@ function updateStatImages() {
 
             if (wantsToMoveForward) {
                 // Fixed direction to go forward from model perspective
-                moveDir.z = -1;
+                moveDir.z = 1;
                 moving = true;
                 isRunning = keys.shift;
                 targetAction = isRunning ? runAction : walkAction;
             } else if (wantsToMoveBackward) {
-                moveDir.z = 0.5;
+                moveDir.z = -0.5;
                 moving = true;
                 isRunning = false;
                 targetAction = walkAction || runAction;
