@@ -761,7 +761,11 @@ function updateStatImages() {
       if (idleClip) idle = m.clipAction(idleClip);
       if (walkClip) walk = m.clipAction(walkClip);
       if (runClip) run = m.clipAction(runClip);
-      if (dieClip) die = m.clipAction(dieClip);
+      if (dieClip) {
+        die = m.clipAction(dieClip);
+        die.setLoop(THREE.LoopOnce, 1);
+        die.clampWhenFinished = true;
+      }
     }
     if (idle) idle.play();
     remotePlayers[id] = { model: remote, mixer: m, idle, walk, run, die, active: idle };
@@ -2249,6 +2253,10 @@ function updateStatImages() {
       walkAction = mixer.clipAction(animations.find(a => a.name.toLowerCase() === 'walk'));
       runAction = mixer.clipAction(animations.find(a => a.name.toLowerCase() === 'run'));
       dieAction = mixer.clipAction(animations.find(a => a.name.toLowerCase() === 'die'));
+      if (dieAction) {
+        dieAction.setLoop(THREE.LoopOnce, 1);
+        dieAction.clampWhenFinished = true;
+      }
       playerAnimations = animations;
 
 
