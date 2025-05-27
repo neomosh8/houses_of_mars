@@ -497,6 +497,7 @@ function updateStatImages() {
     if (oxygen <= 0 || hydration <= 0) {
       dead = true;
       deathOverlay.style.display = 'flex';
+      if (dieAction) switchAnimation(dieAction);
     }
 
     updateStatImages();
@@ -674,7 +675,7 @@ function updateStatImages() {
         if (typeof msg.oxygen === 'number') oxygen = msg.oxygen;
         updateStatImages();
       } else if (msg.type === 'spawn') {
-        createRemotePlayer(msg.id);
+        createRemotePlayer(msg.id, msg.state);
       } else if (msg.type === 'update') {
         if (msg.id !== clientId) updateRemotePlayer(msg.id, msg);
       } else if (msg.type === 'remove') {
@@ -737,6 +738,7 @@ function updateStatImages() {
   oxygenImg.dataset.current = icons.oxygen_full;
 
   updateMoneyDisplay();
+  if (idleAction) switchAnimation(idleAction);
 }
     });
   }
@@ -750,15 +752,19 @@ function updateStatImages() {
     const remote = SkeletonUtils.clone(model);
     scene.add(remote);
     const m = new THREE.AnimationMixer(remote);
-    let idle, run;
+    let idle, walk, run, die;
     if (playerAnimations) {
-      const idleClip = playerAnimations.find(a => a.name === 'Idle');
-      const runClip = playerAnimations.find(a => a.name === 'Run');
+      const idleClip = playerAnimations.find(a => a.name.toLowerCase() === 'idle');
+      const walkClip = playerAnimations.find(a => a.name.toLowerCase() === 'walk');
+      const runClip = playerAnimations.find(a => a.name.toLowerCase() === 'run');
+      const dieClip = playerAnimations.find(a => a.name.toLowerCase() === 'die');
       if (idleClip) idle = m.clipAction(idleClip);
+      if (walkClip) walk = m.clipAction(walkClip);
       if (runClip) run = m.clipAction(runClip);
+      if (dieClip) die = m.clipAction(dieClip);
     }
     if (idle) idle.play();
-    remotePlayers[id] = { model: remote, mixer: m, idle, run, active: idle };
+    remotePlayers[id] = { model: remote, mixer: m, idle, walk, run, die, active: idle };
     if (state) {
       remote.position.fromArray(state.position);
       remote.rotation.y = state.rotation;
@@ -770,13 +776,20 @@ function updateStatImages() {
     if (!rp) return;
     rp.model.position.fromArray(state.position);
     rp.model.rotation.y = state.rotation;
-    if (typeof state.moving === 'boolean') {
-      const target = state.moving ? rp.run : rp.idle;
-      if (target && rp.active !== target) {
-        rp.active && rp.active.fadeOut(0.2);
-        target.reset().fadeIn(0.2).play();
-        rp.active = target;
+    let target = rp.idle;
+    if (state.oxygen <= 0 || state.hydration <= 0) {
+      target = rp.die || target;
+    } else if (typeof state.moving === 'boolean') {
+      if (state.moving) {
+        target = state.running ? rp.run : (rp.walk || rp.run);
+      } else {
+        target = rp.idle;
       }
+    }
+    if (target && rp.active !== target) {
+      rp.active && rp.active.fadeOut(0.2);
+      target.reset().fadeIn(0.2).play();
+      rp.active = target;
     }
   }
 
@@ -1639,6 +1652,7 @@ function updateStatImages() {
       position: [model.position.x, model.position.y, model.position.z],
       rotation: model.rotation.y,
       moving: isMovingForward,
+      running: isRunning,
       health,
       hydration,
       oxygen,
@@ -2173,7 +2187,7 @@ function updateStatImages() {
 
   // Player model and animations
   let model, mixer;
-  let runAction, idleAction;
+  let runAction, walkAction, idleAction, dieAction;
   let activeAction;
   const modelScale = 1.2;
   const characterHeight = 1.8 * modelScale; // Approximate height of character
@@ -2189,7 +2203,7 @@ function updateStatImages() {
 
   // Load player model
   new GLTFLoader().load(
-    'https://threejs.org/examples/models/gltf/Soldier.glb',
+    'character.glb',
     gltf => {
       model = gltf.scene;
       model.scale.set(modelScale, modelScale, modelScale);
@@ -2232,13 +2246,15 @@ function updateStatImages() {
       // Setup animations
       mixer = new THREE.AnimationMixer(model);
       const animations = gltf.animations;
-      idleAction = mixer.clipAction(animations.find(a => a.name === 'Idle'));
-      runAction = mixer.clipAction(animations.find(a => a.name === 'Run'));
+      idleAction = mixer.clipAction(animations.find(a => a.name.toLowerCase() === 'idle'));
+      walkAction = mixer.clipAction(animations.find(a => a.name.toLowerCase() === 'walk'));
+      runAction = mixer.clipAction(animations.find(a => a.name.toLowerCase() === 'run'));
+      dieAction = mixer.clipAction(animations.find(a => a.name.toLowerCase() === 'die'));
       playerAnimations = animations;
 
 
       // Set up animation events for dust particles
-      if (runAction) {
+      if (runAction || walkAction) {
         // Add an event that fires at specific points in animation
         // (these numbers would need adjustment based on the actual animation)
         const leftFootStep = 0.3; // 30% through animation
@@ -2246,14 +2262,14 @@ function updateStatImages() {
 
         // Set up animation events using mixer
         mixer.addEventListener('loop', function(e) {
-          if (e.action === runAction && isMovingForward && onGround) {
+          if ((e.action === runAction || e.action === walkAction) && isMovingForward && onGround) {
             // Calculate foot positions and emit dust at each step
             calculateFootPositions();
           }
         });
       }
 
-      activeAction = idleAction || runAction;
+      activeAction = idleAction || walkAction || runAction;
       if (activeAction) activeAction.play();
 
       // If terrain is already loaded, we can find the ground
@@ -2327,10 +2343,11 @@ function updateStatImages() {
   }
 
   // Input state
-  const keys = { w: false, a: false, s: false, d: false, arrowup: false, arrowleft: false, arrowright: false, arrowdown: false, space: false };
+  const keys = { w: false, a: false, s: false, d: false, arrowup: false, arrowleft: false, arrowright: false, arrowdown: false, space: false, shift: false };
   window.addEventListener('keydown', e => {
     const key = e.code.toLowerCase().replace('key', '').replace('arrow','');
     if (keys.hasOwnProperty(key)) keys[key] = true;
+    if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') keys.shift = true;
     if (e.code === 'KeyK') {
       if (DEBUG_LOG) console.log('[DEBUG] Key K pressed');
       fireAllWeapons();
@@ -2339,6 +2356,7 @@ function updateStatImages() {
   window.addEventListener('keyup', e => {
     const key = e.code.toLowerCase().replace('key', '').replace('arrow','');
     if (keys.hasOwnProperty(key)) keys[key] = false;
+    if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') keys.shift = false;
   });
 
   // Camera and movement settings
@@ -2346,6 +2364,9 @@ function updateStatImages() {
   const modelLookAtHeight = 1.5 * modelScale;
   const clock = new THREE.Clock();
   let isMovingForward = false;
+  let isRunning = false;
+  const walkSpeed = 3.0 * modelScale;
+  const runSpeed = 6.0 * modelScale;
   let lastPosition = new THREE.Vector3();
   let timeSinceLastEmit = 0;
 
@@ -2495,11 +2516,10 @@ function updateStatImages() {
         checkGroundContact();
 
         // Controls and movement - only process when on ground
-        if ((idleAction || runAction) && onGround) {
+        if ((idleAction || walkAction || runAction) && onGround) {
             // Save last position for movement detection
             lastPosition.copy(model.position);
 
-            const speed = 5.0 * modelScale;
             const turnSpeed = (Math.PI); // Adjusted turn speed a bit
 
             let wantsToMoveForward = keys.w || keys.up;
@@ -2514,23 +2534,28 @@ function updateStatImages() {
             // Movement
             let moving = false;
             let moveDir = new THREE.Vector3(0, 0, 0);
+            let targetAction = idleAction;
 
             if (wantsToMoveForward) {
                 // Fixed direction to go forward from model perspective
                 moveDir.z = -1;
                 moving = true;
+                isRunning = keys.shift;
+                targetAction = isRunning ? runAction : walkAction;
             } else if (wantsToMoveBackward) {
                 moveDir.z = 0.5;
                 moving = true;
+                isRunning = false;
+                targetAction = walkAction || runAction;
             }
 
             // Apply movement in model's local direction
             if (moving) {
-                // Switch to running animation if not already
-                if (!isMovingForward && runAction) {
-                    switchAnimation(runAction);
-                    isMovingForward = true;
+                const speed = isRunning ? runSpeed : walkSpeed;
+                if (activeAction !== targetAction && targetAction) {
+                    switchAnimation(targetAction);
                 }
+                isMovingForward = true;
 
                 // Transform direction to world space
                 moveDir.applyQuaternion(model.quaternion);
@@ -2573,6 +2598,7 @@ function updateStatImages() {
                 // Switch to idle when not moving
                 switchAnimation(idleAction);
                 isMovingForward = false;
+                isRunning = false;
             }
 
             if (footstepSound) {

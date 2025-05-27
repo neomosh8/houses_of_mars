@@ -93,6 +93,7 @@ wss.on('connection', (ws, req) => {
     position: user.position,
     rotation: 0,
     moving: false,
+    running: false,
     health: user.health,
     hydration: user.hydration,
     oxygen: user.oxygen,
@@ -122,7 +123,7 @@ wss.on('connection', (ws, req) => {
     })
   );
 
-   broadcast({ type: 'spawn', id }, id);
+  broadcast({ type: 'spawn', id, state: states.get(id) }, id);
 
    ws.on('message', message => {
      try {
@@ -134,6 +135,7 @@ wss.on('connection', (ws, req) => {
           position: pos,
           rotation: data.rotation,
           moving: data.moving,
+          running: data.running,
           health: data.health,
           hydration: data.hydration,
           oxygen: data.oxygen,
@@ -157,6 +159,7 @@ wss.on('connection', (ws, req) => {
             position: pos,
             rotation: data.rotation,
             moving: data.moving,
+            running: data.running,
             health: data.health,
             hydration: data.hydration,
             oxygen: data.oxygen
@@ -176,6 +179,8 @@ wss.on('connection', (ws, req) => {
           state.health = 100;
           state.hydration = 100;
           state.oxygen = 100;
+          state.running = false;
+          state.moving = false;
           states.set(id, state);
           ws.send(
             JSON.stringify({
