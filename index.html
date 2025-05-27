@@ -247,7 +247,7 @@ function updateStatImages() {
       name: 'Defence Base',
       url: 'defba.glb',
       thumbnail: 'https://placehold.co/100x100?text=DefBase',
-      scale: 1,
+      scale: 10,
       price: 300,
       effects: {},
       animated: false
@@ -440,7 +440,7 @@ function updateStatImages() {
   function updateGhostInstitution() {
     if (!placingInstitution || !ghostInstitution || !model) return;
     const distance = ghostInstitution.userData.safeDistance || 20;
-    const offset = new THREE.Vector3(0, 3, -distance);
+    const offset = new THREE.Vector3(0, 3, distance);
     offset.applyQuaternion(model.quaternion);
     const target = model.position.clone().add(offset);
     ghostInstitution.position.copy(target);
