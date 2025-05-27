@@ -7,7 +7,7 @@ module.exports = function(store, broadcast) {
   const router = express.Router();
   // Default scaffolding model for new weapons. A scale of 6 keeps
   // generated weapons at a reasonable size if no scale is provided.
-  const SCAFF = { url: 'defscof.glb', scale: 6 };
+  const SCAFF = { url: 'defscof.glb', scale: 2 };
 
   router.get('/proposals/:id', (req, res) => {
     try {
