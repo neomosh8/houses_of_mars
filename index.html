@@ -109,6 +109,15 @@ const icons = {
     return mesh;
   }
 
+  function addPointLightsFromGLTF(gltf) {
+    if (!gltf || !gltf.scene) return;
+    gltf.scene.traverse(node => {
+      if (node.isPointLight) {
+        scene.add(node);
+      }
+    });
+  }
+
   const healthImg = document.getElementById('health-img');
   const hydrationImg = document.getElementById('hydration-img');
   const oxygenImg = document.getElementById('oxygen-img');
@@ -322,6 +331,7 @@ function updateStatImages() {
     const loader = new GLTFLoader();
     loader.load(inst.url, gltf => {
       ghostInstitution = gltf.scene;
+      addPointLightsFromGLTF(gltf);
       ghostInstitution.scale.setScalar(inst.scale || 1);
       const box = new THREE.Box3().setFromObject(ghostInstitution);
       const size = box.getSize(new THREE.Vector3());
@@ -825,6 +835,7 @@ function updateStatImages() {
       loader.load(c.url, gltf => {
         if (inst.constructions[idx] !== c) return; // ignore outdated load
         const obj = gltf.scene;
+        addPointLightsFromGLTF(gltf);
         const offset = Array.isArray(c.offset)
           ? new THREE.Vector3().fromArray(c.offset)
           : null;
@@ -925,6 +936,7 @@ function updateStatImages() {
       loader.load(w.model, gltf => {
         if (inst.weapons[idx] !== w) return; // ignore outdated load
         const obj = gltf.scene;
+        addPointLightsFromGLTF(gltf);
       obj.scale.setScalar(w.scale || 1);
       obj.rotation.y = inst.rotation || 0;
       scene.add(obj);
@@ -1135,6 +1147,7 @@ function updateStatImages() {
     const loader = new GLTFLoader();
     loader.load(def.url, gltf => {
       const obj = gltf.scene;
+      addPointLightsFromGLTF(gltf);
       obj.scale.setScalar(inst.scale || def.scale || 1);
       obj.position.fromArray(inst.position);
       obj.rotation.y = inst.rotation || 0;
@@ -2094,6 +2107,7 @@ function updateStatImages() {
     'terrain_s.gltf', // Replace this with the path to your ground GLTF file
     (gltf) => {
       gltfTerrain = gltf.scene;
+      addPointLightsFromGLTF(gltf);
 
       gltfTerrain.scale.set(terrainScaleFactor, terrainScaleFactor, terrainScaleFactor);
 
@@ -2210,6 +2224,7 @@ function updateStatImages() {
     'character.glb',
     gltf => {
       model = gltf.scene;
+      addPointLightsFromGLTF(gltf);
       model.scale.set(modelScale, modelScale, modelScale);
       model.rotation.y =0
       // Setup shadow casting
