@@ -496,6 +496,8 @@ function updateStatImages() {
 
     if (oxygen <= 0 || hydration <= 0) {
       dead = true;
+      isMovingForward = false;
+      isRunning = false;
       deathOverlay.style.display = 'flex';
       if (dieAction) switchAnimation(dieAction);
     }
@@ -1655,8 +1657,8 @@ function updateStatImages() {
       type: 'state',
       position: [model.position.x, model.position.y, model.position.z],
       rotation: model.rotation.y,
-      moving: isMovingForward,
-      running: isRunning,
+      moving: dead ? false : isMovingForward,
+      running: dead ? false : isRunning,
       health,
       hydration,
       oxygen,
@@ -2504,6 +2506,7 @@ function updateStatImages() {
     if (ghostMixer) ghostMixer.update(dt);
 
     if (model && terrainMeshes.length > 0) {
+    if (!dead) {
         // PHYSICS - Apply gravity if not on ground
         if (!onGround) {
             velocity.y -= gravity * dt;
@@ -2613,6 +2616,7 @@ function updateStatImages() {
                 footstepSound.setVolume(vol);
             }
         }
+    }
 
         if (model.position.y < -100) {
           model.position.y = 60;
