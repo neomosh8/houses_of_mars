@@ -74,6 +74,7 @@ function createWss(server) {
               position: record.position,
               rotation: record.rotation || 0,
               moving: false,
+              running: false,
               money: record.money
             };
             states.set(id, state);
@@ -81,7 +82,7 @@ function createWss(server) {
             const players = [];
             for (const [pid, st] of states.entries()) {
               if (pid === id) continue;
-              players.push({ id: pid, position: st.position, rotation: st.rotation, moving: st.moving });
+              players.push({ id: pid, position: st.position, rotation: st.rotation, moving: st.moving, running: st.running });
             }
 
             ws.send(JSON.stringify({ type: 'loginSuccess', id, state, players }));
@@ -95,7 +96,8 @@ function createWss(server) {
           st.position = data.position;
           st.rotation = data.rotation;
           st.moving = data.moving;
-          broadcast({ type: 'update', id, position: data.position, rotation: data.rotation, moving: data.moving }, id);
+          st.running = data.running;
+          broadcast({ type: 'update', id, position: data.position, rotation: data.rotation, moving: data.moving, running: data.running }, id);
         }
       } catch (err) {
         ws.send(JSON.stringify({ type: 'error', message: 'Invalid message format' }));
