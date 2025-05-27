@@ -662,6 +662,7 @@ function updateStatImages() {
   const projectiles = []; // active fired weapon objects
   const institutionSounds = {}; // id -> THREE.PositionalAudio
   const weaponSounds = {}; // instId -> array of sounds
+  const weaponMixers = {}; // instId -> array of AnimationMixers
   let footstepSound = null;
 
   function initNetwork() {
@@ -913,6 +914,9 @@ function updateStatImages() {
   function applyWeapons(inst) {
     const existing = weaponMap[inst.id] || [];
     existing.forEach(w => { if (w.obj) scene.remove(w.obj); });
+    const mixArr = weaponMixers[inst.id] || [];
+    mixArr.forEach(m => { if (m) { m.stopAllAction(); } });
+    weaponMixers[inst.id] = [];
     weaponMap[inst.id] = [];
     if (!Array.isArray(inst.weapons)) return;
     inst.weapons.forEach((w, idx) => {
@@ -923,7 +927,7 @@ function updateStatImages() {
       offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), inst.rotation || 0);
       const pos = new THREE.Vector3().fromArray(inst.position).add(offset);
 
-      if (w.status === 'scaffolding' || !w.model) {
+      if (!w.model) {
         const obj = createPlaceholder(w.scale || 1, 0xff0000);
         obj.position.copy(pos);
         obj.rotation.y = inst.rotation || 0;
@@ -940,6 +944,12 @@ function updateStatImages() {
       obj.scale.setScalar(w.scale || 1);
       obj.rotation.y = inst.rotation || 0;
       scene.add(obj);
+      if (gltf.animations && gltf.animations.length > 0) {
+        const mix = new THREE.AnimationMixer(obj);
+        gltf.animations.forEach(anim => mix.clipAction(anim).play());
+        if (!weaponMixers[inst.id]) weaponMixers[inst.id] = [];
+        weaponMixers[inst.id][idx] = mix;
+      }
 
       let techKey = w.technology;
       if (Array.isArray(techKey)) techKey = techKey[0];
@@ -2515,6 +2525,10 @@ function updateStatImages() {
     }
     for (const id in institutionMixers) {
       institutionMixers[id].update(dt);
+    }
+    for (const id in weaponMixers) {
+      const arr = weaponMixers[id];
+      if (Array.isArray(arr)) arr.forEach(m => m.update(dt));
     }
     if (ghostMixer) ghostMixer.update(dt);
 
