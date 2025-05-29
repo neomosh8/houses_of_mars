@@ -97,7 +97,8 @@ wss.on('connection', (ws, req) => {
     health: user.health,
     hydration: user.hydration,
     oxygen: user.oxygen,
-    money: user.money
+    money: user.money,
+    flag: user.flag || null
   });
 
   const players = [];
@@ -131,6 +132,7 @@ wss.on('connection', (ws, req) => {
       if (data.type === 'state') {
         const pos = Array.isArray(data.position) ? data.position.slice(0, 3) : [0, 0, 0];
         if (pos.length >= 2 && pos[1] < -300) pos[1] = 60;
+        const prev = states.get(id) || {};
         states.set(id, {
           position: pos,
           rotation: data.rotation,
@@ -139,7 +141,8 @@ wss.on('connection', (ws, req) => {
           health: data.health,
           hydration: data.hydration,
           oxygen: data.oxygen,
-          money: data.money
+          money: data.money,
+          flag: prev.flag || null
         });
         const users = userStore.loadUsers();
         if (users[email]) {
@@ -221,6 +224,19 @@ wss.on('connection', (ws, req) => {
           if (ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ type: 'error', message: 'not enough money' }));
           }
+        }
+      } else if (data.type === 'target') {
+        const pos = Array.isArray(data.position) ? data.position.slice(0,3) : null;
+        if (pos) {
+          const state = states.get(id) || {};
+          state.flag = pos;
+          states.set(id, state);
+          const users = userStore.loadUsers();
+          if (users[email]) {
+            users[email].flag = pos;
+            userStore.saveUsers(users);
+          }
+          broadcast({ type: 'flag', id, position: pos });
         }
       }
      } catch (err) {
