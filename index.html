@@ -2466,19 +2466,6 @@ function updateStatImages() {
     if (keys.hasOwnProperty(key)) keys[key] = false;
     if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') keys.shift = false;
   });
-  const popupEl = document.getElementById('institution-popup');
-  popupEl.addEventListener('keydown', e => {
-    const key = e.code.toLowerCase().replace('key', '').replace('arrow','');
-    if (keys.hasOwnProperty(key)) keys[key] = true;
-    if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') keys.shift = true;
-    if (e.code === 'KeyK') fireAllWeapons();
-    else if (e.code === 'KeyT') plantFlag();
-  });
-  popupEl.addEventListener('keyup', e => {
-    const key = e.code.toLowerCase().replace('key', '').replace('arrow','');
-    if (keys.hasOwnProperty(key)) keys[key] = false;
-    if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') keys.shift = false;
-  });
 
   // Camera and movement settings
   const camOffset = new THREE.Vector3(0, 2.0 * modelScale, -5.0 * modelScale);
