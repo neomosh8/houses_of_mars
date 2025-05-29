@@ -139,6 +139,20 @@ function addGains(instId, gains) {
   return inst.extraEffects;
 }
 
+function destroyInstitution(id) {
+  const data = loadData();
+  const inst = data.list.find(i => i.id === id);
+  if (!inst) return null;
+  inst.destroyed = true;
+  inst.workforce = [];
+  inst.proposals = [];
+  inst.proposalHistory = [];
+  inst.constructions = [];
+  inst.extraEffects = { hydration: 0, oxygen: 0, health: 0, money: 0 };
+  saveData(data);
+  return inst;
+}
+
 module.exports = {
   getInstitutions,
   addInstitution,
@@ -152,4 +166,5 @@ module.exports = {
   addConstruction,
   updateConstruction,
   addGains,
+  destroyInstitution,
 };

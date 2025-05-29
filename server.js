@@ -225,6 +225,11 @@ wss.on('connection', (ws, req) => {
             ws.send(JSON.stringify({ type: 'error', message: 'not enough money' }));
           }
         }
+      } else if (data.type === 'destroyInstitution') {
+        const inst = institutionStore.destroyInstitution(data.id);
+        if (inst) {
+          broadcast({ type: 'destroyInstitution', id: data.id });
+        }
       } else if (data.type === 'target') {
         const pos = Array.isArray(data.position) ? data.position.slice(0,3) : null;
         if (pos) {

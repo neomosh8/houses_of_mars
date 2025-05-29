@@ -414,7 +414,11 @@ function updateStatImages() {
         obj = obj.parent;
       }
       if (obj && obj.userData && obj.userData.institutionId !== undefined) {
-        showInstitutionPopup(obj.userData.institutionId);
+        const id = obj.userData.institutionId;
+        const data = institutionDataMap[id];
+        if (data && !data.destroyed) {
+          showInstitutionPopup(id);
+        }
         return;
       }
     }
@@ -730,6 +734,8 @@ function updateStatImages() {
           inst.weapons[msg.index] = msg.weapon;
           applyWeapons(inst);
         }
+      } else if (msg.type === 'destroyInstitution') {
+        handleInstitutionDestruction(msg.id);
       } else if (msg.type === 'money') {
         playerMoney = msg.money;
         updateMoneyDisplay();
@@ -1109,6 +1115,23 @@ function updateStatImages() {
         projectiles.splice(i, 1);
         continue;
       }
+      // check collision with institutions
+      const sphere = new THREE.Sphere(p.obj.position.clone(), 1);
+      let hitInst = null;
+      for (const entry of institutionBoxes) {
+        const data = institutionDataMap[entry.id];
+        if (!data || data.destroyed) continue;
+        if (entry.box.intersectsSphere(sphere)) {
+          hitInst = entry.id;
+          break;
+        }
+      }
+      if (hitInst !== null) {
+        scene.remove(p.obj);
+        projectiles.splice(i, 1);
+        sendDestroyInstitution(hitInst);
+        continue;
+      }
       if (p.tech === 'laser') {
         if (!p.dir) {
           p.dir = new THREE.Vector3().subVectors(p.target, p.start).normalize();
@@ -1199,12 +1222,39 @@ function updateStatImages() {
     }
   }
 
+  function handleInstitutionDestruction(id) {
+    const obj = institutionsMap[id];
+    const data = institutionDataMap[id];
+    if (!obj || !data || data.destroyed) return;
+    data.destroyed = true;
+    data.workforce = [];
+    data.proposals = [];
+    data.proposalHistory = [];
+    data.constructions = [];
+    const anims = obj.userData.animations || [];
+    if (anims.length > 0) {
+      const clip = anims.find(a => a.name === 'destruction') || anims[0];
+      const mix = new THREE.AnimationMixer(obj);
+      const action = mix.clipAction(clip);
+      action.setLoop(THREE.LoopOnce, 0);
+      action.clampWhenFinished = true;
+      action.play();
+      action.onFinished = () => {
+        action.paused = true;
+        action.time = clip.duration;
+        mix.update(0);
+      };
+      institutionMixers[id] = mix;
+    }
+  }
+
   function createInstitution(inst, animate) {
     const def = institutions.find(i => i.name === inst.name);
     if (!def) return;
     const loader = new GLTFLoader();
     loader.load(def.url, gltf => {
       const obj = gltf.scene;
+      obj.userData.animations = gltf.animations || [];
       addPointLightsFromGLTF(gltf);
       obj.scale.setScalar(inst.scale || def.scale || 1);
       obj.position.fromArray(inst.position);
@@ -1239,7 +1289,15 @@ function updateStatImages() {
         institutionSounds[inst.id] = sound;
       }
 
-      if (def.animated && gltf.animations && gltf.animations.length > 0) {
+      if (inst.destroyed && gltf.animations && gltf.animations.length > 0) {
+        const mix = new THREE.AnimationMixer(obj);
+        const clip = gltf.animations.find(a => a.name === 'destruction') || gltf.animations[0];
+        const action = mix.clipAction(clip);
+        action.play();
+        action.paused = true;
+        action.time = clip.duration;
+        mix.update(0);
+      } else if (def.animated && gltf.animations && gltf.animations.length > 0) {
         const mix = new THREE.AnimationMixer(obj);
         gltf.animations.forEach(anim => {
           mix.clipAction(anim).play();
@@ -1252,9 +1310,11 @@ function updateStatImages() {
       obj.traverse(o => { o.userData.institutionId = inst.id; });
       const box = new THREE.Box3().setFromObject(obj);
       institutionBoxes.push({ id: inst.id, box });
-      applyConstruction(institutionDataMap[inst.id]);
-      applyWeapons(institutionDataMap[inst.id]);
-      if (inst.owner === playerEmail) {
+      if (!inst.destroyed) {
+        applyConstruction(institutionDataMap[inst.id]);
+        applyWeapons(institutionDataMap[inst.id]);
+      }
+      if (inst.owner === playerEmail && !inst.destroyed) {
         if (def.effects) ownedInstitutions.push(def.effects);
         if (inst.extraEffects) ownedInstitutions.push(inst.extraEffects);
       }
@@ -1266,6 +1326,7 @@ function updateStatImages() {
       }
     }, undefined, () => {
       const obj = createPlaceholder(inst.scale || def.scale || 1, 0x00aa00);
+      obj.userData.animations = [];
       obj.position.fromArray(inst.position);
       obj.rotation.y = inst.rotation || 0;
       scene.add(obj);
@@ -1273,8 +1334,10 @@ function updateStatImages() {
       const box = new THREE.Box3().setFromObject(obj);
       institutionBoxes.push({ id: inst.id, box });
       institutionDataMap[inst.id] = { ...inst, effects: def.effects, workforce: inst.workforce || [], extraEffects: inst.extraEffects || {}, constructions: inst.constructions || [] };
-      applyConstruction(institutionDataMap[inst.id]);
-      applyWeapons(institutionDataMap[inst.id]);
+      if (!inst.destroyed) {
+        applyConstruction(institutionDataMap[inst.id]);
+        applyWeapons(institutionDataMap[inst.id]);
+      }
     });
   }
 
@@ -1298,7 +1361,7 @@ function updateStatImages() {
     let chatInterval = null;
 
     const instData = institutionDataMap[id];
-    if (!instData) return;
+    if (!instData || instData.destroyed) return;
     const isOwner = instData.owner === playerEmail;
     const def = institutions.find(i => i.name === instData.name);
     let count = 0;
@@ -1740,6 +1803,11 @@ function updateStatImages() {
       oxygen,
       money: playerMoney
     }));
+  }
+
+  function sendDestroyInstitution(id) {
+    if (!socket || socket.readyState !== WebSocket.OPEN) return;
+    socket.send(JSON.stringify({ type: 'destroyInstitution', id }));
   }
 
 
