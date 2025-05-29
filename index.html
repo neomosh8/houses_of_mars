@@ -672,6 +672,8 @@ function updateStatImages() {
   const weaponSounds = {}; // instId -> array of sounds
   const weaponMixers = {}; // instId -> array of AnimationMixers
   let footstepSound = null;
+  const flagObjects = {}; // player id -> flag object
+  let currentFlagPos = null;
 
   function initNetwork() {
     socket = new WebSocket('ws://localhost:3000?email=' + encodeURIComponent(playerEmail));
@@ -680,6 +682,7 @@ function updateStatImages() {
       if (msg.type === 'welcome') {
         clientId = msg.id;
         msg.players.forEach(p => {
+          if (p.flag) createFlag(p.id, p.flag);
           if (p.id !== clientId) createRemotePlayer(p.id, p);
         });
         if (msg.institutions) {
@@ -694,6 +697,7 @@ function updateStatImages() {
         if (typeof msg.oxygen === 'number') oxygen = msg.oxygen;
         updateStatImages();
       } else if (msg.type === 'spawn') {
+        if (msg.state && msg.state.flag) createFlag(msg.id, msg.state.flag);
         createRemotePlayer(msg.id, msg.state);
       } else if (msg.type === 'update') {
         if (msg.id !== clientId) updateRemotePlayer(msg.id, msg);
@@ -729,6 +733,8 @@ function updateStatImages() {
       } else if (msg.type === 'money') {
         playerMoney = msg.money;
         updateMoneyDisplay();
+      } else if (msg.type === 'flag') {
+        createFlag(msg.id, msg.position);
       } else if (msg.type === 'respawn') {
   dead = false;
   deathOverlay.style.display = 'none';
@@ -919,6 +925,40 @@ function updateStatImages() {
     });
   }
 
+  function createFlag(id, position) {
+    if (!position || position.length < 3) return;
+    const pos = Array.isArray(position) ? new THREE.Vector3().fromArray(position) : position.clone();
+    let existing = flagObjects[id];
+    if (existing) scene.remove(existing);
+    const loader = new GLTFLoader();
+    loader.load('flag.glb', gltf => {
+      const obj = gltf.scene;
+      obj.position.copy(pos);
+      scene.add(obj);
+      flagObjects[id] = obj;
+      if (id === clientId) currentFlagPos = obj.position;
+    }, undefined, () => {
+      const obj = createPlaceholder(0.5, 0xff0000);
+      obj.position.copy(pos);
+      scene.add(obj);
+      flagObjects[id] = obj;
+      if (id === clientId) currentFlagPos = obj.position;
+    });
+  }
+
+  function plantFlag() {
+    if (!model) return;
+    const offset = new THREE.Vector3(0, 0, -5).applyQuaternion(model.quaternion);
+    const pos = model.position.clone().add(offset);
+    const y = getGroundHeightAt(pos.x, pos.z);
+    pos.y = y;
+    createFlag(clientId, [pos.x, pos.y, pos.z]);
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type: 'target', position: [pos.x, pos.y, pos.z] }));
+    }
+    if (flagPlantAction) switchAnimation(flagPlantAction);
+  }
+
   function applyWeapons(inst) {
     const existing = weaponMap[inst.id] || [];
     existing.forEach(w => { if (w.obj) scene.remove(w.obj); });
@@ -1026,7 +1066,7 @@ function updateStatImages() {
     tech = (typeof tech === 'string' ? tech : '').toLowerCase();
     const cat = (entry.data.category || '').toLowerCase();
     const start = entry.obj.position.clone();
-    const target = model.position.clone();
+    const target = currentFlagPos ? currentFlagPos.clone() : model.position.clone();
     const clone = SkeletonUtils.clone(entry.obj);
     clone.position.copy(start);
     scene.add(clone);
@@ -2229,7 +2269,7 @@ function updateStatImages() {
 
   // Player model and animations
   let model, mixer;
-  let runAction, walkAction, idleAction, dieAction;
+  let runAction, walkAction, idleAction, dieAction, flagPlantAction;
   let activeAction;
   const modelScale = 1.2;
   const characterHeight = 1.8 * modelScale; // Approximate height of character
@@ -2303,6 +2343,11 @@ function updateStatImages() {
       walkAction = mixer.clipAction(animations.find(a => a.name.toLowerCase() === 'walk'));
       runAction = mixer.clipAction(animations.find(a => a.name.toLowerCase() === 'run'));
       dieAction = mixer.clipAction(animations.find(a => a.name.toLowerCase() === 'die'));
+      flagPlantAction = mixer.clipAction(animations.find(a => a.name.toLowerCase() === 'target'));
+      if (flagPlantAction) {
+        flagPlantAction.setLoop(THREE.LoopOnce, 1);
+        flagPlantAction.clampWhenFinished = true;
+      }
       if (dieAction) {
         dieAction.setLoop(THREE.LoopOnce, 1);
         dieAction.clampWhenFinished = true;
@@ -2408,6 +2453,9 @@ function updateStatImages() {
     if (e.code === 'KeyK') {
       if (DEBUG_LOG) console.log('[DEBUG] Key K pressed');
       fireAllWeapons();
+    } else if (e.code === 'KeyT') {
+      if (DEBUG_LOG) console.log('[DEBUG] Key T pressed');
+      plantFlag();
     }
   });
   window.addEventListener('keyup', e => {
@@ -2595,26 +2643,26 @@ function updateStatImages() {
             // Movement
             let moving = false;
             let moveDir = new THREE.Vector3(0, 0, 0);
-            let targetAction = idleAction;
+            let moveAction = idleAction;
 
             if (wantsToMoveForward) {
                 // Fixed direction to go forward from model perspective
                 moveDir.z = 1;
                 moving = true;
                 isRunning = keys.shift;
-                targetAction = isRunning ? runAction : walkAction;
+                moveAction = isRunning ? runAction : walkAction;
             } else if (wantsToMoveBackward) {
                 moveDir.z = -0.5;
                 moving = true;
                 isRunning = false;
-                targetAction = walkAction || runAction;
+                moveAction = walkAction || runAction;
             }
 
             // Apply movement in model's local direction
             if (moving) {
                 const speed = isRunning ? runSpeed : walkSpeed;
-                if (activeAction !== targetAction && targetAction) {
-                    switchAnimation(targetAction);
+                if (activeAction !== moveAction && moveAction) {
+                    switchAnimation(moveAction);
                 }
                 isMovingForward = true;
 
