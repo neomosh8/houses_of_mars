@@ -1650,7 +1650,6 @@ function updateStatImages() {
 
    function closePopup() {
      popup.style.display = 'none';
-      popup.blur();
      institutionPopupOpen = false;
      document.removeEventListener('keydown', escHandler);
       if (chatInterval) {
@@ -2449,6 +2448,7 @@ function updateStatImages() {
   // Input state
   const keys = { w: false, a: false, s: false, d: false, arrowup: false, arrowleft: false, arrowright: false, arrowdown: false, space: false, shift: false };
   window.addEventListener('keydown', e => {
+    if (institutionPopupOpen) return;
     const key = e.code.toLowerCase().replace('key', '').replace('arrow','');
     if (keys.hasOwnProperty(key)) keys[key] = true;
     if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') keys.shift = true;
@@ -2461,6 +2461,7 @@ function updateStatImages() {
     }
   });
   window.addEventListener('keyup', e => {
+    if (institutionPopupOpen) return;
     const key = e.code.toLowerCase().replace('key', '').replace('arrow','');
     if (keys.hasOwnProperty(key)) keys[key] = false;
     if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') keys.shift = false;
