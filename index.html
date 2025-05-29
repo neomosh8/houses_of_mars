@@ -80,6 +80,7 @@
   import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
   import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
   import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+  import { SSAOPass } from 'three/addons/postprocessing/SSAOPass.js';
   import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
   import { renderProposals } from './proposals.js';
   import { renderDefProposals } from './defProposals.js';
@@ -601,8 +602,8 @@ function updateStatImages() {
   // Scene, camera, renderer
   const scene = new THREE.Scene();
   const marsSkyColor = 0x9B7653; // Dusty orange-red for Mars sky
-  // Adjusted fog for potentially larger terrain
-  scene.fog = new THREE.FogExp2(marsSkyColor, 0.0003); // Lower density for more view distance
+  // Mild atmospheric haze
+  scene.fog = new THREE.FogExp2(marsSkyColor, 0.002);
 
   // Adjusted camera far plane for potentially larger terrain
   const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 10000);
@@ -627,6 +628,13 @@ function updateStatImages() {
   const composer = new EffectComposer(renderer);
   const renderPass = new RenderPass(scene, camera);
   composer.addPass(renderPass);
+
+  // Ambient occlusion pass for subtle shading
+  const ssaoPass = new SSAOPass(scene, camera, window.innerWidth, window.innerHeight);
+  ssaoPass.kernelRadius = 8;
+  ssaoPass.minDistance = 0.005;
+  ssaoPass.maxDistance = 0.1;
+  composer.addPass(ssaoPass);
 
   // Bloom effect
   const bloomParams = {
@@ -1161,6 +1169,12 @@ function updateStatImages() {
       obj.scale.setScalar(inst.scale || def.scale || 1);
       obj.position.fromArray(inst.position);
       obj.rotation.y = inst.rotation || 0;
+      obj.traverse(o => {
+        if (o.isMesh) {
+          o.castShadow = true;
+          o.receiveShadow = true;
+        }
+      });
       const boxTmp = new THREE.Box3().setFromObject(obj);
       const radius = Math.max(boxTmp.max.x - boxTmp.min.x, boxTmp.max.z - boxTmp.min.z) * 0.6;
       const ground = getGroundHeightAt(inst.position[0], inst.position[2]);
@@ -2242,6 +2256,17 @@ function updateStatImages() {
         if (o.isMesh) {
           o.castShadow = true;
           o.receiveShadow = false;
+
+          const oldMat = o.material;
+          if (oldMat && !oldMat.isMeshStandardMaterial) {
+            o.material = new THREE.MeshStandardMaterial({
+              map: oldMat.map || null,
+              color: oldMat.color ? oldMat.color.clone() : new THREE.Color(0xffffff),
+              metalness: 0.2,
+              roughness: 0.8,
+              skinning: !!o.isSkinnedMesh
+            });
+          }
         }
       });
       scene.add(model);
@@ -2695,6 +2720,8 @@ function updateStatImages() {
 
     renderer.setSize(window.innerWidth, window.innerHeight);
     composer.setSize(window.innerWidth, window.innerHeight);
+
+    ssaoPass.setSize(window.innerWidth, window.innerHeight);
 
     // Update bloom pass resolution
     bloomPass.resolution.set(window.innerWidth, window.innerHeight);
