@@ -41,7 +41,7 @@
     <div class="panel-tab">Institutions</div>
     <div class="panel-content" id="institution-content"></div>
   </div>
-    <div id="institution-popup" class="panel">
+    <div id="institution-popup" class="panel" tabindex="0">
     <div id="popup-close" >X</div>
     <div id="popup-info">
       <div id="popup-owner"></div>
@@ -1648,10 +1648,11 @@ function updateStatImages() {
       weaponsTabBtn.style.display = 'none';
     }
 
-    function closePopup() {
-      popup.style.display = 'none';
-      institutionPopupOpen = false;
-      document.removeEventListener('keydown', escHandler);
+   function closePopup() {
+     popup.style.display = 'none';
+      popup.blur();
+     institutionPopupOpen = false;
+     document.removeEventListener('keydown', escHandler);
       if (chatInterval) {
         clearInterval(chatInterval);
         chatInterval = null;
@@ -1665,6 +1666,7 @@ function updateStatImages() {
     }
 
     popup.style.display = 'block';
+    popup.focus();
     institutionPopupOpen = true;
     showInfo();
     document.addEventListener('keydown', escHandler);
@@ -2459,6 +2461,19 @@ function updateStatImages() {
     }
   });
   window.addEventListener('keyup', e => {
+    const key = e.code.toLowerCase().replace('key', '').replace('arrow','');
+    if (keys.hasOwnProperty(key)) keys[key] = false;
+    if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') keys.shift = false;
+  });
+  const popupEl = document.getElementById('institution-popup');
+  popupEl.addEventListener('keydown', e => {
+    const key = e.code.toLowerCase().replace('key', '').replace('arrow','');
+    if (keys.hasOwnProperty(key)) keys[key] = true;
+    if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') keys.shift = true;
+    if (e.code === 'KeyK') fireAllWeapons();
+    else if (e.code === 'KeyT') plantFlag();
+  });
+  popupEl.addEventListener('keyup', e => {
     const key = e.code.toLowerCase().replace('key', '').replace('arrow','');
     if (keys.hasOwnProperty(key)) keys[key] = false;
     if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') keys.shift = false;
