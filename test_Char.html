@@ -299,7 +299,14 @@
       document.addEventListener('keydown', onKeyDown);
     }
 
-    function loadGLBModel(url) {
+    function printGLTFHierarchy(obj, prefix = '') {
+      if (!obj || typeof obj.traverse !== 'function') return;
+      console.log(prefix + (obj.name || obj.type));
+      obj.children?.forEach(child => printGLTFHierarchy(child, prefix + '  '));
+    }
+
+    function loadGLBModel() {
+
       const loader = new THREE.GLTFLoader();
 
       loader.load(
@@ -307,16 +314,16 @@
         function(gltf) {
           model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
           if (!model) return;
-          if (DEBUG_LOG) printGLTFHierarchy(gltf);
           const root = gltf.scene || (gltf.scenes && gltf.scenes[0]);
-          if (root) {
+          if (root && typeof root.traverse === 'function') {
+            printGLTFHierarchy(root);
+
             root.traverse(node => {
               if (node.isPointLight) {
                 scene.add(node);
               }
             });
           }
-
           model.traverse(child => {
             if (child.isMesh) {
               child.castShadow = true;
