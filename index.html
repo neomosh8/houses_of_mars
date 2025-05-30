@@ -279,6 +279,16 @@ function updateStatImages() {
 
   const institutionTiles = [];
   const ownedInstitutions = [];
+  function addInstitutionEffects(id, effects) {
+    if (!effects || typeof effects !== 'object') return;
+    ownedInstitutions.push(Object.assign({ id }, effects));
+  }
+
+  function removeInstitutionEffects(id) {
+    for (let i = ownedInstitutions.length - 1; i >= 0; i--) {
+      if (ownedInstitutions[i].id === id) ownedInstitutions.splice(i, 1);
+    }
+  }
   const INSTITUTION_INTERVAL_FRAMES = 60;
   let institutionFrame = 0;
   institutions.forEach(inst => {
@@ -724,7 +734,7 @@ function updateStatImages() {
             typeof msg.gains === 'object' &&
             !Array.isArray(msg.gains)
           ) {
-            ownedInstitutions.push(msg.gains);
+            addInstitutionEffects(msg.id, msg.gains);
           }
         }
       } else if (msg.type === 'updateWeapon') {
@@ -1239,6 +1249,7 @@ function updateStatImages() {
     data.proposals = [];
     data.proposalHistory = [];
     data.constructions = [];
+    removeInstitutionEffects(id);
     const anims = obj.userData.animations || [];
     if (anims.length > 0) {
       const clip = anims.find(a => a.name === 'destruction') || anims[0];
@@ -1323,8 +1334,8 @@ function updateStatImages() {
         applyWeapons(institutionDataMap[inst.id]);
       }
       if (inst.owner === playerEmail && !inst.destroyed) {
-        if (def.effects) ownedInstitutions.push(def.effects);
-        if (inst.extraEffects) ownedInstitutions.push(inst.extraEffects);
+        if (def.effects) addInstitutionEffects(inst.id, def.effects);
+        if (inst.extraEffects) addInstitutionEffects(inst.id, inst.extraEffects);
       }
       if (animate) {
         const startY = obj.position.y + 5;

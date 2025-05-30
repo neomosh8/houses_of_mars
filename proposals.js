@@ -111,7 +111,7 @@ export function renderProposals(container, proposals, instId, institutionDataMap
             inst.extraEffects = inst.extraEffects || {};
             Object.assign(inst.extraEffects, data.result.gains);
             if (inst.owner === playerEmail) {
-              ownedInstitutions.push(data.result.gains);
+              ownedInstitutions.push(Object.assign({ id: instId }, data.result.gains));
             }
           }
         }
