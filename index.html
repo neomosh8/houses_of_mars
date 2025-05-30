@@ -219,9 +219,9 @@ function updateStatImages() {
   const institutions = [
     {
       name: 'WatOx',
-      url: 'WATOX.glb',
+      url: 'watox.glb',
       thumbnail: 'watox.png',
-      scale: 7,
+      scale: 1,
       price: 100,
       effects: { hydration: 0.5, oxygen: 0.5 },
       animated: false
@@ -1116,7 +1116,7 @@ function updateStatImages() {
         continue;
       }
       // check collision with institutions
-      const sphere = new THREE.Sphere(p.obj.position.clone(), 1);
+      const sphere = new THREE.Sphere(p.obj.position.clone(), 20);
       let hitInst = null;
       for (const entry of institutionBoxes) {
         const data = institutionDataMap[entry.id];
