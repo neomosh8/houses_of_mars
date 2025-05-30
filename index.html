@@ -986,6 +986,10 @@ function updateStatImages() {
         obj.position.copy(pos);
         obj.rotation.y = inst.rotation || 0;
         scene.add(obj);
+        obj.traverse(o => {
+          o.userData.weaponInstId = inst.id;
+          o.userData.weaponIndex = idx;
+        });
         weaponMap[inst.id][idx] = { obj, data: w };
         return;
       }
@@ -1055,6 +1059,10 @@ function updateStatImages() {
         obj.position.copy(pos);
         obj.rotation.y = inst.rotation || 0;
         scene.add(obj);
+        obj.traverse(o => {
+          o.userData.weaponInstId = inst.id;
+          o.userData.weaponIndex = idx;
+        });
         weaponMap[inst.id][idx] = { obj, data: w };
       });
     });
@@ -1330,6 +1338,7 @@ function updateStatImages() {
       obj.position.fromArray(inst.position);
       obj.rotation.y = inst.rotation || 0;
       scene.add(obj);
+      obj.traverse(o => { o.userData.institutionId = inst.id; });
       institutionsMap[inst.id] = obj;
       const box = new THREE.Box3().setFromObject(obj);
       institutionBoxes.push({ id: inst.id, box });
