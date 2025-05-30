@@ -339,8 +339,10 @@ function updateStatImages() {
   function openPartnerForm(inst) {
     const form = document.getElementById('partner-form');
     form.style.display = 'flex';
-    document.getElementById('partner-total').value = 10;
-    document.getElementById('partner-price').value = inst.price;
+    const totalDefault = 10;
+    const shareDefault = Math.max(1, Math.floor(inst.price / totalDefault));
+    document.getElementById('partner-total').value = totalDefault;
+    document.getElementById('partner-price').value = shareDefault;
     document.getElementById('partner-my').value = 1;
     placingApplication = false;
     applicationInfo = null;
