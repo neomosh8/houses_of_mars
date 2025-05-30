@@ -173,6 +173,7 @@
     let isTransitioning = false;
 
     const GLB_URL = 'character.glb';
+    const DEBUG_LOG = false;
 
     // zoom parameters
     let radius = 4;
@@ -185,6 +186,33 @@
     function onMouseWheel(event) {
       radius += event.deltaY * 0.01 * zoomSpeed;
       radius = Math.max(minRadius, Math.min(maxRadius, radius));
+    }
+
+    function printGLTFHierarchy(gltf) {
+      if (!gltf) {
+        console.log('[DEBUG] No GLTF provided');
+        return;
+      }
+      const scenes = [];
+      if (gltf.scene) scenes.push(gltf.scene);
+      if (Array.isArray(gltf.scenes)) {
+        gltf.scenes.forEach(s => {
+          if (s && !scenes.includes(s)) scenes.push(s);
+        });
+      }
+      if (!scenes.length) {
+        console.log('[DEBUG] GLTF contains no scenes');
+        return;
+      }
+
+      const logNode = (node, indent = '') => {
+        console.log(`${indent}${node.type}${node.name ? ' (' + node.name + ')' : ''}`);
+        (node.children || []).forEach(child => logNode(child, indent + '  '));
+      };
+      scenes.forEach((scene, idx) => {
+        console.log(`-- Scene ${idx} --`);
+        logNode(scene);
+      });
     }
 
     init();
@@ -237,12 +265,17 @@
       loader.load(
         GLB_URL,
         function(gltf) {
-          model = gltf.scene;
-          gltf.scene.traverse(node => {
-            if (node.isPointLight) {
-              scene.add(node);
-            }
-          });
+          model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+          if (!model) return;
+          if (DEBUG_LOG) printGLTFHierarchy(gltf);
+          const root = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+          if (root) {
+            root.traverse(node => {
+              if (node.isPointLight) {
+                scene.add(node);
+              }
+            });
+          }
           model.traverse(child => {
             if (child.isMesh) {
               child.castShadow = true;
