@@ -237,12 +237,16 @@
       loader.load(
         GLB_URL,
         function(gltf) {
-          model = gltf.scene;
-          gltf.scene.traverse(node => {
-            if (node.isPointLight) {
-              scene.add(node);
-            }
-          });
+          model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+          if (!model) return;
+          const root = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+          if (root) {
+            root.traverse(node => {
+              if (node.isPointLight) {
+                scene.add(node);
+              }
+            });
+          }
           model.traverse(child => {
             if (child.isMesh) {
               child.castShadow = true;
