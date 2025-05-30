@@ -116,8 +116,36 @@ const icons = {
     return mesh;
   }
 
+  function printGLTFHierarchy(gltf) {
+    if (!gltf) {
+      console.log('[DEBUG] No GLTF provided');
+      return;
+    }
+    const scenes = [];
+    if (gltf.scene) scenes.push(gltf.scene);
+    if (Array.isArray(gltf.scenes)) {
+      gltf.scenes.forEach(s => {
+        if (s && !scenes.includes(s)) scenes.push(s);
+      });
+    }
+    if (!scenes.length) {
+      console.log('[DEBUG] GLTF contains no scenes');
+      return;
+    }
+
+    const logNode = (node, indent = '') => {
+      console.log(`${indent}${node.type}${node.name ? ' (' + node.name + ')' : ''}`);
+      (node.children || []).forEach(child => logNode(child, indent + '  '));
+    };
+    scenes.forEach((scene, idx) => {
+      console.log(`-- Scene ${idx} --`);
+      logNode(scene);
+    });
+  }
+
   function addPointLightsFromGLTF(gltf) {
     if (!gltf) return;
+    if (DEBUG_LOG) printGLTFHierarchy(gltf);
     const root = gltf.scene || (gltf.scenes && gltf.scenes[0]);
     if (!root) return;
     root.traverse(node => {

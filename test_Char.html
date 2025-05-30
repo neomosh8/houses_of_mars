@@ -215,6 +215,8 @@
     let currentAction = null;
     let isTransitioning = false;
 
+    const GLB_URL = 'character.glb';
+    const DEBUG_LOG = false;
     // zoom parameters
     let radius = 4;
     const minRadius = 2;
@@ -228,18 +230,32 @@
       radius = Math.max(minRadius, Math.min(maxRadius, radius));
     }
 
-    // File input handler
-    document.getElementById('file-input').addEventListener('change', function(e) {
-      const file = e.target.files[0];
-      if (file && file.name.toLowerCase().endsWith('.glb')) {
-        const url = URL.createObjectURL(file);
-        loadGLBModel(url);
-        document.getElementById('file-upload').style.display = 'none';
-        document.getElementById('loading').style.display = 'block';
-      } else {
-        alert('Please select a valid GLB file');
+    function printGLTFHierarchy(gltf) {
+      if (!gltf) {
+        console.log('[DEBUG] No GLTF provided');
+        return;
       }
-    });
+      const scenes = [];
+      if (gltf.scene) scenes.push(gltf.scene);
+      if (Array.isArray(gltf.scenes)) {
+        gltf.scenes.forEach(s => {
+          if (s && !scenes.includes(s)) scenes.push(s);
+        });
+      }
+      if (!scenes.length) {
+        console.log('[DEBUG] GLTF contains no scenes');
+        return;
+      }
+
+      const logNode = (node, indent = '') => {
+        console.log(`${indent}${node.type}${node.name ? ' (' + node.name + ')' : ''}`);
+        (node.children || []).forEach(child => logNode(child, indent + '  '));
+      };
+      scenes.forEach((scene, idx) => {
+        console.log(`-- Scene ${idx} --`);
+        logNode(scene);
+      });
+    }
 
     init();
     animate();
@@ -289,32 +305,18 @@
       loader.load(
         url,
         function(gltf) {
-          // Check if gltf and gltf.scene exist
-          if (!gltf || !gltf.scene) {
-            console.error('Invalid GLB file structure');
-            showError('Invalid GLB file structure. Please check your file.');
-            return;
+          model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+          if (!model) return;
+          if (DEBUG_LOG) printGLTFHierarchy(gltf);
+          const root = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+          if (root) {
+            root.traverse(node => {
+              if (node.isPointLight) {
+                scene.add(node);
+              }
+            });
           }
 
-          // Remove previous model if exists
-          if (model) {
-            scene.remove(model);
-          }
-
-          model = gltf.scene;
-
-          // Extract lights from the model
-          const lights = [];
-          model.traverse(node => {
-            if (node.isLight) {
-              lights.push(node.clone());
-            }
-          });
-
-          // Add cloned lights to scene
-          lights.forEach(light => scene.add(light));
-
-          // Setup shadows
           model.traverse(child => {
             if (child.isMesh) {
               child.castShadow = true;
