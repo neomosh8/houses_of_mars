@@ -539,6 +539,7 @@ function handleClick(event) {
 
   window.addEventListener('click', handleClick);
 
+  let ghostSample = { x: null, z: null, y: 0 };
   function updateGhostInstitution() {
     if (!placingInstitution || !ghostInstitution || !model) return;
     const distance = ghostInstitution.userData.safeDistance || 20;
@@ -551,10 +552,16 @@ function handleClick(event) {
       const b = new THREE.Box3().setFromObject(ghostInstitution);
       return Math.max(b.max.x - b.min.x, b.max.z - b.min.z) * 0.6;
     })();
-    const lowest = findLowestPointInArea(target.x, target.z, rad);
+    const dx = ghostSample.x === null ? Infinity : Math.abs(target.x - ghostSample.x);
+    const dz = ghostSample.z === null ? Infinity : Math.abs(target.z - ghostSample.z);
+    if (dx > 0.25 || dz > 0.25) {
+      ghostSample.x = target.x;
+      ghostSample.z = target.z;
+      ghostSample.y = findLowestPointInArea(target.x, target.z, rad);
+    }
     const box = new THREE.Box3().setFromObject(ghostInstitution);
     const offY = box.min.y - ghostInstitution.position.y;
-    ghostInstitution.position.y = lowest - offY;
+    ghostInstitution.position.y = ghostSample.y - offY;
   }
 
   function getGroundHeightAt(x, z) {
@@ -569,26 +576,25 @@ function handleClick(event) {
   }
 
   function findLowestPointInArea(cx, cz, radius) {
-    let min = getGroundHeightAt(cx, cz);
-    const step = Math.max(1, radius / 4);
-    for (let x = cx - radius; x <= cx + radius; x += step) {
-      for (let z = cz - radius; z <= cz + radius; z += step) {
-        const dx = x - cx;
-        const dz = z - cz;
-        if (dx * dx + dz * dz <= radius * radius) {
-          const h = getGroundHeightAt(x, z);
-          if (h < min) min = h;
-        }
-      }
-    }
-    const samples = 16;
-    for (let i = 0; i < samples; i++) {
-      const ang = (i / samples) * Math.PI * 2;
-      const x = cx + Math.cos(ang) * radius;
-      const z = cz + Math.sin(ang) * radius;
+    const samples = [
+      [0, 0],
+      [radius, 0],
+      [-radius, 0],
+      [0, radius],
+      [0, -radius],
+      [radius * 0.7, radius * 0.7],
+      [-radius * 0.7, radius * 0.7],
+      [radius * 0.7, -radius * 0.7],
+      [-radius * 0.7, -radius * 0.7]
+    ];
+    let min = Infinity;
+    for (let i = 0; i < samples.length; i++) {
+      const x = cx + samples[i][0];
+      const z = cz + samples[i][1];
       const h = getGroundHeightAt(x, z);
       if (h < min) min = h;
     }
+    if (min === Infinity) return getGroundHeightAt(cx, cz);
     return min;
   }
 
