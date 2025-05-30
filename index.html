@@ -1106,8 +1106,8 @@ function handleClick(event) {
 
   function createFundingIndicator(id, position) {
     const pos = new THREE.Vector3().fromArray(position);
-    pos.y += 10;
-    const geom = new THREE.SphereGeometry(1, 16, 16);
+    pos.y += 20;
+    const geom = new THREE.SphereGeometry(4, 16, 16);
     const mat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
     const sph = new THREE.Mesh(geom, mat);
     sph.position.copy(pos);
