@@ -1,6 +1,5 @@
 /.idea
 /node_modules
-
 .env
 package-lock.json
 package.json
@@ -9,11 +8,9 @@ WatOx_utility.glb
 watox.png
 institutions.json
 *.png
-*.glb
 *.json
 !defence_base.json
-terrain_s.bin
-terrain_s.gltf
-WATOX.glb
 *.mp3
 walking.mp3
+/generated_models
+/worker_images
