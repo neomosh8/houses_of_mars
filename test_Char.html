@@ -83,6 +83,7 @@
       transform: translate(-50%, -50%);
       font-size: 24px;
       z-index: 1000;
+      text-align: center;
     }
 
     .loading-spinner {
@@ -110,6 +111,39 @@
       border-radius: 12px;
       display: none;
       z-index: 1000;
+      max-width: 400px;
+    }
+
+    #file-upload {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.9);
+      padding: 30px;
+      border-radius: 12px;
+      text-align: center;
+      z-index: 1000;
+    }
+
+    #file-input {
+      display: none;
+    }
+
+    .upload-button {
+      background: #4fc3f7;
+      color: white;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 16px;
+      margin-top: 10px;
+      transition: background 0.3s;
+    }
+
+    .upload-button:hover {
+      background: #29b6f6;
     }
 
     .key-hint {
@@ -136,17 +170,26 @@
 </head>
 <body>
   <div id="container">
-    <div id="loading">
+    <div id="loading" style="display: none;">
       <div class="loading-spinner"></div>
       Loading GLB model...
     </div>
 
     <div id="error">
       <h3>Error Loading Model</h3>
-      <p>Please ensure you have a valid GLB file to load.</p>
+      <p id="error-message">Please ensure you have a valid GLB file to load.</p>
     </div>
 
-    <div id="info">
+    <div id="file-upload">
+      <h2>GLB Animation Viewer</h2>
+      <p>Upload a GLB file to view its animations</p>
+      <input type="file" id="file-input" accept=".glb" />
+      <button class="upload-button" onclick="document.getElementById('file-input').click()">
+        Choose GLB File
+      </button>
+    </div>
+
+    <div id="info" style="display: none;">
       <h2>🎭 Animation Controller</h2>
       <div id="controls">
         <div>Press <span class="key">A</span> to cycle animations</div>
@@ -155,7 +198,7 @@
       <div id="animation-list"></div>
     </div>
 
-    <div class="key-hint">
+    <div class="key-hint" style="display: none;">
       <span class="key">A</span> Next Animation
     </div>
   </div>
@@ -172,8 +215,6 @@
     let currentAction = null;
     let isTransitioning = false;
 
-    const GLB_URL = 'character.glb';
-
     // zoom parameters
     let radius = 4;
     const minRadius = 2;
@@ -186,6 +227,19 @@
       radius += event.deltaY * 0.01 * zoomSpeed;
       radius = Math.max(minRadius, Math.min(maxRadius, radius));
     }
+
+    // File input handler
+    document.getElementById('file-input').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (file && file.name.toLowerCase().endsWith('.glb')) {
+        const url = URL.createObjectURL(file);
+        loadGLBModel(url);
+        document.getElementById('file-upload').style.display = 'none';
+        document.getElementById('loading').style.display = 'block';
+      } else {
+        alert('Please select a valid GLB file');
+      }
+    });
 
     init();
     animate();
@@ -225,24 +279,42 @@
 
       clock = new THREE.Clock();
 
-      loadGLBModel();
-
       window.addEventListener('resize', onWindowResize);
       document.addEventListener('keydown', onKeyDown);
     }
 
-    function loadGLBModel() {
+    function loadGLBModel(url) {
       const loader = new THREE.GLTFLoader();
 
       loader.load(
-        GLB_URL,
+        url,
         function(gltf) {
+          // Check if gltf and gltf.scene exist
+          if (!gltf || !gltf.scene) {
+            console.error('Invalid GLB file structure');
+            showError('Invalid GLB file structure. Please check your file.');
+            return;
+          }
+
+          // Remove previous model if exists
+          if (model) {
+            scene.remove(model);
+          }
+
           model = gltf.scene;
-          gltf.scene.traverse(node => {
-            if (node.isPointLight) {
-              scene.add(node);
+
+          // Extract lights from the model
+          const lights = [];
+          model.traverse(node => {
+            if (node.isLight) {
+              lights.push(node.clone());
             }
           });
+
+          // Add cloned lights to scene
+          lights.forEach(light => scene.add(light));
+
+          // Setup shadows
           model.traverse(child => {
             if (child.isMesh) {
               child.castShadow = true;
@@ -250,11 +322,12 @@
             }
           });
 
+          // Scale and position model
           model.scale.setScalar(1);
           model.position.y = 0;
           scene.add(model);
 
-          // filter out T-poses and zero-length clips
+          // Handle animations
           const allClips = gltf.animations || [];
           animations = allClips.filter(clip =>
             clip.duration > 0.1 && !/t[\s_-]?pose/i.test(clip.name)
@@ -263,7 +336,7 @@
           if (animations.length > 0) {
             mixer = new THREE.AnimationMixer(model);
 
-            // play and immediately freeze the first clip as base pose
+            // Play and immediately freeze the first clip as base pose
             const baseAction = mixer.clipAction(animations[0]);
             baseAction.play();
             mixer.update(0);
@@ -271,16 +344,21 @@
 
             updateAnimationList();
             updateCurrentAnimationDisplay();
+          } else {
+            document.getElementById('current-animation').textContent = 'No animations found in this model';
           }
 
           hideLoading();
+          document.getElementById('info').style.display = 'block';
+          document.querySelector('.key-hint').style.display = 'block';
         },
         function(progress) {
-          console.log('Loading progress:', (progress.loaded / progress.total * 100) + '%');
+          const percent = (progress.loaded / progress.total * 100).toFixed(2);
+          console.log('Loading progress:', percent + '%');
         },
         function(error) {
           console.error('Error loading GLB:', error);
-          showError();
+          showError('Failed to load GLB file. Error: ' + error.message);
         }
       );
     }
@@ -346,9 +424,13 @@
       document.getElementById('loading').style.display = 'none';
     }
 
-    function showError() {
+    function showError(message) {
       hideLoading();
+      document.getElementById('file-upload').style.display = 'none';
       document.getElementById('error').style.display = 'block';
+      if (message) {
+        document.getElementById('error-message').textContent = message;
+      }
     }
 
     function animate() {
@@ -357,7 +439,7 @@
       const delta = clock.getDelta();
       if (mixer) mixer.update(delta);
 
-      // orbit camera at variable radius
+      // Orbit camera at variable radius
       const t = Date.now() * 0.0005;
       camera.position.x = Math.cos(t) * radius;
       camera.position.z = Math.sin(t) * radius;
