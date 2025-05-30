@@ -117,8 +117,10 @@ const icons = {
   }
 
   function addPointLightsFromGLTF(gltf) {
-    if (!gltf || !gltf.scene) return;
-    gltf.scene.traverse(node => {
+    if (!gltf) return;
+    const root = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+    if (!root) return;
+    root.traverse(node => {
       if (node.isPointLight) {
         scene.add(node);
       }
@@ -393,7 +395,9 @@ function updateStatImages() {
     }
     const loader = new GLTFLoader();
     loader.load(inst.url, gltf => {
-      ghostInstitution = gltf.scene;
+      const root = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+      if (!root) return;
+      ghostInstitution = root;
       addPointLightsFromGLTF(gltf);
       ghostInstitution.scale.setScalar(inst.scale || 1);
       const box = new THREE.Box3().setFromObject(ghostInstitution);
@@ -1007,7 +1011,8 @@ function handleClick(event) {
       const loader = new GLTFLoader();
       loader.load(c.url, gltf => {
         if (inst.constructions[idx] !== c) return; // ignore outdated load
-        const obj = gltf.scene;
+        const obj = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+        if (!obj) return;
         addPointLightsFromGLTF(gltf);
         const offset = Array.isArray(c.offset)
           ? new THREE.Vector3().fromArray(c.offset)
@@ -1090,7 +1095,8 @@ function handleClick(event) {
     if (existing) scene.remove(existing);
     const loader = new GLTFLoader();
     loader.load('flag.glb', gltf => {
-      const obj = gltf.scene;
+      const obj = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+      if (!obj) return;
       obj.position.copy(pos);
       scene.add(obj);
       flagObjects[id] = obj;
@@ -1166,7 +1172,8 @@ function handleClick(event) {
       const loader = new GLTFLoader();
       loader.load(w.model, gltf => {
         if (inst.weapons[idx] !== w) return; // ignore outdated load
-        const obj = gltf.scene;
+        const obj = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+        if (!obj) return;
         addPointLightsFromGLTF(gltf);
       obj.scale.setScalar(w.scale || 1);
       obj.rotation.y = inst.rotation || 0;
@@ -1435,7 +1442,8 @@ function handleClick(event) {
     if (!def) return;
     const loader = new GLTFLoader();
     loader.load(def.url, gltf => {
-      const obj = gltf.scene;
+      const obj = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+      if (!obj) return;
       obj.userData.animations = gltf.animations || [];
       addPointLightsFromGLTF(gltf);
       obj.scale.setScalar(inst.scale || def.scale || 1);
@@ -2449,7 +2457,8 @@ function showInstitutionPopup(id) {
   groundLoader.load(
     'terrain_s.gltf', // Replace this with the path to your ground GLTF file
     (gltf) => {
-      gltfTerrain = gltf.scene;
+      gltfTerrain = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+      if (!gltfTerrain) return;
       addPointLightsFromGLTF(gltf);
 
       gltfTerrain.scale.set(terrainScaleFactor, terrainScaleFactor, terrainScaleFactor);
@@ -2566,7 +2575,8 @@ function showInstitutionPopup(id) {
   new GLTFLoader().load(
     'character.glb',
     gltf => {
-      model = gltf.scene;
+      model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+      if (!model) return;
       addPointLightsFromGLTF(gltf);
       model.scale.set(modelScale, modelScale, modelScale);
       model.rotation.y =0
