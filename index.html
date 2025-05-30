@@ -1103,243 +1103,371 @@ function updateStatImages() {
     Object.values(weaponMap).forEach(arr => arr.forEach(w => fireWeapon(w)));
   }
 
-  function updateProjectiles(dt) {
-    for (let i = projectiles.length - 1; i >= 0; i--) {
-      const p = projectiles[i];
-      const weight = p.params.weight || 1;
-      const force = p.params.force || 0;
-      const ammo = p.params.ammo || 0;
-      const fuel = p.params.fuel || 0;
-      if (p.cat !== 'attack') {
+  // 1. MISSING FUNCTION - Add this function in index.html
+function sendDestroyInstitution(id) {
+  if (!socket || socket.readyState !== WebSocket.OPEN) return;
+  socket.send(JSON.stringify({ type: 'destroyInstitution', id }));
+}
+
+// 2. IMPROVED COLLISION DETECTION - Replace the collision check in updateProjectiles
+function updateProjectiles(dt) {
+  for (let i = projectiles.length - 1; i >= 0; i--) {
+    const p = projectiles[i];
+    const weight = p.params.weight || 1;
+    const force = p.params.force || 0;
+    const ammo = p.params.ammo || 0;
+    const fuel = p.params.fuel || 0;
+
+    if (p.cat !== 'attack') {
+      scene.remove(p.obj);
+      projectiles.splice(i, 1);
+      continue;
+    }
+
+    // IMPROVED collision detection with institutions
+    const projectilePos = p.obj.position.clone();
+    let hitInst = null;
+
+    for (const entry of institutionBoxes) {
+      const data = institutionDataMap[entry.id];
+      if (!data || data.destroyed) continue;
+
+      // Check if projectile is inside the bounding box
+      if (entry.box.containsPoint(projectilePos)) {
+        hitInst = entry.id;
+        console.log('[DEBUG] Projectile hit institution:', hitInst);
+        break;
+      }
+
+      // Alternative: Check distance to center of bounding box
+      const center = new THREE.Vector3();
+      entry.box.getCenter(center);
+      const distance = projectilePos.distanceTo(center);
+      const size = new THREE.Vector3();
+      entry.box.getSize(size);
+      const radius = Math.max(size.x, size.y, size.z) / 2;
+
+      if (distance <= radius) {
+        hitInst = entry.id;
+        console.log('[DEBUG] Projectile hit institution (radius check):', hitInst);
+        break;
+      }
+    }
+
+    if (hitInst !== null) {
+      scene.remove(p.obj);
+      projectiles.splice(i, 1);
+
+      // Call the destruction function
+      sendDestroyInstitution(hitInst);
+
+      // Optional: Add explosion effect at impact point
+      emitDustParticle(projectilePos, 20);
+      continue;
+    }
+
+    // Rest of projectile movement code...
+    if (p.tech === 'laser') {
+      if (!p.dir) {
+        p.dir = new THREE.Vector3().subVectors(p.target, p.start).normalize();
+        p.speed = force * 1;
+      }
+      const step = p.speed * dt;
+      p.obj.position.addScaledVector(p.dir, step);
+      if (p.obj.position.distanceTo(p.target) <= step) {
         scene.remove(p.obj);
         projectiles.splice(i, 1);
-        continue;
       }
-      // check collision with institutions
-      const sphere = new THREE.Sphere(p.obj.position.clone(), 1);
-      let hitInst = null;
-      for (const entry of institutionBoxes) {
-        const data = institutionDataMap[entry.id];
-        if (!data || data.destroyed) continue;
-        if (entry.box.intersectsSphere(sphere)) {
-          hitInst = entry.id;
-          break;
-        }
+    } else if (p.tech === 'bullet') {
+      if (!p.dir) {
+        p.dir = new THREE.Vector3().subVectors(p.target, p.start).normalize();
+        p.speed = weight > 0 ? (force / weight) : force;
       }
-      if (hitInst !== null) {
+      const step = p.speed * dt;
+      p.obj.position.addScaledVector(p.dir, step);
+      if (p.obj.position.distanceTo(p.target) <= step) {
         scene.remove(p.obj);
         projectiles.splice(i, 1);
-        sendDestroyInstitution(hitInst);
-        continue;
       }
-      if (p.tech === 'laser') {
-        if (!p.dir) {
-          p.dir = new THREE.Vector3().subVectors(p.target, p.start).normalize();
-          p.speed = force * 1;
-        }
-        const step = p.speed * dt;
-        p.obj.position.addScaledVector(p.dir, step);
-        if (p.obj.position.distanceTo(p.target) <= step) {
-          scene.remove(p.obj);
-          projectiles.splice(i, 1);
-        }
-      } else if (p.tech === 'bullet') {
-        if (!p.dir) {
-          p.dir = new THREE.Vector3().subVectors(p.target, p.start).normalize();
-          p.speed = weight > 0 ? (force / weight) : force;
-        }
-        const step = p.speed * dt;
-        p.obj.position.addScaledVector(p.dir, step);
-        if (p.obj.position.distanceTo(p.target) <= step) {
-          scene.remove(p.obj);
-          projectiles.splice(i, 1);
-        }
-      } else if (p.tech === 'missile') {
-        if (p.stage === 0) {
-          p.h = p.h || (force * fuel / (weight + ammo + fuel)) * 10;
-          p.v0 = p.v0 || (force / weight);
-          p.v1 = p.v1 || (weight * p.h);
-          p.speed = p.v0;
-          const targetY = p.start.y + p.h;
-          p.obj.position.y += p.v0 * dt;
-          if (p.obj.position.y >= targetY) {
-            p.stage = 1;
-            p.dir = new THREE.Vector3().subVectors(p.target, p.obj.position).normalize();
-          }
-        } else {
-          p.speed += (p.v1 - p.speed) * 0.05;
-          const step = p.speed * dt;
-          p.obj.position.addScaledVector(p.dir, step);
-          if (p.obj.position.distanceTo(p.target) <= step) {
-            scene.remove(p.obj);
-            projectiles.splice(i, 1);
-          }
-        }
-      } else if (p.tech === 'drone') {
-        p.h = p.h || (force / weight) * 10;
+    } else if (p.tech === 'missile') {
+      if (p.stage === 0) {
+        p.h = p.h || (force * fuel / (weight + ammo + fuel)) * 10;
         p.v0 = p.v0 || (force / weight);
         p.v1 = p.v1 || (weight * p.h);
-        if (p.stage === 0) {
-          const targetY = p.start.y + p.h;
-          p.obj.position.y += p.v0 * dt;
-          if (p.obj.position.y >= targetY) {
-            p.stage = 1;
-          }
-        } else if (p.stage === 1) {
-          if (!p.dir) p.dir = new THREE.Vector3(p.target.x - p.obj.position.x, 0, p.target.z - p.obj.position.z).normalize();
-          p.speed += (p.v1 - (p.speed || p.v0)) * 0.05;
-          const step = p.speed * dt;
-          const move = p.dir.clone().multiplyScalar(step);
-          p.obj.position.add(move);
-          if (new THREE.Vector2(p.obj.position.x - p.target.x, p.obj.position.z - p.target.z).length() <= step) {
-            p.stage = 2;
-            p.dir = new THREE.Vector3(0, -1, 0);
-          }
-        } else {
-          const step = p.v1 * dt;
-          p.obj.position.addScaledVector(p.dir, step);
-          if (p.obj.position.y <= p.target.y) {
-            p.obj.position.copy(p.target);
-            scene.remove(p.obj);
-            projectiles.splice(i, 1);
-          }
+        p.speed = p.v0;
+        const targetY = p.start.y + p.h;
+        p.obj.position.y += p.v0 * dt;
+        if (p.obj.position.y >= targetY) {
+          p.stage = 1;
+          p.dir = new THREE.Vector3().subVectors(p.target, p.obj.position).normalize();
         }
-      } else if (p.tech === 'kamikaze') {
-        if (!p.dir) p.dir = new THREE.Vector2(p.target.x - p.start.x, p.target.z - p.start.z).normalize();
-        p.speed = p.speed || ((force * fuel) / weight);
+      } else {
+        p.speed += (p.v1 - p.speed) * 0.05;
         const step = p.speed * dt;
-        p.obj.position.x += p.dir.x * step;
-        p.obj.position.z += p.dir.y * step;
-        p.obj.position.y = getGroundHeightAt(p.obj.position.x, p.obj.position.z);
-        if (new THREE.Vector2(p.obj.position.x - p.target.x, p.obj.position.z - p.target.z).length() <= step) {
+        p.obj.position.addScaledVector(p.dir, step);
+        if (p.obj.position.distanceTo(p.target) <= step) {
           scene.remove(p.obj);
           projectiles.splice(i, 1);
         }
+      }
+    } else if (p.tech === 'drone') {
+      p.h = p.h || (force / weight) * 10;
+      p.v0 = p.v0 || (force / weight);
+      p.v1 = p.v1 || (weight * p.h);
+      if (p.stage === 0) {
+        const targetY = p.start.y + p.h;
+        p.obj.position.y += p.v0 * dt;
+        if (p.obj.position.y >= targetY) {
+          p.stage = 1;
+        }
+      } else if (p.stage === 1) {
+        if (!p.dir) p.dir = new THREE.Vector3(p.target.x - p.obj.position.x, 0, p.target.z - p.obj.position.z).normalize();
+        p.speed += (p.v1 - (p.speed || p.v0)) * 0.05;
+        const step = p.speed * dt;
+        const move = p.dir.clone().multiplyScalar(step);
+        p.obj.position.add(move);
+        if (new THREE.Vector2(p.obj.position.x - p.target.x, p.obj.position.z - p.target.z).length() <= step) {
+          p.stage = 2;
+          p.dir = new THREE.Vector3(0, -1, 0);
+        }
       } else {
+        const step = p.v1 * dt;
+        p.obj.position.addScaledVector(p.dir, step);
+        if (p.obj.position.y <= p.target.y) {
+          p.obj.position.copy(p.target);
+          scene.remove(p.obj);
+          projectiles.splice(i, 1);
+        }
+      }
+    } else if (p.tech === 'kamikaze') {
+      if (!p.dir) p.dir = new THREE.Vector2(p.target.x - p.start.x, p.target.z - p.start.z).normalize();
+      p.speed = p.speed || ((force * fuel) / weight);
+      const step = p.speed * dt;
+      p.obj.position.x += p.dir.x * step;
+      p.obj.position.z += p.dir.y * step;
+      p.obj.position.y = getGroundHeightAt(p.obj.position.x, p.obj.position.z);
+      if (new THREE.Vector2(p.obj.position.x - p.target.x, p.obj.position.z - p.target.z).length() <= step) {
         scene.remove(p.obj);
         projectiles.splice(i, 1);
       }
+    } else {
+      scene.remove(p.obj);
+      projectiles.splice(i, 1);
     }
   }
+}
 
-  function handleInstitutionDestruction(id) {
-    const obj = institutionsMap[id];
-    const data = institutionDataMap[id];
-    if (!obj || !data || data.destroyed) return;
-    data.destroyed = true;
-    data.workforce = [];
-    data.proposals = [];
-    data.proposalHistory = [];
-    data.constructions = [];
-    const anims = obj.userData.animations || [];
-    if (anims.length > 0) {
-      const clip = anims.find(a => a.name === 'destruction') || anims[0];
-      const mix = new THREE.AnimationMixer(obj);
-      const action = mix.clipAction(clip);
-      action.setLoop(THREE.LoopOnce, 0);
-      action.clampWhenFinished = true;
-      action.play();
-      action.onFinished = () => {
-        action.paused = true;
-        action.time = clip.duration;
-        mix.update(0);
-      };
-      institutionMixers[id] = mix;
+// 3. IMPROVED DESTRUCTION HANDLER - Replace handleInstitutionDestruction
+function handleInstitutionDestruction(id) {
+  const obj = institutionsMap[id];
+  const data = institutionDataMap[id];
+  if (!obj || !data || data.destroyed) return;
+
+  console.log('[DEBUG] Destroying institution:', id);
+
+  data.destroyed = true;
+  data.workforce = [];
+  data.proposals = [];
+  data.proposalHistory = [];
+  data.constructions = [];
+
+  // Try to find and play destruction animation
+  const anims = obj.userData.animations || [];
+  console.log('[DEBUG] Available animations:', anims.map(a => a.name));
+
+  if (anims.length > 0) {
+    // Look for destruction animation (try different naming conventions)
+    let destructionClip = anims.find(a =>
+      a.name.toLowerCase().includes('destruction') ||
+      a.name.toLowerCase().includes('destroy') ||
+      a.name.toLowerCase().includes('collapse') ||
+      a.name.toLowerCase().includes('death')
+    );
+
+    // If no destruction animation found, use the first available animation
+    if (!destructionClip) {
+      destructionClip = anims[0];
+      console.log('[DEBUG] No destruction animation found, using:', destructionClip.name);
+    } else {
+      console.log('[DEBUG] Using destruction animation:', destructionClip.name);
     }
-  }
 
-  function createInstitution(inst, animate) {
-    const def = institutions.find(i => i.name === inst.name);
-    if (!def) return;
-    const loader = new GLTFLoader();
-    loader.load(def.url, gltf => {
-      const obj = gltf.scene;
-      obj.userData.animations = gltf.animations || [];
-      addPointLightsFromGLTF(gltf);
-      obj.scale.setScalar(inst.scale || def.scale || 1);
-      obj.position.fromArray(inst.position);
-      obj.rotation.y = inst.rotation || 0;
-      obj.traverse(o => {
-        if (o.isMesh) {
-          o.castShadow = true;
-          o.receiveShadow = true;
-        }
-      });
-      const boxTmp = new THREE.Box3().setFromObject(obj);
-      const radius = Math.max(boxTmp.max.x - boxTmp.min.x, boxTmp.max.z - boxTmp.min.z) * 0.6;
-      const ground = getGroundHeightAt(inst.position[0], inst.position[2]);
-      flattenTerrain(inst.position[0], inst.position[2], radius, ground);
-      scene.add(obj);
+    const mix = new THREE.AnimationMixer(obj);
+    const action = mix.clipAction(destructionClip);
+    action.setLoop(THREE.LoopOnce, 1);
+    action.clampWhenFinished = true;
+    action.play();
 
-      const instAudioFile = institutionAudioFiles[inst.name];
-      if (instAudioFile) {
-        const sound = new THREE.PositionalAudio(listener);
-       audioLoader.load(instAudioFile, buffer => {
-      sound.setLoop(true);
-      sound.setRefDistance(1);
-      sound.setRolloffFactor(10.0);
-      sound.setMaxDistance(10);
-      sound.setVolume(1);
-      sound.setBuffer(buffer);
-      if (sound.isPlaying) sound.stop();
-      sound.play();
-    });
+    // Store the mixer so it gets updated in the animation loop
+    institutionMixers[id] = mix;
 
-        obj.add(sound);
-        institutionSounds[inst.id] = sound;
-      }
+    // Optional: Add visual effects
+    setTimeout(() => {
+      // Add dust particles during destruction
+      const box = new THREE.Box3().setFromObject(obj);
+      const center = new THREE.Vector3();
+      box.getCenter(center);
+      emitDustParticle(center, 30);
+    }, 500);
 
-      if (inst.destroyed && gltf.animations && gltf.animations.length > 0) {
-        const mix = new THREE.AnimationMixer(obj);
-        const clip = gltf.animations.find(a => a.name === 'destruction') || gltf.animations[0];
-        const action = mix.clipAction(clip);
-        action.play();
-        action.paused = true;
-        action.time = clip.duration;
-        mix.update(0);
-      } else if (def.animated && gltf.animations && gltf.animations.length > 0) {
-        const mix = new THREE.AnimationMixer(obj);
-        gltf.animations.forEach(anim => {
-          mix.clipAction(anim).play();
+    // Optional: Fade out after animation completes
+    setTimeout(() => {
+      if (obj.parent) {
+        obj.traverse(child => {
+          if (child.isMesh && child.material) {
+            if (Array.isArray(child.material)) {
+              child.material.forEach(mat => {
+                mat.transparent = true;
+                mat.opacity = 0.3;
+              });
+            } else {
+              child.material.transparent = true;
+              child.material.opacity = 0.3;
+            }
+          }
         });
-        institutionMixers[inst.id] = mix;
       }
-      institutionsMap[inst.id] = obj;
-      const cons = inst.constructions || (inst.construction ? [inst.construction] : []);
-      institutionDataMap[inst.id] = { ...inst, effects: def.effects, workforce: inst.workforce || [], extraEffects: inst.extraEffects || {}, constructions: cons };
-      obj.traverse(o => { o.userData.institutionId = inst.id; });
-      const box = new THREE.Box3().setFromObject(obj);
-      institutionBoxes.push({ id: inst.id, box });
-      if (!inst.destroyed) {
-        applyConstruction(institutionDataMap[inst.id]);
-        applyWeapons(institutionDataMap[inst.id]);
-      }
-      if (inst.owner === playerEmail && !inst.destroyed) {
-        if (def.effects) ownedInstitutions.push(def.effects);
-        if (inst.extraEffects) ownedInstitutions.push(inst.extraEffects);
-      }
-      if (animate) {
-        const startY = obj.position.y + 5;
-        const endY = obj.position.y;
-        obj.position.y = startY;
-        sinking.push({ obj, start: startY, end: endY, t: 0, emit: 0 });
-      }
-    }, undefined, () => {
-      const obj = createPlaceholder(inst.scale || def.scale || 1, 0x00aa00);
-      obj.userData.animations = [];
-      obj.position.fromArray(inst.position);
-      obj.rotation.y = inst.rotation || 0;
-      scene.add(obj);
-      institutionsMap[inst.id] = obj;
-      const box = new THREE.Box3().setFromObject(obj);
-      institutionBoxes.push({ id: inst.id, box });
-      institutionDataMap[inst.id] = { ...inst, effects: def.effects, workforce: inst.workforce || [], extraEffects: inst.extraEffects || {}, constructions: inst.constructions || [] };
-      if (!inst.destroyed) {
-        applyConstruction(institutionDataMap[inst.id]);
-        applyWeapons(institutionDataMap[inst.id]);
+    }, destructionClip.duration * 1000);
+
+  } else {
+    console.log('[DEBUG] No animations available for destruction');
+    // Fallback: Simple fade out effect
+    obj.traverse(child => {
+      if (child.isMesh && child.material) {
+        if (Array.isArray(child.material)) {
+          child.material.forEach(mat => {
+            mat.transparent = true;
+            mat.opacity = 0.3;
+          });
+        } else {
+          child.material.transparent = true;
+          child.material.opacity = 0.3;
+        }
       }
     });
   }
+}
+
+// 4. ENSURE ANIMATIONS ARE STORED - Update createInstitution function
+function createInstitution(inst, animate) {
+  const def = institutions.find(i => i.name === inst.name);
+  if (!def) return;
+  const loader = new GLTFLoader();
+  loader.load(def.url, gltf => {
+    const obj = gltf.scene;
+
+    // IMPORTANT: Store animations in userData for destruction system
+    obj.userData.animations = gltf.animations || [];
+    console.log('[DEBUG] Institution loaded with animations:', obj.userData.animations.map(a => a.name));
+
+    addPointLightsFromGLTF(gltf);
+    obj.scale.setScalar(inst.scale || def.scale || 1);
+    obj.position.fromArray(inst.position);
+    obj.rotation.y = inst.rotation || 0;
+    obj.traverse(o => {
+      if (o.isMesh) {
+        o.castShadow = true;
+        o.receiveShadow = true;
+      }
+    });
+
+    // Rest of the function remains the same...
+    const boxTmp = new THREE.Box3().setFromObject(obj);
+    const radius = Math.max(boxTmp.max.x - boxTmp.min.x, boxTmp.max.z - boxTmp.min.z) * 0.6;
+    const ground = getGroundHeightAt(inst.position[0], inst.position[2]);
+    flattenTerrain(inst.position[0], inst.position[2], radius, ground);
+    scene.add(obj);
+
+    // Institution audio setup...
+    const instAudioFile = institutionAudioFiles[inst.name];
+    if (instAudioFile) {
+      const sound = new THREE.PositionalAudio(listener);
+      audioLoader.load(instAudioFile, buffer => {
+        sound.setLoop(true);
+        sound.setRefDistance(1);
+        sound.setRolloffFactor(10.0);
+        sound.setMaxDistance(10);
+        sound.setVolume(1);
+        sound.setBuffer(buffer);
+        if (sound.isPlaying) sound.stop();
+        sound.play();
+      });
+      obj.add(sound);
+      institutionSounds[inst.id] = sound;
+    }
+
+    // Handle existing destruction state and animations...
+    if (inst.destroyed && gltf.animations && gltf.animations.length > 0) {
+      const mix = new THREE.AnimationMixer(obj);
+      const clip = gltf.animations.find(a => a.name === 'destruction') || gltf.animations[0];
+      const action = mix.clipAction(clip);
+      action.play();
+      action.paused = true;
+      action.time = clip.duration;
+      mix.update(0);
+    } else if (def.animated && gltf.animations && gltf.animations.length > 0) {
+      const mix = new THREE.AnimationMixer(obj);
+      gltf.animations.forEach(anim => {
+        mix.clipAction(anim).play();
+      });
+      institutionMixers[inst.id] = mix;
+    }
+
+    institutionsMap[inst.id] = obj;
+    const cons = inst.constructions || (inst.construction ? [inst.construction] : []);
+    institutionDataMap[inst.id] = {
+      ...inst,
+      effects: def.effects,
+      workforce: inst.workforce || [],
+      extraEffects: inst.extraEffects || {},
+      constructions: cons
+    };
+
+    obj.traverse(o => { o.userData.institutionId = inst.id; });
+    const box = new THREE.Box3().setFromObject(obj);
+    institutionBoxes.push({ id: inst.id, box });
+
+    if (!inst.destroyed) {
+      applyConstruction(institutionDataMap[inst.id]);
+      applyWeapons(institutionDataMap[inst.id]);
+    }
+
+    if (inst.owner === playerEmail && !inst.destroyed) {
+      if (def.effects) ownedInstitutions.push(def.effects);
+      if (inst.extraEffects) ownedInstitutions.push(inst.extraEffects);
+    }
+
+    if (animate) {
+      const startY = obj.position.y + 5;
+      const endY = obj.position.y;
+      obj.position.y = startY;
+      sinking.push({ obj, start: startY, end: endY, t: 0, emit: 0 });
+    }
+  }, undefined, () => {
+    // Fallback creation code remains the same...
+    const obj = createPlaceholder(inst.scale || def.scale || 1, 0x00aa00);
+    obj.userData.animations = [];
+    obj.position.fromArray(inst.position);
+    obj.rotation.y = inst.rotation || 0;
+    scene.add(obj);
+    institutionsMap[inst.id] = obj;
+    const box = new THREE.Box3().setFromObject(obj);
+    institutionBoxes.push({ id: inst.id, box });
+    institutionDataMap[inst.id] = {
+      ...inst,
+      effects: def.effects,
+      workforce: inst.workforce || [],
+      extraEffects: inst.extraEffects || {},
+      constructions: inst.constructions || []
+    };
+    if (!inst.destroyed) {
+      applyConstruction(institutionDataMap[inst.id]);
+      applyWeapons(institutionDataMap[inst.id]);
+    }
+  });
+}
+
+
 
   function showInstitutionPopup(id) {
     const popup = document.getElementById('institution-popup');
@@ -1803,11 +1931,6 @@ function updateStatImages() {
       oxygen,
       money: playerMoney
     }));
-  }
-
-  function sendDestroyInstitution(id) {
-    if (!socket || socket.readyState !== WebSocket.OPEN) return;
-    socket.send(JSON.stringify({ type: 'destroyInstitution', id }));
   }
 
 
