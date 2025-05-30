@@ -393,10 +393,6 @@ function updateStatImages() {
     }
     const loader = new GLTFLoader();
     loader.load(inst.url, gltf => {
-      if (!gltf || !gltf.scene) {
-        console.error('Model failed to load properly:', inst.url);
-        return;
-      }
       ghostInstitution = gltf.scene;
       addPointLightsFromGLTF(gltf);
       ghostInstitution.scale.setScalar(inst.scale || 1);
@@ -1010,10 +1006,6 @@ function handleClick(event) {
       if (!c) return;
       const loader = new GLTFLoader();
       loader.load(c.url, gltf => {
-        if (!gltf || !gltf.scene) {
-          console.error('Model failed to load properly:', c.url);
-          return;
-        }
         if (inst.constructions[idx] !== c) return; // ignore outdated load
         const obj = gltf.scene;
         addPointLightsFromGLTF(gltf);
@@ -1098,10 +1090,6 @@ function handleClick(event) {
     if (existing) scene.remove(existing);
     const loader = new GLTFLoader();
     loader.load('flag.glb', gltf => {
-      if (!gltf || !gltf.scene) {
-        console.error('Model failed to load properly: flag.glb');
-        return;
-      }
       const obj = gltf.scene;
       obj.position.copy(pos);
       scene.add(obj);
@@ -1177,10 +1165,6 @@ function handleClick(event) {
 
       const loader = new GLTFLoader();
       loader.load(w.model, gltf => {
-        if (!gltf || !gltf.scene) {
-          console.error('Model failed to load properly:', w.model);
-          return;
-        }
         if (inst.weapons[idx] !== w) return; // ignore outdated load
         const obj = gltf.scene;
         addPointLightsFromGLTF(gltf);
@@ -1451,10 +1435,6 @@ function handleClick(event) {
     if (!def) return;
     const loader = new GLTFLoader();
     loader.load(def.url, gltf => {
-      if (!gltf || !gltf.scene) {
-        console.error('Model failed to load properly:', def.url);
-        return;
-      }
       const obj = gltf.scene;
       obj.userData.animations = gltf.animations || [];
       addPointLightsFromGLTF(gltf);
@@ -2469,11 +2449,6 @@ function showInstitutionPopup(id) {
   groundLoader.load(
     'terrain_s.gltf', // Replace this with the path to your ground GLTF file
     (gltf) => {
-      if (!gltf || !gltf.scene) {
-        console.error('Model failed to load properly: terrain_s.gltf');
-        createFallbackTerrain();
-        return;
-      }
       gltfTerrain = gltf.scene;
       addPointLightsFromGLTF(gltf);
 
@@ -2591,10 +2566,6 @@ function showInstitutionPopup(id) {
   new GLTFLoader().load(
     'character.glb',
     gltf => {
-      if (!gltf || !gltf.scene) {
-        console.error('Model failed to load properly: character.glb');
-        return;
-      }
       model = gltf.scene;
       addPointLightsFromGLTF(gltf);
       model.scale.set(modelScale, modelScale, modelScale);
