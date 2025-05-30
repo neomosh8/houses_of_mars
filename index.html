@@ -228,7 +228,7 @@ function updateStatImages() {
       url: 'watox.glb',
       thumbnail: 'watox.png',
       scale: 1,
-      price: 100,
+      price: 150,
       effects: { hydration: 0.5, oxygen: 0.5 },
       animated: false
     },
@@ -417,14 +417,22 @@ function updateStatImages() {
       currentInstitution = inst;
     });
   }
-
-  function handleClick(event) {
-    if (institutionPopupOpen) return;
-    if (placingInstitution && ghostInstitution && currentInstitution) {
-      if (!placingApplication && playerMoney < currentInstitution.price) {
-        alert('Not enough money');
+function handleClick(event) {
+  if (institutionPopupOpen) return;
+  if (placingInstitution && ghostInstitution && currentInstitution) {
+    // Validate money requirements
+    if (placingApplication && applicationInfo) {
+      // For partnerships, check if user has enough for their shares
+      const cost = applicationInfo.myShares * applicationInfo.sharePrice;
+      if (playerMoney < cost) {
+        alert(`Not enough money. You need ${cost} for ${applicationInfo.myShares} shares at ${applicationInfo.sharePrice} each.`);
         return;
       }
+    } else if (!placingApplication && playerMoney < currentInstitution.price) {
+      // For regular placement, check full price
+      alert('Not enough money');
+      return;
+    }
       const box = new THREE.Box3().setFromObject(ghostInstitution);
       const ground = getGroundHeightAt(
         ghostInstitution.position.x,
@@ -1475,401 +1483,420 @@ function updateStatImages() {
     });
   }
 
-  function showInstitutionPopup(id) {
-    const popup = document.getElementById('institution-popup');
-    const infoTabBtn = document.getElementById('info-tab-btn');
-    const workforceTabBtn = document.getElementById('workforce-tab-btn');
-    const chatTabBtn = document.getElementById('chat-tab-btn');
-    const proposalsTabBtn = document.getElementById('proposals-tab-btn');
-    const weaponsTabBtn = document.getElementById('weapons-tab-btn');
-    const infoDiv = document.getElementById('popup-info');
-    const workforceDiv = document.getElementById('popup-workforce');
-    const chatDiv = document.getElementById('popup-chat');
-    const proposalsDiv = document.getElementById('popup-proposals');
-    const weaponsDiv = document.getElementById('popup-weapons');
-    const chatContainer = document.getElementById('chat-container');
-    const ownerSpan = document.getElementById('popup-owner');
-    const resDiv = document.getElementById('popup-resources');
-    const closeBtn = document.getElementById('popup-close');
+// In index.html, replace the showInstitutionPopup function with this updated version:
 
-    let chatInterval = null;
+function showInstitutionPopup(id) {
+  const popup = document.getElementById('institution-popup');
+  const infoTabBtn = document.getElementById('info-tab-btn');
+  const workforceTabBtn = document.getElementById('workforce-tab-btn');
+  const chatTabBtn = document.getElementById('chat-tab-btn');
+  const proposalsTabBtn = document.getElementById('proposals-tab-btn');
+  const weaponsTabBtn = document.getElementById('weapons-tab-btn');
+  const infoDiv = document.getElementById('popup-info');
+  const workforceDiv = document.getElementById('popup-workforce');
+  const chatDiv = document.getElementById('popup-chat');
+  const proposalsDiv = document.getElementById('popup-proposals');
+  const weaponsDiv = document.getElementById('popup-weapons');
+  const chatContainer = document.getElementById('chat-container');
+  const ownerSpan = document.getElementById('popup-owner');
+  const resDiv = document.getElementById('popup-resources');
+  const closeBtn = document.getElementById('popup-close');
 
-    const instData = institutionDataMap[id];
-    if (!instData || instData.destroyed) return;
-    const isOwner = instData.owner === playerEmail;
-    const def = institutions.find(i => i.name === instData.name);
-    let count = 0;
+  let chatInterval = null;
+
+  const instData = institutionDataMap[id];
+  if (!instData || instData.destroyed) return;
+
+  // Check if user is owner OR has shares (is a partner)
+  const isOwner = instData.owner === playerEmail;
+  const userShares = instData.shares && instData.shares[playerEmail] ? instData.shares[playerEmail] : 0;
+  const hasAccess = isOwner || userShares > 0;
+
+  const def = institutions.find(i => i.name === instData.name);
+  let count = 0;
+  Object.values(institutionDataMap).forEach(d => {
+    if (d.owner === instData.owner && d.name === instData.name) count++;
+  });
+  const effects = Object.assign({}, def.effects || {});
+  if (instData.extraEffects) {
+    for (const k of Object.keys(instData.extraEffects)) {
+      const val = instData.extraEffects[k];
+      if (typeof val === 'number' && isFinite(val)) {
+        effects[k] = (effects[k] || 0) + val;
+      }
+    }
+  }
+  const lines = [];
+  Object.keys(effects).forEach(k => {
+    if (typeof effects[k] === 'number' && isFinite(effects[k])) {
+      lines.push(`${k}: +${effects[k]} (${(effects[k] * count).toFixed(2)} total)`);
+    }
+  });
+  resDiv.textContent = lines.join(' | ');
+
+  const actionsDiv = popup.querySelector('.popup-actions');
+
+  // Show controls if user has access (owner or partner)
+  if (hasAccess) {
+    actionsDiv.style.display = 'flex';
+    resDiv.style.display = 'block';
+
+    // Show ownership info with shares
+    let ownerText = `Owner: ${instData.owner}`;
+    if (userShares > 0) {
+      ownerText += ` | Your shares: ${userShares}/${instData.totalShares}`;
+    }
+    ownerSpan.innerHTML = isOwner
+      ? `<span id="owner-click" style="text-decoration:underline;cursor:pointer;">${ownerText}</span>`
+      : ownerText;
+  } else {
+    actionsDiv.style.display = 'none';
+    resDiv.style.display = 'none';
+    ownerSpan.textContent = `Owner: ${instData.owner}`;
+  }
+
+  function showInfo() {
+    infoDiv.style.display = 'block';
+    workforceDiv.style.display = 'none';
+    chatDiv.style.display = 'none';
+    proposalsDiv.style.display = 'none';
+    weaponsDiv.style.display = 'none';
+    if (chatInterval) {
+      clearInterval(chatInterval);
+      chatInterval = null;
+    }
+    const carousel = document.getElementById('popup-workforce-carousel');
+    carousel.innerHTML = '';
+    const workers = [];
     Object.values(institutionDataMap).forEach(d => {
-      if (d.owner === instData.owner && d.name === instData.name) count++;
-    });
-    const effects = Object.assign({}, def.effects || {});
-    if (instData.extraEffects) {
-      for (const k of Object.keys(instData.extraEffects)) {
-        const val = instData.extraEffects[k];
-        if (typeof val === 'number' && isFinite(val)) {
-          effects[k] = (effects[k] || 0) + val;
-        }
-      }
-    }
-    const lines = [];
-    Object.keys(effects).forEach(k => {
-      if (typeof effects[k] === 'number' && isFinite(effects[k])) {
-        lines.push(`${k}: +${effects[k]} (${(effects[k] * count).toFixed(2)} total)`);
+      if (d.owner === instData.owner && d.name === instData.name && Array.isArray(d.workforce)) {
+        workers.push(...d.workforce);
       }
     });
-    resDiv.textContent = lines.join(' | ');
-    const actionsDiv = popup.querySelector('.popup-actions');
-    if (isOwner) {
-      actionsDiv.style.display = 'flex';
-      resDiv.style.display = 'block';
-      ownerSpan.innerHTML = `Owner: <span id="owner-click" style="text-decoration:underline;cursor:pointer;">${instData.owner}</span>`;
-    } else {
-      actionsDiv.style.display = 'none';
-      resDiv.style.display = 'none';
-      ownerSpan.textContent = `Owner: ${instData.owner}`;
+    if (workers.length === 0) {
+      carousel.textContent = 'No workforce';
+      return;
     }
+    workers.forEach(w => {
+      const item = document.createElement('div');
+      item.style.minWidth = '80px';
+      item.style.display = 'flex';
+      item.style.flexDirection = 'column';
+      item.style.alignItems = 'center';
+      const img = document.createElement('img');
+      img.src = w.image;
+      img.style.width = '60px';
+      img.style.height = '80px';
+      item.appendChild(img);
+      const name = document.createElement('div');
+      name.textContent = w.name + (w.director ? ' \u2605' : '');
+      name.style.fontSize = '12px';
+      item.appendChild(name);
+      carousel.appendChild(item);
+    });
+  }
 
-    function showInfo() {
-      infoDiv.style.display = 'block';
-      workforceDiv.style.display = 'none';
-      chatDiv.style.display = 'none';
-      proposalsDiv.style.display = 'none';
-      weaponsDiv.style.display = 'none';
-      if (chatInterval) {
-        clearInterval(chatInterval);
-        chatInterval = null;
+  async function showWorkforce() {
+    infoDiv.style.display = 'none';
+    workforceDiv.style.display = 'block';
+    chatDiv.style.display = 'none';
+    proposalsDiv.style.display = 'none';
+    weaponsDiv.style.display = 'none';
+    if (chatInterval) {
+      clearInterval(chatInterval);
+      chatInterval = null;
+    }
+    const container = document.getElementById('workforce-container');
+    // Immediately show loading spinner
+    container.innerHTML = '<div class="spinner" style="display: flex; justify-content: center; align-items: center; height: 200px; color: #fff;">Loading applicants...</div>';
+
+    try {
+      const res = await fetch(`/api/workforce/generate/${id}`, { method: 'POST' });
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
       }
-      const carousel = document.getElementById('popup-workforce-carousel');
-      carousel.innerHTML = '';
-      const workers = [];
-      Object.values(institutionDataMap).forEach(d => {
-        if (d.owner === instData.owner && d.name === instData.name && Array.isArray(d.workforce)) {
-          workers.push(...d.workforce);
-        }
-      });
-      if (workers.length === 0) {
-        carousel.textContent = 'No workforce';
+      const workersData = await res.json();
+
+      // Clear loading and display workers
+      container.innerHTML = '';
+
+      if (!workersData.workers || workersData.workers.length === 0) {
+        container.innerHTML = '<div style="color: #fff; text-align: center;">No applicants available</div>';
         return;
       }
-      workers.forEach(w => {
-        const item = document.createElement('div');
-        item.style.minWidth = '80px';
-        item.style.display = 'flex';
-        item.style.flexDirection = 'column';
-        item.style.alignItems = 'center';
-        const img = document.createElement('img');
-        img.src = w.image;
-        img.style.width = '60px';
-        img.style.height = '80px';
-        item.appendChild(img);
-        const name = document.createElement('div');
-        name.textContent = w.name + (w.director ? ' \u2605' : '');
-        name.style.fontSize = '12px';
-        item.appendChild(name);
-        carousel.appendChild(item);
-      });
-    }
 
-    async function showWorkforce() {
-      infoDiv.style.display = 'none';
-      workforceDiv.style.display = 'block';
-      chatDiv.style.display = 'none';
-      proposalsDiv.style.display = 'none';
-      weaponsDiv.style.display = 'none';
-      if (chatInterval) {
-        clearInterval(chatInterval);
-        chatInterval = null;
-      }
-      const container = document.getElementById('workforce-container');
-      // Immediately show loading spinner
-      container.innerHTML = '<div class="spinner" style="display: flex; justify-content: center; align-items: center; height: 200px; color: #fff;">Loading applicants...</div>';
-
-      try {
-        const res = await fetch(`/api/workforce/generate/${id}`, { method: 'POST' });
-        if (!res.ok) {
-          throw new Error(`HTTP error! status: ${res.status}`);
-        }
-        const workersData = await res.json();
-
-        // Clear loading and display workers
-        container.innerHTML = '';
-
-        if (!workersData.workers || workersData.workers.length === 0) {
-          container.innerHTML = '<div style="color: #fff; text-align: center;">No applicants available</div>';
-          return;
-        }
-
-        workersData.workers.forEach(w => {
-          const card = document.createElement('div');
-          card.className = 'worker-card';
-          card.style.width = '150px';
-          card.style.perspective = '800px';
-          const inner = document.createElement('div');
-          inner.className = 'card-inner';
-          inner.style.position = 'relative';
-          inner.style.width = '100%';
-          inner.style.height = '200px';
-          inner.style.transition = 'transform 0.6s';
-          inner.style.transformStyle = 'preserve-3d';
-          const front = document.createElement('div');
-          front.style.position = 'absolute';
-          front.style.backfaceVisibility = 'hidden';
-          front.style.width = '100%';
-          front.style.height = '100%';
-          front.style.backgroundImage = `url(${w.image})`;
-          front.style.backgroundSize = 'cover';
-          front.style.backgroundPosition = 'center';
-          front.textContent = w.name + (w.director ? ' \u2605' : '');
-          front.style.display = 'flex';
-          front.style.alignItems = 'flex-end';
-          front.style.justifyContent = 'center';
-          front.style.color = '#fff';
-          front.style.textShadow = '0 1px 3px rgba(0,0,0,0.8)';
-          front.style.padding = '8px';
-          front.style.textAlign = 'center';
-          front.style.fontSize = '14px';
-          front.style.fontWeight = 'bold';
-          const back = document.createElement('div');
-          back.style.position = 'absolute';
-          back.style.transform = 'rotateY(180deg)';
-          back.style.backfaceVisibility = 'hidden';
-          back.style.width = '100%';
-          back.style.height = '100%';
-          back.style.background = '#333';
-          back.style.color = '#fff';
-          back.style.fontSize = '12px';
-          back.style.padding = '8px';
-          back.style.overflowY = 'auto';
-          back.style.boxSizing = 'border-box';
-          back.innerHTML = `
-            <div style="margin-bottom: 8px;"><strong>${w.role}${w.director ? ' \u2605' : ''}</strong></div>
-            <div style="margin-bottom: 8px; font-size: 11px;">${w.backstory}</div>
-            <div style="margin-bottom: 8px; font-size: 11px;">${w.resume}</div>
-            <div style="font-weight: bold;">Wage: $${w.wage}/day</div>
-          `;
-          inner.appendChild(front);
-          inner.appendChild(back);
-          card.appendChild(inner);
-          card.onclick = () => {
-            inner.style.transform = inner.style.transform === 'rotateY(180deg)' ? '' : 'rotateY(180deg)';
-          };
-          const hireBtn = document.createElement('button');
-          hireBtn.textContent = 'Hire';
-          hireBtn.style.width = '100%';
-          hireBtn.style.marginTop = '20px';
-          hireBtn.onclick = async (e) => {
-            e.stopPropagation();
-            try {
-              const hireRes = await fetch(`/api/workforce/hire/${id}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ worker: w })
-              });
-              if (hireRes.ok) {
-                if (!instData.workforce) instData.workforce = [];
-                instData.workforce.push(w);
-                container.removeChild(card);
-                if (container.children.length === 0) {
-                  container.innerHTML = '<div style="color: #fff; text-align: center;">All applicants hired!</div>';
-                }
-              } else {
-                alert('Failed to hire worker');
+      workersData.workers.forEach(w => {
+        const card = document.createElement('div');
+        card.className = 'worker-card';
+        card.style.width = '150px';
+        card.style.perspective = '800px';
+        const inner = document.createElement('div');
+        inner.className = 'card-inner';
+        inner.style.position = 'relative';
+        inner.style.width = '100%';
+        inner.style.height = '200px';
+        inner.style.transition = 'transform 0.6s';
+        inner.style.transformStyle = 'preserve-3d';
+        const front = document.createElement('div');
+        front.style.position = 'absolute';
+        front.style.backfaceVisibility = 'hidden';
+        front.style.width = '100%';
+        front.style.height = '100%';
+        front.style.backgroundImage = `url(${w.image})`;
+        front.style.backgroundSize = 'cover';
+        front.style.backgroundPosition = 'center';
+        front.textContent = w.name + (w.director ? ' \u2605' : '');
+        front.style.display = 'flex';
+        front.style.alignItems = 'flex-end';
+        front.style.justifyContent = 'center';
+        front.style.color = '#fff';
+        front.style.textShadow = '0 1px 3px rgba(0,0,0,0.8)';
+        front.style.padding = '8px';
+        front.style.textAlign = 'center';
+        front.style.fontSize = '14px';
+        front.style.fontWeight = 'bold';
+        const back = document.createElement('div');
+        back.style.position = 'absolute';
+        back.style.transform = 'rotateY(180deg)';
+        back.style.backfaceVisibility = 'hidden';
+        back.style.width = '100%';
+        back.style.height = '100%';
+        back.style.background = '#333';
+        back.style.color = '#fff';
+        back.style.fontSize = '12px';
+        back.style.padding = '8px';
+        back.style.overflowY = 'auto';
+        back.style.boxSizing = 'border-box';
+        back.innerHTML = `
+          <div style="margin-bottom: 8px;"><strong>${w.role}${w.director ? ' \u2605' : ''}</strong></div>
+          <div style="margin-bottom: 8px; font-size: 11px;">${w.backstory}</div>
+          <div style="margin-bottom: 8px; font-size: 11px;">${w.resume}</div>
+          <div style="font-weight: bold;">Wage: $${w.wage}/day</div>
+        `;
+        inner.appendChild(front);
+        inner.appendChild(back);
+        card.appendChild(inner);
+        card.onclick = () => {
+          inner.style.transform = inner.style.transform === 'rotateY(180deg)' ? '' : 'rotateY(180deg)';
+        };
+        const hireBtn = document.createElement('button');
+        hireBtn.textContent = 'Hire';
+        hireBtn.style.width = '100%';
+        hireBtn.style.marginTop = '20px';
+        hireBtn.onclick = async (e) => {
+          e.stopPropagation();
+          try {
+            const hireRes = await fetch(`/api/workforce/hire/${id}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ worker: w })
+            });
+            if (hireRes.ok) {
+              if (!instData.workforce) instData.workforce = [];
+              instData.workforce.push(w);
+              container.removeChild(card);
+              if (container.children.length === 0) {
+                container.innerHTML = '<div style="color: #fff; text-align: center;">All applicants hired!</div>';
               }
-            } catch (err) {
+            } else {
               alert('Failed to hire worker');
             }
-          };
-          card.appendChild(hireBtn);
-          container.appendChild(card);
-        });
-      } catch (err) {
-        container.innerHTML = '<div style="color: #ff6666; text-align: center;">Failed to load applicants. Please try again.</div>';
-      }
-    }
-
-    async function showChat() {
-      infoDiv.style.display = 'none';
-      workforceDiv.style.display = 'none';
-      chatDiv.style.display = 'block';
-      proposalsDiv.style.display = 'none';
-      weaponsDiv.style.display = 'none';
-      if (chatInterval) clearInterval(chatInterval);
-      const input = document.getElementById('chat-input');
-      const sendBtn = document.getElementById('chat-send');
-      let lastHeight = 0;
-      async function load() {
-        try {
-          const res = await fetch(`/api/workforce/chat/${id}`);
-          if (res.ok) {
-            const data = await res.json();
-            chatContainer.innerHTML = '';
-            data.messages.forEach(m => {
-              const box = document.createElement('div');
-              box.className = 'chat-msg';
-              let text = m.text;
-              if (typeof m.text === 'object' && m.text !== null) {
-                text = m.text.dialogue || '';
-                if (m.text.is_proposal && m.text.proposal) {
-                  const p = m.text.proposal;
-                  const parts = [];
-                  if (p.title) parts.push(`Title: ${p.title}`);
-                  if (p.description) parts.push(`Description: ${p.description}`);
-                  if (p.cost !== undefined) parts.push(`Cost: $${p.cost}`);
-                  const info = parts.join(' | ');
-                  if (info) text += ` (Proposal - ${info})`;
-                }
-              }
-              box.textContent = `${m.worker}: ${text}`;
-              chatContainer.appendChild(box);
-              if (typeof m.text === 'object' && m.text !== null && m.text.raw) {
-                const preRaw = document.createElement('pre');
-                preRaw.className = 'chat-raw';
-                preRaw.textContent = m.text.raw;
-                chatContainer.appendChild(preRaw);
-                if (m.text.proposal) {
-                  const preObj = document.createElement('pre');
-                  preObj.className = 'chat-raw';
-                  preObj.textContent = JSON.stringify(m.text.proposal, null, 2);
-                  chatContainer.appendChild(preObj);
-                }
-              }
-            });
-            if (chatContainer.scrollHeight !== lastHeight) {
-              chatContainer.scrollTop = chatContainer.scrollHeight;
-              lastHeight = chatContainer.scrollHeight;
-            }
+          } catch (err) {
+            alert('Failed to hire worker');
           }
-        } catch (err) {
-        }
-      }
-      await load();
-      chatInterval = setInterval(load, 5000);
-
-      async function send() {
-        const text = input.value.trim();
-        if (!text) return;
-        input.value = '';
-        await fetch(`/api/workforce/chat/${id}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text })
-        });
-        await load();
-      }
-
-      sendBtn.onclick = send;
-      input.addEventListener('keydown', e => {
-        if (e.key === 'Enter') send();
+        };
+        card.appendChild(hireBtn);
+        container.appendChild(card);
       });
+    } catch (err) {
+      container.innerHTML = '<div style="color: #ff6666; text-align: center;">Failed to load applicants. Please try again.</div>';
     }
+  }
 
-    async function showProposals() {
-      infoDiv.style.display = 'none';
-      workforceDiv.style.display = 'none';
-      chatDiv.style.display = 'none';
-      proposalsDiv.style.display = 'block';
-      weaponsDiv.style.display = 'none';
-      if (chatInterval) { clearInterval(chatInterval); chatInterval = null; }
-      const container = document.getElementById('proposals-container');
-      container.innerHTML = '<div class="spinner" style="height:100px;color:#fff">Loading...</div>';
-      if (DEBUG_LOG) console.log('[DEFENCE UI] showProposals', { instId: id });
+  async function showChat() {
+    infoDiv.style.display = 'none';
+    workforceDiv.style.display = 'none';
+    chatDiv.style.display = 'block';
+    proposalsDiv.style.display = 'none';
+    weaponsDiv.style.display = 'none';
+    if (chatInterval) clearInterval(chatInterval);
+    const input = document.getElementById('chat-input');
+    const sendBtn = document.getElementById('chat-send');
+    let lastHeight = 0;
+    async function load() {
       try {
-        if (instData.name === 'Defence Base') {
-          const res = await fetch(`/api/defence/proposals/${id}`);
-          if (res.ok) {
-            const data = await res.json();
-            renderDefProposals(container, data.proposals || [], id);
-          }
-        } else {
-          const res = await fetch(`/api/workforce/proposals/${id}`);
-          const hist = await fetch(`/api/workforce/proposals/history/${id}`);
-          if (res.ok && hist.ok) {
-            const data = await res.json();
-            const h = await hist.json();
-            renderProposals(container, data.proposals || [], id, institutionDataMap, playerEmail, ownedInstitutions, h.history || []);
-          }
-        }
-      } catch(err){
-        container.innerHTML = '<div style="color:#ff6666">Failed</div>';
-      }
-    }
-
-    async function showWeapons() {
-      infoDiv.style.display = 'none';
-      workforceDiv.style.display = 'none';
-      chatDiv.style.display = 'none';
-      proposalsDiv.style.display = 'none';
-      weaponsDiv.style.display = 'block';
-      if (chatInterval) { clearInterval(chatInterval); chatInterval = null; }
-      const container = document.getElementById('weapons-container');
-      container.innerHTML = '<div class="spinner" style="height:100px;color:#fff">Loading...</div>';
-      try {
-        const res = await fetch(`/api/defence/weapons/${id}`);
+        const res = await fetch(`/api/workforce/chat/${id}`);
         if (res.ok) {
           const data = await res.json();
-          container.innerHTML = '';
-          (data.weapons || []).forEach(w => {
-            const div = document.createElement('div');
-            div.textContent = `${w.name} - movement ${w.movement.toFixed(2)}`;
-            div.className = 'weapon-entry';
-            div.onclick = () => alert('Using weapon ' + w.name);
-            container.appendChild(div);
+          chatContainer.innerHTML = '';
+          data.messages.forEach(m => {
+            const box = document.createElement('div');
+            box.className = 'chat-msg';
+            let text = m.text;
+            if (typeof m.text === 'object' && m.text !== null) {
+              text = m.text.dialogue || '';
+              if (m.text.is_proposal && m.text.proposal) {
+                const p = m.text.proposal;
+                const parts = [];
+                if (p.title) parts.push(`Title: ${p.title}`);
+                if (p.description) parts.push(`Description: ${p.description}`);
+                if (p.cost !== undefined) parts.push(`Cost: $${p.cost}`);
+                const info = parts.join(' | ');
+                if (info) text += ` (Proposal - ${info})`;
+              }
+            }
+            box.textContent = `${m.worker}: ${text}`;
+            chatContainer.appendChild(box);
+            if (typeof m.text === 'object' && m.text !== null && m.text.raw) {
+              const preRaw = document.createElement('pre');
+              preRaw.className = 'chat-raw';
+              preRaw.textContent = m.text.raw;
+              chatContainer.appendChild(preRaw);
+              if (m.text.proposal) {
+                const preObj = document.createElement('pre');
+                preObj.className = 'chat-raw';
+                preObj.textContent = JSON.stringify(m.text.proposal, null, 2);
+                chatContainer.appendChild(preObj);
+              }
+            }
           });
-          if (!data.weapons || data.weapons.length === 0) {
-            container.textContent = 'No weapons';
+          if (chatContainer.scrollHeight !== lastHeight) {
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            lastHeight = chatContainer.scrollHeight;
           }
         }
-      } catch {
-        container.innerHTML = '<div style="color:#ff6666">Failed</div>';
+      } catch (err) {
       }
     }
+    await load();
+    chatInterval = setInterval(load, 5000);
 
-    if (isOwner) {
-      infoTabBtn.onclick = showInfo;
-      workforceTabBtn.onclick = showWorkforce;
-      chatTabBtn.onclick = showChat;
-      proposalsTabBtn.onclick = showProposals;
-      if (instData.name === 'Defence Base') {
-        weaponsTabBtn.style.display = 'inline-block';
-        weaponsTabBtn.onclick = showWeapons;
-      } else {
-        weaponsTabBtn.style.display = 'none';
-        weaponsTabBtn.onclick = null;
-      }
-    } else {
-      infoTabBtn.onclick = null;
-      workforceTabBtn.onclick = null;
-      chatTabBtn.onclick = null;
-      proposalsTabBtn.onclick = null;
-      weaponsTabBtn.onclick = null;
-      weaponsTabBtn.style.display = 'none';
+    async function send() {
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = '';
+      await fetch(`/api/workforce/chat/${id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
+      await load();
     }
 
-   function closePopup() {
-     popup.style.display = 'none';
-     institutionPopupOpen = false;
-     document.removeEventListener('keydown', escHandler);
-      if (chatInterval) {
-        clearInterval(chatInterval);
-        chatInterval = null;
-      }
-      proposalsDiv.style.display = 'none';
-      weaponsDiv.style.display = 'none';
-    }
-
-    function escHandler(e) {
-      if (e.key === 'Escape') closePopup();
-    }
-
-    popup.style.display = 'block';
-    popup.focus();
-    institutionPopupOpen = true;
-    showInfo();
-    document.addEventListener('keydown', escHandler);
-    closeBtn.onclick = closePopup;
-    const ownerLink = document.getElementById('owner-click');
-    if (ownerLink && isOwner) ownerLink.onclick = showWorkforce;
+    sendBtn.onclick = send;
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') send();
+    });
   }
+
+  async function showProposals() {
+    infoDiv.style.display = 'none';
+    workforceDiv.style.display = 'none';
+    chatDiv.style.display = 'none';
+    proposalsDiv.style.display = 'block';
+    weaponsDiv.style.display = 'none';
+    if (chatInterval) { clearInterval(chatInterval); chatInterval = null; }
+    const container = document.getElementById('proposals-container');
+    container.innerHTML = '<div class="spinner" style="height:100px;color:#fff">Loading...</div>';
+    if (DEBUG_LOG) console.log('[DEFENCE UI] showProposals', { instId: id });
+    try {
+      if (instData.name === 'Defence Base') {
+        const res = await fetch(`/api/defence/proposals/${id}`);
+        if (res.ok) {
+          const data = await res.json();
+          renderDefProposals(container, data.proposals || [], id);
+        }
+      } else {
+        const res = await fetch(`/api/workforce/proposals/${id}`);
+        const hist = await fetch(`/api/workforce/proposals/history/${id}`);
+        if (res.ok && hist.ok) {
+          const data = await res.json();
+          const h = await hist.json();
+          renderProposals(container, data.proposals || [], id, institutionDataMap, playerEmail, ownedInstitutions, h.history || []);
+        }
+      }
+    } catch(err){
+      container.innerHTML = '<div style="color:#ff6666">Failed</div>';
+    }
+  }
+
+  async function showWeapons() {
+    infoDiv.style.display = 'none';
+    workforceDiv.style.display = 'none';
+    chatDiv.style.display = 'none';
+    proposalsDiv.style.display = 'none';
+    weaponsDiv.style.display = 'block';
+    if (chatInterval) { clearInterval(chatInterval); chatInterval = null; }
+    const container = document.getElementById('weapons-container');
+    container.innerHTML = '<div class="spinner" style="height:100px;color:#fff">Loading...</div>';
+    try {
+      const res = await fetch(`/api/defence/weapons/${id}`);
+      if (res.ok) {
+        const data = await res.json();
+        container.innerHTML = '';
+        (data.weapons || []).forEach(w => {
+          const div = document.createElement('div');
+          div.textContent = `${w.name} - movement ${w.movement.toFixed(2)}`;
+          div.className = 'weapon-entry';
+          div.onclick = () => alert('Using weapon ' + w.name);
+          container.appendChild(div);
+        });
+        if (!data.weapons || data.weapons.length === 0) {
+          container.textContent = 'No weapons';
+        }
+      }
+    } catch {
+      container.innerHTML = '<div style="color:#ff6666">Failed</div>';
+    }
+  }
+
+  // Enable buttons if user has access (owner or partner)
+  if (hasAccess) {
+    infoTabBtn.onclick = showInfo;
+    workforceTabBtn.onclick = showWorkforce;
+    chatTabBtn.onclick = showChat;
+    proposalsTabBtn.onclick = showProposals;
+    if (instData.name === 'Defence Base') {
+      weaponsTabBtn.style.display = 'inline-block';
+      weaponsTabBtn.onclick = showWeapons;
+    } else {
+      weaponsTabBtn.style.display = 'none';
+      weaponsTabBtn.onclick = null;
+    }
+  } else {
+    infoTabBtn.onclick = null;
+    workforceTabBtn.onclick = null;
+    chatTabBtn.onclick = null;
+    proposalsTabBtn.onclick = null;
+    weaponsTabBtn.onclick = null;
+    weaponsTabBtn.style.display = 'none';
+  }
+
+  function closePopup() {
+    popup.style.display = 'none';
+    institutionPopupOpen = false;
+    document.removeEventListener('keydown', escHandler);
+    if (chatInterval) {
+      clearInterval(chatInterval);
+      chatInterval = null;
+    }
+    proposalsDiv.style.display = 'none';
+    weaponsDiv.style.display = 'none';
+  }
+
+  function escHandler(e) {
+    if (e.key === 'Escape') closePopup();
+  }
+
+  popup.style.display = 'block';
+  popup.focus();
+  institutionPopupOpen = true;
+  showInfo();
+  document.addEventListener('keydown', escHandler);
+  closeBtn.onclick = closePopup;
+  const ownerLink = document.getElementById('owner-click');
+  if (ownerLink && (isOwner || hasAccess)) ownerLink.onclick = showWorkforce;
+}
 
   function updateSinking(dt) {
     for (let i = sinking.length - 1; i >= 0; i--) {
