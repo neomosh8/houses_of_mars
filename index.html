@@ -964,7 +964,8 @@ function updateStatImages() {
 
   function plantFlag() {
     if (!model) return;
-    const offset = new THREE.Vector3(0, 0, -5).applyQuaternion(model.quaternion);
+    // Place the flag a few units in front of the player instead of behind
+    const offset = new THREE.Vector3(0, 0, 3).applyQuaternion(model.quaternion);
     const pos = model.position.clone().add(offset);
     const y = getGroundHeightAt(pos.x, pos.z);
     pos.y = y;
