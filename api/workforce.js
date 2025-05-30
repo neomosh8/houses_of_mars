@@ -334,87 +334,66 @@ module.exports = function(institutionStore, userStore, engine, broadcast, sendTo
   router.post('/proposals/:id', async (req, res) => {
     try {
       const id = Number(req.params.id);
-      const { index, approve } = req.body;
+      const { index, approve, email } = req.body;
 
       const inst = institutionStore.getInstitution(id);
       if (!inst || !inst.proposals || !inst.proposals[index]) {
         return res.status(404).json({ error: 'not found' });
       }
 
-      const orig = inst.proposals[index];
-      let updatedMoney = null;
-      let result = null;
-      let status = 'denied';
+      const prop = inst.proposals[index];
+      prop.votes = prop.votes || {};
+      prop.votes[email] = approve;
+      institutionStore.updateProposal(id, index, { votes: prop.votes });
 
-      if (approve) {
-        if (orig.cost) {
-          const users = userStore.loadUsers();
-          const user = users[inst.owner];
-          if (user) {
-            user.money = Math.max((user.money || 0) - orig.cost, 0);
-            updatedMoney = user.money;
-            userStore.saveUsers(users);
-            if (typeof sendToEmail === 'function') {
-              sendToEmail(inst.owner, { type: 'money', money: user.money });
-            }
-          }
-        }
-        const [x, , z] = inst.position || [0, 0, 0];
-        const ecosystem = engine.getProperties(x, z);
-        result = await judge.judgeProposal(orig, ecosystem);
-        status = result && result.feasible ? 'approved' : 'rejected';
-        if (result && result.feasible && result.gains) {
-          const extra = institutionStore.addGains(id, result.gains);
-          broadcast({ type: 'updateInstitution', id, extraEffects: extra, gains: result.gains });
-        }
-        if (result && result.feasible) {
-          const scaff = SCAFF_MODELS[Math.floor(Math.random() * SCAFF_MODELS.length)];
-          const existing = Array.isArray(inst.constructions) ? inst.constructions : [];
-          function getOffset() {
-            const angle = Math.random() * Math.PI * 2;
-            const distance = 8 + Math.random() * 4;
-            return [Math.cos(angle) * distance, 0, Math.sin(angle) * distance];
-          }
-          let offset = getOffset();
-          for (let a = 0; a < 20; a++) {
-            const [ox, , oz] = offset;
-            const ok = !existing.some(c => Array.isArray(c.offset) &&
-              Math.hypot((c.offset[0] || 0) - ox, (c.offset[2] || 0) - oz) < 4);
-            if (ok) break;
-            offset = getOffset();
-          }
-          const construction = {
-            status: 'scaffolding',
-            url: scaff.url,
-            scale: scaff.scale,
-            offset
-          };
-          const idx = institutionStore.addConstruction(id, construction);
-          broadcast({ type: 'updateInstitution', id, construction, index: idx });
-
-          const prompt = `${orig.project || orig.title || ''} ${orig.description || ''}`.trim();
-          const file = path.join(MODEL_DIR, `inst_${id}_${Date.now()}.glb`);
-          meshy.generateModel(prompt, file)
-            .then(fp => {
-              const rel = path.relative(path.join(__dirname, '..'), fp).replace(/\\/g, '/');
-              const done = {
-                status: 'completed',
-                url: rel,
-                scale: scaff.scale,
-                offset
-              };
-              institutionStore.updateConstruction(id, idx, done);
-              broadcast({ type: 'updateInstitution', id, construction: done, index: idx });
-            })
-            .catch(err => console.error('Meshy generation failed:', err));
-        }
+      const total = inst.totalShares || 1;
+      let approveShares = 0;
+      let denyShares = 0;
+      for (const [em, val] of Object.entries(prop.votes)) {
+        const s = inst.shares && inst.shares[em] ? inst.shares[em] : 0;
+        if (val) approveShares += s; else denyShares += s;
       }
 
-      const proposal = institutionStore.updateProposal(id, index, { status, judgeResult: result });
-      const note = result && !result.feasible ? result.gains : null;
-      chatManager.resolveProposal(id, index, status, note);
+      let status = 'pending';
+      let result = null;
+      let updatedMoney = null;
+      if (approveShares / total > 0.5 || denyShares / total > 0.5) {
+        if (approveShares > denyShares) {
+          if (prop.cost) {
+            const users = userStore.loadUsers();
+            const user = users[inst.owner];
+            if (user) {
+              user.money = Math.max((user.money || 0) - prop.cost, 0);
+              updatedMoney = user.money;
+              userStore.saveUsers(users);
+              if (typeof sendToEmail === 'function') {
+                sendToEmail(inst.owner, { type: 'money', money: user.money });
+              }
+            }
+          }
+          const [x, , z] = inst.position || [0, 0, 0];
+          const ecosystem = engine.getProperties(x, z);
+          result = await judge.judgeProposal(prop, ecosystem);
+          status = result && result.feasible ? 'approved' : 'rejected';
+          if (result && result.feasible && result.gains) {
+            const extra = institutionStore.addGains(id, result.gains);
+            broadcast({ type: 'updateInstitution', id, extraEffects: extra, gains: result.gains });
+          }
+        } else {
+          status = 'denied';
+        }
 
-      res.json({ proposal, result, money: updatedMoney });
+        institutionStore.updateProposal(id, index, { status, judgeResult: result, votes: prop.votes });
+        const note = result && !result.feasible ? result.gains : null;
+        chatManager.resolveProposal(id, index, status, note);
+      }
+
+      res.json({
+        votes: { approve: approveShares, deny: denyShares, total },
+        status,
+        result,
+        money: updatedMoney
+      });
     } catch (err) {
       res.status(500).json({ error: 'failed' });
     }
