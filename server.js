@@ -209,7 +209,12 @@ wss.on('connection', (ws, req) => {
             name: data.name,
             position: data.position,
             rotation: data.rotation,
-            scale: data.scale
+            scale: data.scale,
+            sharePrice: price,
+            totalShares: 1,
+            soldShares: 1,
+            shares: { [email]: 1 },
+            funded: true
           };
           const instId = institutionStore.addInstitution(inst);
           const storedInst = institutionStore.getInstitution(instId);
@@ -222,6 +227,59 @@ wss.on('connection', (ws, req) => {
           }
         } else {
           if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'error', message: 'not enough money' }));
+          }
+        }
+      } else if (data.type === 'addInstitutionApplication') {
+        const price = INSTITUTION_PRICES[data.name] || 0;
+        const users = userStore.loadUsers();
+        const user = users[email];
+        const cost = (data.myShares || 0) * (data.sharePrice || 0);
+        if (user && user.money >= cost) {
+          user.money -= cost;
+          userStore.saveUsers(users);
+          const inst = {
+            owner: email,
+            name: data.name,
+            position: data.position,
+            rotation: data.rotation,
+            scale: data.scale,
+            sharePrice: data.sharePrice,
+            totalShares: data.totalShares,
+            soldShares: data.myShares,
+            shares: { [email]: data.myShares },
+            funded: data.myShares * data.sharePrice >= price
+          };
+          const instId = institutionStore.addInstitution(inst);
+          const storedInst = institutionStore.getInstitution(instId);
+          const instData = storedInst.name === 'Defence Base'
+            ? { ...storedInst, weapons: defenceStore.getWeapons(instId) }
+            : storedInst;
+          broadcast({ type: 'addInstitution', institution: instData });
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'money', money: user.money }));
+          }
+        } else if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'error', message: 'not enough money' }));
+        }
+      } else if (data.type === 'buyShares') {
+        const inst = institutionStore.getInstitution(data.id);
+        if (inst && !inst.funded) {
+          const users = userStore.loadUsers();
+          const user = users[email];
+          const shares = Math.max(1, Math.floor(data.shares || 0));
+          const cost = shares * inst.sharePrice;
+          if (user && user.money >= cost) {
+            user.money -= cost;
+            userStore.saveUsers(users);
+            const info = institutionStore.buyShares(inst.id, email, shares);
+            if (info) {
+              broadcast({ type: 'updateInstitutionShares', id: inst.id, info });
+              if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'money', money: user.money }));
+              }
+            }
+          } else if (ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ type: 'error', message: 'not enough money' }));
           }
         }

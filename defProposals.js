@@ -34,6 +34,16 @@ export function renderDefProposals(container, proposals, instId) {
     const statusDiv = document.createElement('div');
     statusDiv.style.marginTop = '4px';
     statusDiv.style.fontSize = '12px';
+    const votesDiv = document.createElement('div');
+    votesDiv.style.fontSize = '12px';
+    votesDiv.style.marginTop = '4px';
+    const votes = p.votes || {};
+    const instShares = institutionDataMap[instId] && institutionDataMap[instId].shares || {};
+    let approveCount = 0;
+    let denyCount = 0;
+    Object.entries(votes).forEach(([em,v]) => { const s = instShares[em] || 0; if(v) approveCount += s; else denyCount += s; });
+    votesDiv.textContent = `Approvals: ${approveCount}, Denials: ${denyCount}`;
+    if (votes[playerEmail] !== undefined) { approve.disabled = true; deny.disabled = true; }
 
     approve.onclick = async () => {
       approve.disabled = true;
@@ -42,15 +52,16 @@ export function renderDefProposals(container, proposals, instId) {
       const res = await fetch(`/api/defence/proposals/${instId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ index: idx, approve: true })
+        body: JSON.stringify({ index: idx, approve: true, email: playerEmail })
       });
       if (res.ok) {
-        approve.textContent = 'Started';
-        approve.style.backgroundColor = '#0a0';
-        statusDiv.textContent = 'Status: approved';
-      } else {
-        approve.textContent = 'Error';
-        approve.style.backgroundColor = '#a00';
+        const data = await res.json();
+        if (data.status && data.status !== 'pending') {
+          statusDiv.textContent = 'Status: ' + data.status;
+        } else {
+          votesDiv.textContent = `Approvals: ${data.votes.approve}, Denials: ${data.votes.deny}`;
+          approve.textContent = 'Vote sent';
+        }
       }
     };
 
@@ -60,20 +71,23 @@ export function renderDefProposals(container, proposals, instId) {
       const res = await fetch(`/api/defence/proposals/${instId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ index: idx, approve: false })
+        body: JSON.stringify({ index: idx, approve: false, email: playerEmail })
       });
       if (res.ok) {
-        statusDiv.textContent = 'Status: denied';
-        approve.style.display = 'none';
-        deny.style.display = 'none';
-      } else {
-        deny.textContent = 'Error';
+        const data = await res.json();
+        if (data.status && data.status !== 'pending') {
+          statusDiv.textContent = 'Status: ' + data.status;
+        } else {
+          votesDiv.textContent = `Approvals: ${data.votes.approve}, Denials: ${data.votes.deny}`;
+          deny.textContent = 'Vote sent';
+        }
       }
     };
 
     card.appendChild(approve);
     card.appendChild(deny);
     card.appendChild(statusDiv);
+    card.appendChild(votesDiv);
     container.appendChild(card);
   });
 }

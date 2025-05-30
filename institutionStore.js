@@ -35,6 +35,13 @@ function addInstitution(inst) {
     inst.extraEffects = { hydration: 0, oxygen: 0, health: 0, money: 0 };
   }
   if (!Array.isArray(inst.constructions)) inst.constructions = [];
+  if (typeof inst.funded !== 'boolean') inst.funded = true;
+  if (typeof inst.totalShares !== 'number') inst.totalShares = 1;
+  if (typeof inst.sharePrice !== 'number') inst.sharePrice = 0;
+  if (typeof inst.soldShares !== 'number') inst.soldShares = inst.totalShares;
+  if (!inst.shares || typeof inst.shares !== 'object') {
+    inst.shares = { [inst.owner]: inst.soldShares };
+  }
   data.list.push(inst);
   saveData(data);
   return inst.id;
@@ -66,7 +73,8 @@ function addProposal(instId, proposal) {
     cost: proposal.cost || 0,
     gains: proposal.gains || {},
     risk: proposal.risk || null,
-    status: 'pending'
+    status: 'pending',
+    votes: {}
   };
   if (!Array.isArray(inst.proposals)) inst.proposals = [];
   inst.proposals.push(full);
@@ -153,6 +161,20 @@ function destroyInstitution(id) {
   return inst;
 }
 
+function buyShares(id, email, shares) {
+  const data = loadData();
+  const inst = data.list.find(i => i.id === id);
+  if (!inst || inst.funded || shares <= 0) return null;
+  if (!inst.shares) inst.shares = {};
+  const available = inst.totalShares - inst.soldShares;
+  const buy = Math.min(shares, available);
+  inst.soldShares += buy;
+  inst.shares[email] = (inst.shares[email] || 0) + buy;
+  if (inst.soldShares >= inst.totalShares) inst.funded = true;
+  saveData(data);
+  return { shares: inst.shares[email], soldShares: inst.soldShares, funded: inst.funded, sharePrice: inst.sharePrice, totalShares: inst.totalShares };
+}
+
 module.exports = {
   getInstitutions,
   addInstitution,
@@ -167,4 +189,5 @@ module.exports = {
   updateConstruction,
   addGains,
   destroyInstitution,
+  buyShares,
 };
