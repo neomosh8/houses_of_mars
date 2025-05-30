@@ -398,6 +398,7 @@ function updateStatImages() {
       ghostInstitution.scale.setScalar(inst.scale || 1);
       const box = new THREE.Box3().setFromObject(ghostInstitution);
       const size = box.getSize(new THREE.Vector3());
+      ghostInstitution.userData.radius = Math.max(size.x, size.z) * 0.6;
       ghostInstitution.userData.safeDistance = Math.max(size.x, size.z) * 1.5;
       ghostInstitution.traverse(o => {
         if (o.isMesh) {
@@ -434,13 +435,19 @@ function handleClick(event) {
       return;
     }
       const box = new THREE.Box3().setFromObject(ghostInstitution);
-      const ground = getGroundHeightAt(
+      const radius = Math.max(box.max.x - box.min.x, box.max.z - box.min.z) * 0.6;
+      const lowestGround = findLowestPointInArea(
         ghostInstitution.position.x,
-        ghostInstitution.position.z
+        ghostInstitution.position.z,
+        radius
       );
       // Flatten the terrain under the institution before placing it
-      const radius = Math.max(box.max.x - box.min.x, box.max.z - box.min.z) * 0.6;
-      flattenTerrain(ghostInstitution.position.x, ghostInstitution.position.z, radius, ground);
+      flattenTerrain(
+        ghostInstitution.position.x,
+        ghostInstitution.position.z,
+        radius,
+        lowestGround
+      );
       const newGround = getGroundHeightAt(
         ghostInstitution.position.x,
         ghostInstitution.position.z
@@ -540,6 +547,14 @@ function handleClick(event) {
     const target = model.position.clone().add(offset);
     ghostInstitution.position.copy(target);
     ghostInstitution.rotation.y = model.rotation.y;
+    const rad = ghostInstitution.userData.radius || (function(){
+      const b = new THREE.Box3().setFromObject(ghostInstitution);
+      return Math.max(b.max.x - b.min.x, b.max.z - b.min.z) * 0.6;
+    })();
+    const lowest = findLowestPointInArea(target.x, target.z, rad);
+    const box = new THREE.Box3().setFromObject(ghostInstitution);
+    const offY = box.min.y - ghostInstitution.position.y;
+    ghostInstitution.position.y = lowest - offY;
   }
 
   function getGroundHeightAt(x, z) {
@@ -551,6 +566,30 @@ function handleClick(event) {
       return hits[0].point.y;
     }
     return 0;
+  }
+
+  function findLowestPointInArea(cx, cz, radius) {
+    let min = getGroundHeightAt(cx, cz);
+    const step = Math.max(1, radius / 4);
+    for (let x = cx - radius; x <= cx + radius; x += step) {
+      for (let z = cz - radius; z <= cz + radius; z += step) {
+        const dx = x - cx;
+        const dz = z - cz;
+        if (dx * dx + dz * dz <= radius * radius) {
+          const h = getGroundHeightAt(x, z);
+          if (h < min) min = h;
+        }
+      }
+    }
+    const samples = 16;
+    for (let i = 0; i < samples; i++) {
+      const ang = (i / samples) * Math.PI * 2;
+      const x = cx + Math.cos(ang) * radius;
+      const z = cz + Math.sin(ang) * radius;
+      const h = getGroundHeightAt(x, z);
+      if (h < min) min = h;
+    }
+    return min;
   }
 
   function flattenTerrain(x, z, radius, height) {
@@ -989,9 +1028,9 @@ function handleClick(event) {
         scene.add(obj);
         const boxTmp = new THREE.Box3().setFromObject(obj);
         const radius = Math.max(boxTmp.max.x - boxTmp.min.x, boxTmp.max.z - boxTmp.min.z) * 0.6;
-        const ground = getGroundHeightAt(pos.x, pos.z);
-        flattenTerrain(pos.x, pos.z, radius, ground);
-        obj.position.set(pos.x, ground - boxTmp.min.y, pos.z);
+        const lowestGround = findLowestPointInArea(pos.x, pos.z, radius);
+        flattenTerrain(pos.x, pos.z, radius, lowestGround);
+        obj.position.set(pos.x, lowestGround - boxTmp.min.y, pos.z);
 
         const cbox = new THREE.Box3().setFromObject(obj);
         constructionBoxes.push({ id: inst.id, index: idx, box: cbox });
@@ -1156,9 +1195,9 @@ function handleClick(event) {
 
       const boxTmp = new THREE.Box3().setFromObject(obj);
         const radius = Math.max(boxTmp.max.x - boxTmp.min.x, boxTmp.max.z - boxTmp.min.z) * 0.6;
-        const ground = getGroundHeightAt(pos.x, pos.z);
-        flattenTerrain(pos.x, pos.z, radius, ground);
-        obj.position.set(pos.x, ground - boxTmp.min.y, pos.z);
+        const lowestGround = findLowestPointInArea(pos.x, pos.z, radius);
+        flattenTerrain(pos.x, pos.z, radius, lowestGround);
+        obj.position.set(pos.x, lowestGround - boxTmp.min.y, pos.z);
         obj.traverse(o => {
           o.userData.weaponInstId = inst.id;
           o.userData.weaponIndex = idx;
@@ -1180,7 +1219,11 @@ function handleClick(event) {
       }, undefined, () => {
         if (inst.weapons[idx] !== w) return;
         const obj = createPlaceholder(w.scale || 1, 0xff0000);
-        obj.position.copy(pos);
+        const boxTmp2 = new THREE.Box3().setFromObject(obj);
+        const radius2 = Math.max(boxTmp2.max.x - boxTmp2.min.x, boxTmp2.max.z - boxTmp2.min.z) * 0.6;
+        const lowestGround2 = findLowestPointInArea(pos.x, pos.z, radius2);
+        flattenTerrain(pos.x, pos.z, radius2, lowestGround2);
+        obj.position.set(pos.x, lowestGround2 - boxTmp2.min.y, pos.z);
         obj.rotation.y = inst.rotation || 0;
         scene.add(obj);
         obj.traverse(o => {
@@ -1405,8 +1448,8 @@ function handleClick(event) {
       });
       const boxTmp = new THREE.Box3().setFromObject(obj);
       const radius = Math.max(boxTmp.max.x - boxTmp.min.x, boxTmp.max.z - boxTmp.min.z) * 0.6;
-      const ground = getGroundHeightAt(inst.position[0], inst.position[2]);
-      flattenTerrain(inst.position[0], inst.position[2], radius, ground);
+      const lowestGround = findLowestPointInArea(inst.position[0], inst.position[2], radius);
+      flattenTerrain(inst.position[0], inst.position[2], radius, lowestGround);
       scene.add(obj);
 
       const instAudioFile = institutionAudioFiles[inst.name];
