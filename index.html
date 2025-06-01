@@ -263,6 +263,7 @@ function updateStatImages() {
       playerEmail = email;
       document.getElementById('login-container').style.display = 'none';
       loaderEl.classList.remove('hidden');
+      loaderEl.style.display = 'flex';
       document.getElementById('loading-bar').style.width = '0%';
       document.getElementById('loading-text').textContent = 'Fetching files list...';
       await preloadAssets(
@@ -275,12 +276,14 @@ function updateStatImages() {
         }
       );
       loaderEl.classList.add('hidden');
+      loaderEl.style.display = 'none';
       initNetwork();
       updateMoneyDisplay();
       return true;
     } catch (e) {
       console.error('autoLogin failed:', e);
       loaderEl.classList.add('hidden');
+      loaderEl.style.display = 'none';
       document.getElementById('login-container').style.display = 'flex';
       return false;
     }
@@ -808,6 +811,7 @@ function handleClick(event) {
     localStorage.setItem('playerEmail', email);
     const loaderEl = document.getElementById('loading-container');
     loaderEl.classList.remove('hidden');
+    loaderEl.style.display = 'flex';
     document.getElementById('loading-bar').style.width = '0%';
     document.getElementById('loading-text').textContent = 'Fetching files list...';
     document.getElementById('login-container').style.display = 'none';
@@ -821,6 +825,7 @@ function handleClick(event) {
       }
     );
     loaderEl.classList.add('hidden');
+    loaderEl.style.display = 'none';
     initNetwork();
     updateMoneyDisplay();
   }
