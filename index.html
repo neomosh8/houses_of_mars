@@ -85,6 +85,7 @@
     <button id="partner-save">Save</button>
   </div>
   <script type="module">
+
   const DEBUG_LOG = true;
   import * as THREE from 'three';
   import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -345,7 +346,14 @@ const PRELOAD_ASSETS = [
   "watox.glb","agrifood.glb","base.glb","defbase.glb","character.glb","flag.glb",
   "walking.mp3"
 ];
+// Debug helper for remote server issues
+console.log('Current location:', window.location.href);
+console.log('Asset URLs will resolve to:', PRELOAD_ASSETS.map(url => new URL(url, window.location.href).href));
 
+// Check if we're on HTTPS and warn about mixed content
+if (window.location.protocol === 'https:') {
+  console.warn('Site is on HTTPS - ensure all assets are also HTTPS to avoid mixed content issues');
+}
   const panel = document.getElementById('institution-panel');
   const panelTab = panel.querySelector('.panel-tab');
   const panelContent = document.getElementById('institution-content');
