@@ -118,6 +118,25 @@
   let slideTimer = null;
   let slideshowAudio = null;
 
+  function playAudioWithUserGesture(audio) {
+    if (!audio) return;
+    const attempt = () => {
+      if (!audio.paused) {
+        document.removeEventListener('click', attempt);
+        document.removeEventListener('keydown', attempt);
+        return;
+      }
+      audio.play().then(() => {
+        document.removeEventListener('click', attempt);
+        document.removeEventListener('keydown', attempt);
+      }).catch(() => {/* ignore until next user gesture */});
+    };
+    attempt();
+    document.addEventListener('click', attempt);
+    document.addEventListener('keydown', attempt);
+  }
+
+
   function startSlideshow() {
     const img = document.getElementById('loading-image');
     const tipEl = document.getElementById('loading-tip');
@@ -130,7 +149,8 @@
       slideshowAudio = new Audio('intro_music.mp3');
       slideshowAudio.loop = true;
     }
-    try { slideshowAudio.play(); } catch (e) { console.error('Audio play failed', e); }
+    playAudioWithUserGesture(slideshowAudio);
+
     slideTimer = setInterval(() => {
       slideIndex = (slideIndex + 1) % SLIDES.length;
       img.src = SLIDES[slideIndex];
