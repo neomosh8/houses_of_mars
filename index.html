@@ -27,6 +27,7 @@
     </div>
   </div>
   <div id="loading-container" class="loading-container hidden">
+    <div id="loading-tip" class="loading-tip"></div>
     <div class="loading-box">
       <div id="loading-bar" class="loading-bar"></div>
     </div>
@@ -107,25 +108,41 @@
   let startPosition = [70, 100, -50];
 
   const SLIDES = ['healthfull.png', 'transport.png', 'dangerousChemicals.png'];
+  const SLIDE_TIPS = [
+    'Stay healthy to survive the harsh environment.',
+    'Efficient transport keeps the colony running.',
+    'Handle chemicals with extreme caution.'
+  ];
   const SLIDE_DURATION = 3000; // ms
   let slideIndex = 0;
   let slideTimer = null;
+  let slideshowAudio = null;
 
   function startSlideshow() {
     const img = document.getElementById('loading-image');
+    const tipEl = document.getElementById('loading-tip');
     if (!img) return;
     img.classList.remove('hidden');
     img.src = SLIDES[0];
+    if (tipEl) tipEl.textContent = SLIDE_TIPS[0] || '';
     slideIndex = 0;
+    if (!slideshowAudio) {
+      slideshowAudio = new Audio('intro_music.mp3');
+      slideshowAudio.loop = true;
+    }
+    try { slideshowAudio.play(); } catch (e) { console.error('Audio play failed', e); }
     slideTimer = setInterval(() => {
       slideIndex = (slideIndex + 1) % SLIDES.length;
       img.src = SLIDES[slideIndex];
+      if (tipEl) tipEl.textContent = SLIDE_TIPS[slideIndex] || '';
     }, SLIDE_DURATION);
   }
 
   function stopSlideshow() {
     if (slideTimer) clearInterval(slideTimer);
     slideTimer = null;
+    const tipEl = document.getElementById('loading-tip');
+    if (tipEl) tipEl.textContent = '';
   }
 
   async function playIntroSequence() {
@@ -141,6 +158,10 @@
       try { await video.play(); } catch (e) { console.error('Video play failed', e); }
       await new Promise(res => video.onended = res);
       video.classList.add('hidden');
+    }
+    if (slideshowAudio) {
+      slideshowAudio.pause();
+      slideshowAudio.currentTime = 0;
     }
     const loaderEl = document.getElementById('loading-container');
     loaderEl.classList.add('hidden');
