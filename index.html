@@ -26,6 +26,12 @@
       <div id="login-error"></div>
     </div>
   </div>
+  <div id="loading-container" class="loading-container hidden">
+    <div class="loading-box">
+      <div id="loading-bar" class="loading-bar"></div>
+    </div>
+    <div id="loading-text" class="loading-text"></div>
+  </div>
   <div id="money-display">Money: 0</div>
   <div id="status-panel">
     <div class="stat"><img id="health-img" /></div>
@@ -91,6 +97,7 @@
   import { renderProposals } from './proposals.js';
   import { renderDefProposals } from './defProposals.js';
 
+  import { preloadAssets } from "./preloadAssets.js";
 
   let playerEmail = null;
   let playerMoney = 0;
@@ -253,6 +260,20 @@ function updateStatImages() {
       updateStatImages();
       playerEmail = email;
       document.getElementById('login-container').style.display = 'none';
+      const loaderEl = document.getElementById('loading-container');
+      loaderEl.classList.remove('hidden');
+      document.getElementById('loading-bar').style.width = '0%';
+      document.getElementById('loading-text').textContent = 'Fetching files list...';
+      await preloadAssets(
+        PRELOAD_ASSETS,
+        p => {
+          document.getElementById('loading-bar').style.width = `${Math.floor(p * 100)}%`;
+        },
+        msg => {
+          document.getElementById('loading-text').textContent = msg;
+        }
+      );
+      loaderEl.classList.add('hidden');
       initNetwork();
       updateMoneyDisplay();
       return true;
@@ -312,14 +333,19 @@ function updateStatImages() {
     'Depot': 'depot.mp3',
     'Defence Base': 'defence_base.mp3'
   };
-
   const weaponAudioFiles = {
-    laser: 'laser.mp3',
-    bullet: 'bullet.mp3',
-    missile: 'missile.mp3',
-    drone: 'drone.mp3',
-    kamikaze: 'kamikaze.mp3'
+    laser: "laser.mp3",
+    bullet: "bullet.mp3",
+    missile: "missile.mp3",
+    drone: "drone.mp3",
+    kamikaze: "kamikaze.mp3"
   };
+
+  const PRELOAD_ASSETS = [
+    "watox.glb","agriFood.glb","base.glb","defbase.glb","character.glb","flag.glb",
+    "watox.mp3","agrifood.mp3","depot.mp3","defence_base.mp3",
+    "laser.mp3","bullet.mp3","missile.mp3","drone.mp3","kamikaze.mp3","walking.mp3"
+  ];
 
   const panel = document.getElementById('institution-panel');
   const panelTab = panel.querySelector('.panel-tab');
@@ -764,7 +790,21 @@ function handleClick(event) {
     updateStatImages();
     playerEmail = email;
     localStorage.setItem('playerEmail', email);
+    const loaderEl = document.getElementById('loading-container');
+    loaderEl.classList.remove('hidden');
+    document.getElementById('loading-bar').style.width = '0%';
+    document.getElementById('loading-text').textContent = 'Fetching files list...';
     document.getElementById('login-container').style.display = 'none';
+    await preloadAssets(
+      PRELOAD_ASSETS,
+      p => {
+        document.getElementById('loading-bar').style.width = `${Math.floor(p * 100)}%`;
+      },
+      msg => {
+        document.getElementById('loading-text').textContent = msg;
+      }
+    );
+    loaderEl.classList.add('hidden');
     initNetwork();
     updateMoneyDisplay();
   }
