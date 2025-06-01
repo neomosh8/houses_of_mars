@@ -7,7 +7,6 @@ users.json
 WatOx_utility.glb
 watox.png
 institutions.json
-*.png
 *.json
 !defence_base.json
 *.mp3
