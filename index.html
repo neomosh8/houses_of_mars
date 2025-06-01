@@ -136,6 +136,7 @@
     document.addEventListener('keydown', attempt);
   }
 
+
   function startSlideshow() {
     const img = document.getElementById('loading-image');
     const tipEl = document.getElementById('loading-tip');
@@ -149,6 +150,7 @@
       slideshowAudio.loop = true;
     }
     playAudioWithUserGesture(slideshowAudio);
+
     slideTimer = setInterval(() => {
       slideIndex = (slideIndex + 1) % SLIDES.length;
       img.src = SLIDES[slideIndex];
