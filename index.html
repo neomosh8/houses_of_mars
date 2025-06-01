@@ -30,6 +30,7 @@
     <div class="loading-box">
       <div id="loading-bar" class="loading-bar"></div>
     </div>
+    <div id="loading-text" class="loading-text"></div>
   </div>
   <div id="money-display">Money: 0</div>
   <div id="status-panel">
@@ -261,9 +262,17 @@ function updateStatImages() {
       document.getElementById('login-container').style.display = 'none';
       const loaderEl = document.getElementById('loading-container');
       loaderEl.classList.remove('hidden');
-      await preloadAssets(PRELOAD_ASSETS, p => {
-        document.getElementById('loading-bar').style.width = `${Math.floor(p * 100)}%`;
-      });
+      document.getElementById('loading-bar').style.width = '0%';
+      document.getElementById('loading-text').textContent = 'Fetching files list...';
+      await preloadAssets(
+        PRELOAD_ASSETS,
+        p => {
+          document.getElementById('loading-bar').style.width = `${Math.floor(p * 100)}%`;
+        },
+        msg => {
+          document.getElementById('loading-text').textContent = msg;
+        }
+      );
       loaderEl.classList.add('hidden');
       initNetwork();
       updateMoneyDisplay();
@@ -783,10 +792,18 @@ function handleClick(event) {
     localStorage.setItem('playerEmail', email);
     const loaderEl = document.getElementById('loading-container');
     loaderEl.classList.remove('hidden');
+    document.getElementById('loading-bar').style.width = '0%';
+    document.getElementById('loading-text').textContent = 'Fetching files list...';
     document.getElementById('login-container').style.display = 'none';
-    await preloadAssets(PRELOAD_ASSETS, p => {
-      document.getElementById('loading-bar').style.width = `${Math.floor(p * 100)}%`;
-    });
+    await preloadAssets(
+      PRELOAD_ASSETS,
+      p => {
+        document.getElementById('loading-bar').style.width = `${Math.floor(p * 100)}%`;
+      },
+      msg => {
+        document.getElementById('loading-text').textContent = msg;
+      }
+    );
     loaderEl.classList.add('hidden');
     initNetwork();
     updateMoneyDisplay();
