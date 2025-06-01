@@ -249,6 +249,7 @@ function updateStatImages() {
   };
 
   async function autoLogin(email) {
+    const loaderEl = document.getElementById('loading-container');
     try {
       const res = await fetch('/api/state/' + encodeURIComponent(email));
       if (!res.ok) throw new Error('state');
@@ -261,8 +262,8 @@ function updateStatImages() {
       updateStatImages();
       playerEmail = email;
       document.getElementById('login-container').style.display = 'none';
-      const loaderEl = document.getElementById('loading-container');
       loaderEl.classList.remove('hidden');
+      loaderEl.style.display = 'flex';
       document.getElementById('loading-bar').style.width = '0%';
       document.getElementById('loading-text').textContent = 'Fetching files list...';
       await preloadAssets(
@@ -275,17 +276,28 @@ function updateStatImages() {
         }
       );
       loaderEl.classList.add('hidden');
+      loaderEl.style.display = 'none';
       initNetwork();
       updateMoneyDisplay();
       return true;
-    } catch {
+    } catch (e) {
+      console.error('autoLogin failed:', e);
+      loaderEl.classList.add('hidden');
+      loaderEl.style.display = 'none';
+      document.getElementById('login-container').style.display = 'flex';
       return false;
     }
   }
 
   const stored = localStorage.getItem('playerEmail');
   if (stored) {
-    autoLogin(stored);
+    (async () => {
+      try {
+        await autoLogin(stored);
+      } catch (e) {
+        console.error('Stored login failed:', e);
+      }
+    })();
   }
 
     // --- Institution placement ---
@@ -799,6 +811,7 @@ function handleClick(event) {
     localStorage.setItem('playerEmail', email);
     const loaderEl = document.getElementById('loading-container');
     loaderEl.classList.remove('hidden');
+    loaderEl.style.display = 'flex';
     document.getElementById('loading-bar').style.width = '0%';
     document.getElementById('loading-text').textContent = 'Fetching files list...';
     document.getElementById('login-container').style.display = 'none';
@@ -812,6 +825,7 @@ function handleClick(event) {
       }
     );
     loaderEl.classList.add('hidden');
+    loaderEl.style.display = 'none';
     initNetwork();
     updateMoneyDisplay();
   }
