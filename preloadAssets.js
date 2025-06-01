@@ -6,6 +6,7 @@ export async function preloadAssets(urls, onProgress = () => {}, onStatus = () =
   onStatus('Fetching files list...');
 
   // Attempt to obtain file sizes using HEAD requests
+
   for (const url of urls) {
     try {
       const res = await fetch(url, { method: 'HEAD' });
