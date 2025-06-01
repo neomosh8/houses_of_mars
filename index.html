@@ -249,6 +249,7 @@ function updateStatImages() {
   };
 
   async function autoLogin(email) {
+    const loaderEl = document.getElementById('loading-container');
     try {
       const res = await fetch('/api/state/' + encodeURIComponent(email));
       if (!res.ok) throw new Error('state');
@@ -261,7 +262,6 @@ function updateStatImages() {
       updateStatImages();
       playerEmail = email;
       document.getElementById('login-container').style.display = 'none';
-      const loaderEl = document.getElementById('loading-container');
       loaderEl.classList.remove('hidden');
       document.getElementById('loading-bar').style.width = '0%';
       document.getElementById('loading-text').textContent = 'Fetching files list...';
@@ -278,14 +278,23 @@ function updateStatImages() {
       initNetwork();
       updateMoneyDisplay();
       return true;
-    } catch {
+    } catch (e) {
+      console.error('autoLogin failed:', e);
+      loaderEl.classList.add('hidden');
+      document.getElementById('login-container').style.display = 'flex';
       return false;
     }
   }
 
   const stored = localStorage.getItem('playerEmail');
   if (stored) {
-    autoLogin(stored);
+    (async () => {
+      try {
+        await autoLogin(stored);
+      } catch (e) {
+        console.error('Stored login failed:', e);
+      }
+    })();
   }
 
     // --- Institution placement ---
