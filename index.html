@@ -79,7 +79,7 @@
     <button id="partner-save">Save</button>
   </div>
   <script type="module">
-  const DEBUG_LOG = false;
+  const DEBUG_LOG = true;
   import * as THREE from 'three';
   import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
   import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -123,16 +123,21 @@ const icons = {
   }
 
   function addPointLightsFromGLTF(gltf) {
-    if (!gltf) return;
-    const root = gltf.scene || (gltf.scenes && gltf.scenes[0]);
-    if (!root || typeof root.traverse !== 'function') return;
-    if (DEBUG_LOG) printGLTFHierarchy(root);
-    root.traverse(node => {
-      if (node.isPointLight) {
-        scene.add(node);
-      }
-    });
-  }
+  if (!gltf) return;
+  const root = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+  if (!root || typeof root.traverse !== 'function') return;
+
+  // (Optional) dump out the hierarchy for debugging:
+  if (DEBUG_LOG) printGLTFHierarchy(root);
+
+  root.traverse(node => {
+    if (node.isLight) {
+      // ← clone() instead of reparenting the exact node
+      scene.add(node.clone());
+    }
+  });
+}
+
 
   const healthImg = document.getElementById('health-img');
   const hydrationImg = document.getElementById('hydration-img');
