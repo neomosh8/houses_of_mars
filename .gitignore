@@ -9,8 +9,6 @@ watox.png
 institutions.json
 *.json
 !defence_base.json
-*.mp3
-walking.mp3
 /generated_models
 /worker_images
 chatLogs.json
