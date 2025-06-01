@@ -116,6 +116,37 @@ const icons = {
     return mesh;
   }
 
+  // Create a 2D ground footprint (X/Z) for an object. This footprint is used
+  // for all collision checks so that only horizontal space on the terrain is
+  // considered.
+  function createBuildingFootprint(obj) {
+    const box = new THREE.Box3().setFromObject(obj);
+    return {
+      minX: box.min.x,
+      maxX: box.max.x,
+      minZ: box.min.z,
+      maxZ: box.max.z,
+    };
+  }
+
+  // Update an existing footprint with a new object's bounds
+  function updateBuildingFootprint(fp, obj) {
+    const box = new THREE.Box3().setFromObject(obj);
+    fp.minX = box.min.x;
+    fp.maxX = box.max.x;
+    fp.minZ = box.min.z;
+    fp.maxZ = box.max.z;
+  }
+
+  // Test if a THREE.Sphere intersects the ground footprint
+  function sphereIntersectsFootprint(fp, sphere) {
+    const x = sphere.center.x;
+    const z = sphere.center.z;
+    const dx = Math.max(fp.minX - x, 0, x - fp.maxX);
+    const dz = Math.max(fp.minZ - z, 0, z - fp.maxZ);
+    return dx * dx + dz * dz <= sphere.radius * sphere.radius;
+  }
+
   function printGLTFHierarchy(obj, prefix = '') {
     if (!obj || typeof obj.traverse !== 'function') return;
     console.log(prefix + (obj.name || obj.type));
@@ -818,6 +849,7 @@ function handleClick(event) {
   const institutionsMap = {};
   const institutionMixers = {};
   const institutionDataMap = {};
+  // Lists of ground footprints for institutions and constructions
   const institutionBoxes = [];
   const constructionBoxes = [];
   const sinking = [];
@@ -1036,9 +1068,8 @@ function handleClick(event) {
         } else {
           const boxEntry = institutionBoxes.find(b => b.id === inst.id);
           if (boxEntry) {
-            const size = new THREE.Vector3();
-            boxEntry.box.getSize(size);
-            const off = new THREE.Vector3(size.x / 2 + 5, 0, 0);
+            const width = boxEntry.box.maxX - boxEntry.box.minX;
+            const off = new THREE.Vector3(width / 2 + 5, 0, 0);
             off.applyAxisAngle(new THREE.Vector3(0, 1, 0), inst.rotation || 0);
             pos.add(off);
           } else {
@@ -1055,7 +1086,7 @@ function handleClick(event) {
         flattenTerrain(pos.x, pos.z, radius, lowestGround);
         obj.position.set(pos.x, lowestGround - boxTmp.min.y, pos.z);
 
-        const cbox = new THREE.Box3().setFromObject(obj);
+        const cbox = createBuildingFootprint(obj);
         constructionBoxes.push({ id: inst.id, index: idx, box: cbox });
 
         if (!constructionMap[inst.id][idx]) constructionMap[inst.id][idx] = {};
@@ -1077,9 +1108,8 @@ function handleClick(event) {
         } else {
           const boxEntry = institutionBoxes.find(b => b.id === inst.id);
           if (boxEntry) {
-            const size = new THREE.Vector3();
-            boxEntry.box.getSize(size);
-            const off = new THREE.Vector3(size.x / 2 + 5, 0, 0);
+            const width = boxEntry.box.maxX - boxEntry.box.minX;
+            const off = new THREE.Vector3(width / 2 + 5, 0, 0);
             off.applyAxisAngle(new THREE.Vector3(0, 1, 0), inst.rotation || 0);
             pos.add(off);
           } else {
@@ -1088,7 +1118,7 @@ function handleClick(event) {
         }
         obj.position.copy(pos);
         scene.add(obj);
-        const cbox = new THREE.Box3().setFromObject(obj);
+        const cbox = createBuildingFootprint(obj);
         constructionBoxes.push({ id: inst.id, index: idx, box: cbox });
         if (!constructionMap[inst.id][idx]) constructionMap[inst.id][idx] = {};
         if (c.status === 'scaffolding') {
@@ -1321,7 +1351,7 @@ function handleClick(event) {
       for (const entry of institutionBoxes) {
         const data = institutionDataMap[entry.id];
         if (!data || data.destroyed) continue;
-        if (entry.box.intersectsSphere(sphere)) {
+        if (sphereIntersectsFootprint(entry.box, sphere)) {
           hitInst = entry.id;
           break;
         }
@@ -1515,7 +1545,7 @@ function handleClick(event) {
       const cons = inst.constructions || (inst.construction ? [inst.construction] : []);
       institutionDataMap[inst.id] = { ...inst, effects: def.effects, workforce: inst.workforce || [], extraEffects: inst.extraEffects || {}, constructions: cons };
       obj.traverse(o => { o.userData.institutionId = inst.id; });
-      const box = new THREE.Box3().setFromObject(obj);
+      const box = createBuildingFootprint(obj);
       institutionBoxes.push({ id: inst.id, box });
       if (!inst.destroyed) {
         applyConstruction(institutionDataMap[inst.id]);
@@ -1542,7 +1572,7 @@ function handleClick(event) {
       scene.add(obj);
       obj.traverse(o => { o.userData.institutionId = inst.id; });
       institutionsMap[inst.id] = obj;
-      const box = new THREE.Box3().setFromObject(obj);
+      const box = createBuildingFootprint(obj);
       institutionBoxes.push({ id: inst.id, box });
       institutionDataMap[inst.id] = { ...inst, effects: def.effects, workforce: inst.workforce || [], extraEffects: inst.extraEffects || {}, constructions: inst.constructions || [] };
       if (!inst.destroyed) {
@@ -2001,7 +2031,7 @@ function showInstitutionPopup(id) {
   function updateInstitutionBoxes() {
     institutionBoxes.forEach(entry => {
       const obj = institutionsMap[entry.id];
-      if (obj) entry.box.setFromObject(obj);
+      if (obj) updateBuildingFootprint(entry.box, obj);
     });
   }
 
@@ -2010,7 +2040,7 @@ function showInstitutionPopup(id) {
       const list = constructionMap[entry.id];
       const c = list && list[entry.index];
       const obj = c && (c.scaff || c.final);
-      if (obj) entry.box.setFromObject(obj);
+      if (obj) updateBuildingFootprint(entry.box, obj);
     });
   }
 
@@ -2982,10 +3012,10 @@ function showInstitutionPopup(id) {
                 sphereCenter.y += characterHeight / 2;
                 const sphere = new THREE.Sphere(sphereCenter, characterRadius);
                 institutionBoxes.forEach(entry => {
-                    if (entry.box.intersectsSphere(sphere)) blocked = true;
+                    if (sphereIntersectsFootprint(entry.box, sphere)) blocked = true;
                 });
                 constructionBoxes.forEach(entry => {
-                    if (entry.box.intersectsSphere(sphere)) blocked = true;
+                    if (sphereIntersectsFootprint(entry.box, sphere)) blocked = true;
                 });
                 if (!blocked) {
                     model.position.copy(proposed);
