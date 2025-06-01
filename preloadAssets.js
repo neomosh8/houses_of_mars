@@ -1,141 +1,135 @@
 export async function preloadAssets(urls, onProgress = () => {}, onStatus = () => {}) {
-  const cache = await caches.open('asset-cache');
+  let cache = null;
+  let useCache = true;
+
+  // Check if Cache API is available
+  try {
+    cache = await caches.open('asset-cache');
+  } catch (e) {
+    console.warn('Cache API not available, falling back to direct loading:', e);
+    useCache = false;
+  }
+
   let totalFiles = urls.length;
   let loadedFiles = 0;
-  let totalBytes = 0;
-  let loadedBytes = 0;
-  const sizes = {};
-  let useByteProgress = false;
+  let failedFiles = [];
+  let successFiles = [];
 
-  onStatus('Checking cache and file sizes...');
+  console.log(`Starting preload of ${totalFiles} assets...`);
+  onStatus('Starting asset preload...');
   onProgress(0);
 
-  // First, check cache and attempt to get sizes
-  const sizePromises = urls.map(async (url) => {
-    try {
-      // Check if already cached
-      const cached = await cache.match(url);
-      if (cached) {
-        return { url, size: 0, cached: true };
-      }
-
-      // Try to get size via HEAD request
-      try {
-        const res = await fetch(url, { method: 'HEAD' });
-        const len = parseInt(res.headers.get('Content-Length'));
-        if (!isNaN(len) && len > 0) {
-          return { url, size: len, cached: false };
-        }
-      } catch (e) {
-        // HEAD request failed, will use file counting
-      }
-
-      return { url, size: 0, cached: false };
-    } catch (e) {
-      return { url, size: 0, cached: false, error: e };
+  // Convert relative URLs to absolute
+  const absoluteUrls = urls.map(url => {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url;
     }
+    // Create absolute URL from relative path
+    return new URL(url, window.location.href).href;
   });
 
-  const sizeResults = await Promise.all(sizePromises);
-
-  // Calculate totals and determine progress mode
-  for (const result of sizeResults) {
-    sizes[result.url] = result.size;
-    if (result.size > 0 && !result.cached) {
-      totalBytes += result.size;
-      useByteProgress = true;
-    }
-  }
-
-  onStatus('Loading assets...');
-
-  // Load files one by one for better progress tracking
-  for (let i = 0; i < urls.length; i++) {
-    const url = urls[i];
-    const display = url.split('/').pop() || 'file';
-    const result = sizeResults[i];
+  // Load files sequentially to avoid overwhelming the server
+  for (let i = 0; i < absoluteUrls.length; i++) {
+    const url = absoluteUrls[i];
+    const originalUrl = urls[i];
+    const display = originalUrl.split('/').pop() || 'file';
 
     try {
-      // Update status
       onStatus(`Loading ${display}... (${i + 1}/${totalFiles})`);
+      console.log(`Attempting to load: ${display} from ${url}`);
 
-      // Check if already cached
-      if (result.cached) {
-        loadedFiles++;
-        const progress = loadedFiles / totalFiles;
-        onProgress(progress);
-        continue;
+      // Check cache first if available
+      if (useCache) {
+        try {
+          const cached = await cache.match(url);
+          if (cached) {
+            console.log(`✓ Using cached: ${display}`);
+            successFiles.push(originalUrl);
+            loadedFiles++;
+            onProgress(loadedFiles / totalFiles);
+            continue;
+          }
+        } catch (e) {
+          console.warn('Cache check failed for:', display, e);
+        }
       }
 
-      // Fetch the file
-      const response = await fetch(url);
+      // Set a timeout for fetch operations
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
-      if (!response.ok) {
-        throw new Error(`Failed to load ${display}: ${response.status} ${response.statusText}`);
-      }
+      try {
+        const response = await fetch(url, {
+          signal: controller.signal,
+          mode: 'cors', // Explicitly set CORS mode
+          credentials: 'same-origin' // Don't send cookies cross-origin
+        });
 
-      if (useByteProgress && sizes[url] > 0) {
-        // Read with progress tracking
-        const reader = response.body.getReader();
-        const chunks = [];
-        let receivedBytes = 0;
+        clearTimeout(timeoutId);
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          chunks.push(value);
-          receivedBytes += value.length;
-          loadedBytes += value.length;
-
-          // Update progress based on bytes
-          const fileProgress = receivedBytes / sizes[url];
-          const overallProgress = loadedBytes / totalBytes;
-
-          onStatus(`Loading ${display}... ${Math.round(fileProgress * 100)}%`);
-          onProgress(Math.min(overallProgress, 1));
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
 
-        // Cache the complete file
-        const blob = new Blob(chunks);
-        const cachedResponse = new Response(blob, {
-          status: response.status,
-          statusText: response.statusText,
-          headers: response.headers,
-        });
-        await cache.put(url, cachedResponse);
-      } else {
-        // No size info, just load and cache
+        // Load the full response
         const blob = await response.blob();
-        await cache.put(url, new Response(blob));
+        console.log(`✓ Downloaded: ${display} (${(blob.size / 1024).toFixed(1)} KB)`);
 
+        // Try to cache if available
+        if (useCache) {
+          try {
+            await cache.put(url, new Response(blob.slice())); // Use slice() to create a new blob
+          } catch (e) {
+            console.warn('Failed to cache:', display, e);
+          }
+        }
+
+        successFiles.push(originalUrl);
         loadedFiles++;
-        const progress = loadedFiles / totalFiles;
-        onProgress(progress);
+        onProgress(loadedFiles / totalFiles);
+
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+
+        if (fetchError.name === 'AbortError') {
+          throw new Error('Timeout - server took too long to respond');
+        }
+        throw fetchError;
       }
+
     } catch (error) {
-      console.error(`Failed to load ${display}:`, error);
-      onStatus(`Failed to load ${display} - continuing...`);
+      console.error(`❌ Failed to load ${display}:`, error.message);
+      failedFiles.push({ url: originalUrl, error: error.message });
 
-      // Still increment progress for failed files
+      // Still update progress for failed files
       loadedFiles++;
-      if (sizes[url] > 0) {
-        loadedBytes += sizes[url];
-      }
+      onProgress(loadedFiles / totalFiles);
 
-      const progress = useByteProgress
-        ? (totalBytes > 0 ? loadedBytes / totalBytes : 1)
-        : loadedFiles / totalFiles;
-      onProgress(Math.min(progress, 1));
-
-      // Small delay to show error message
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Show error briefly
+      onStatus(`Failed: ${display} - ${error.message}`);
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
   }
 
-  onStatus('Loading complete!');
-  onProgress(1);
+  // Log summary
+  console.log('=== Preload Summary ===');
+  console.log(`Successfully loaded: ${successFiles.length}/${totalFiles} files`);
+  if (successFiles.length > 0) {
+    console.log('Loaded:', successFiles.join(', '));
+  }
+  if (failedFiles.length > 0) {
+    console.log('Failed files:', failedFiles);
+  }
 
-  // Small delay to show completion
-  await new Promise(resolve => setTimeout(resolve, 200));
+  // Final status
+  if (failedFiles.length > 0) {
+    console.error('Failed to load assets:', failedFiles);
+    onStatus(`Loaded ${successFiles.length}/${totalFiles} files - continuing...`);
+    await new Promise(resolve => setTimeout(resolve, 2000));
+  } else {
+    onStatus('All assets loaded successfully!');
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+
+  onProgress(1);
 }
