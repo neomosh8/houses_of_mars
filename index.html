@@ -31,6 +31,8 @@
       <div id="loading-bar" class="loading-bar"></div>
     </div>
     <div id="loading-text" class="loading-text"></div>
+    <img id="loading-image" class="loading-image hidden" />
+    <video id="intro-video" class="intro-video hidden" src="intro.mp4" preload="auto"></video>
   </div>
   <div id="money-display">Money: 0</div>
   <div id="status-panel">
@@ -103,6 +105,47 @@
   let playerEmail = null;
   let playerMoney = 0;
   let startPosition = [70, 100, -50];
+
+  const SLIDES = ['healthfull.png', 'transport.png', 'dangerousChemicals.png'];
+  const SLIDE_DURATION = 3000; // ms
+  let slideIndex = 0;
+  let slideTimer = null;
+
+  function startSlideshow() {
+    const img = document.getElementById('loading-image');
+    if (!img) return;
+    img.classList.remove('hidden');
+    img.src = SLIDES[0];
+    slideIndex = 0;
+    slideTimer = setInterval(() => {
+      slideIndex = (slideIndex + 1) % SLIDES.length;
+      img.src = SLIDES[slideIndex];
+    }, SLIDE_DURATION);
+  }
+
+  function stopSlideshow() {
+    if (slideTimer) clearInterval(slideTimer);
+    slideTimer = null;
+  }
+
+  async function playIntroSequence() {
+    stopSlideshow();
+    const img = document.getElementById('loading-image');
+    if (img) {
+      img.src = SLIDES[SLIDES.length - 1];
+    }
+    await new Promise(r => setTimeout(r, SLIDE_DURATION));
+    const video = document.getElementById('intro-video');
+    if (video) {
+      video.classList.remove('hidden');
+      try { await video.play(); } catch (e) { console.error('Video play failed', e); }
+      await new Promise(res => video.onended = res);
+      video.classList.add('hidden');
+    }
+    const loaderEl = document.getElementById('loading-container');
+    loaderEl.classList.add('hidden');
+    loaderEl.style.display = 'none';
+  }
 
 const icons = {
   health_full: 'healthfull.png',
@@ -266,6 +309,7 @@ function updateStatImages() {
       loaderEl.style.display = 'flex';
       document.getElementById('loading-bar').style.width = '0%';
       document.getElementById('loading-text').textContent = 'Fetching files list...';
+      startSlideshow();
       await preloadAssets(
         PRELOAD_ASSETS,
         p => {
@@ -275,8 +319,7 @@ function updateStatImages() {
           document.getElementById('loading-text').textContent = msg;
         }
       );
-      loaderEl.classList.add('hidden');
-      loaderEl.style.display = 'none';
+      await playIntroSequence();
       initNetwork();
       updateMoneyDisplay();
       return true;
@@ -814,6 +857,7 @@ function handleClick(event) {
     loaderEl.style.display = 'flex';
     document.getElementById('loading-bar').style.width = '0%';
     document.getElementById('loading-text').textContent = 'Fetching files list...';
+    startSlideshow();
     document.getElementById('login-container').style.display = 'none';
     await preloadAssets(
       PRELOAD_ASSETS,
@@ -824,8 +868,7 @@ function handleClick(event) {
         document.getElementById('loading-text').textContent = msg;
       }
     );
-    loaderEl.classList.add('hidden');
-    loaderEl.style.display = 'none';
+    await playIntroSequence();
     initNetwork();
     updateMoneyDisplay();
   }
