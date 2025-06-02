@@ -594,15 +594,12 @@ if (window.location.protocol === 'https:') {
       currentInstitution = inst;
     });
   }
-function handleClick(event) {
-  if (institutionPopupOpen) return;
-  if (placingInstitution && ghostInstitution && currentInstitution) {
-    // Validate money requirements
-    if (placingApplication && applicationInfo) {
-      // For partnerships, check if user has enough for their shares
-      const cost = applicationInfo.myShares * applicationInfo.sharePrice;
-      if (playerMoney < cost) {
-        alert(`Not enough money. You need ${cost} for ${applicationInfo.myShares} shares at ${applicationInfo.sharePrice} each.`);
+
+  function handleClick(event) {
+    if (institutionPopupOpen) return;
+    if (placingInstitution && ghostInstitution && currentInstitution) {
+      if (!placingApplication && playerMoney < currentInstitution.price) {
+        alert('Not enough money');
         return;
       }
     } else if (!placingApplication && playerMoney < currentInstitution.price) {

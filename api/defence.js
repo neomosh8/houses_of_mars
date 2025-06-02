@@ -3,7 +3,7 @@ const path = require('path');
 const meshy = require('../meshy');
 const chatManager = require('../workforceChatManager');
 
-module.exports = function(store, broadcast) {
+module.exports = function(store, institutionStore, broadcast) {
   const router = express.Router();
   // Default scaffolding model for new weapons. A scale of 6 keeps
   // generated weapons at a reasonable size if no scale is provided.

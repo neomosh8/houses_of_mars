@@ -45,7 +45,7 @@ function sendToEmail(email, data) {
 }
 
 const workforceRoute = require('./api/workforce')(institutionStore, userStore, engine, broadcast, sendToEmail);
-const defenceRoute = require('./api/defence')(defenceStore, broadcast);
+const defenceRoute = require('./api/defence')(defenceStore, institutionStore, broadcast);
 chatManager.initFromInstitutions(institutionStore.getInstitutions());
 
 app.use('/api/login', loginRoute);
@@ -230,48 +230,38 @@ wss.on('connection', (ws, req) => {
             ws.send(JSON.stringify({ type: 'error', message: 'not enough money' }));
           }
         }
-// In server.js, replace the addInstitutionApplication handler with this:
-
-} else if (data.type === 'addInstitutionApplication') {
-  const price = INSTITUTION_PRICES[data.name] || 0;
-  const users = userStore.loadUsers();
-  const user = users[email];
-  const cost = (data.myShares || 0) * (data.sharePrice || 0);
-
-  if (user && user.money >= cost) {
-    user.money -= cost;
-    userStore.saveUsers(users);
-
-    // Calculate if institution is fully funded
-    const totalRaised = data.myShares * data.sharePrice;
-    const isFunded = totalRaised >= price;
-
-    const inst = {
-      owner: email,
-      name: data.name,
-      position: data.position,
-      rotation: data.rotation,
-      scale: data.scale,
-      sharePrice: data.sharePrice,
-      totalShares: data.totalShares,
-      soldShares: data.myShares,
-      shares: { [email]: data.myShares },
-      funded: isFunded  // Only funded if total raised covers the price
-    };
-
-    const instId = institutionStore.addInstitution(inst);
-    const storedInst = institutionStore.getInstitution(instId);
-    const instData = storedInst.name === 'Defence Base'
-      ? { ...storedInst, weapons: defenceStore.getWeapons(instId) }
-      : storedInst;
-    broadcast({ type: 'addInstitution', institution: instData });
-
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: 'money', money: user.money }));
-    }
-  } else if (ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: 'error', message: 'not enough money' }));
-  }
+      } else if (data.type === 'addInstitutionApplication') {
+        const price = INSTITUTION_PRICES[data.name] || 0;
+        const users = userStore.loadUsers();
+        const user = users[email];
+        const cost = (data.myShares || 0) * (data.sharePrice || 0);
+        if (user && user.money >= cost) {
+          user.money -= cost;
+          userStore.saveUsers(users);
+          const inst = {
+            owner: email,
+            name: data.name,
+            position: data.position,
+            rotation: data.rotation,
+            scale: data.scale,
+            sharePrice: data.sharePrice,
+            totalShares: data.totalShares,
+            soldShares: data.myShares,
+            shares: { [email]: data.myShares },
+            funded: data.myShares * data.sharePrice >= price
+          };
+          const instId = institutionStore.addInstitution(inst);
+          const storedInst = institutionStore.getInstitution(instId);
+          const instData = storedInst.name === 'Defence Base'
+            ? { ...storedInst, weapons: defenceStore.getWeapons(instId) }
+            : storedInst;
+          broadcast({ type: 'addInstitution', institution: instData });
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'money', money: user.money }));
+          }
+        } else if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'error', message: 'not enough money' }));
+        }
       } else if (data.type === 'buyShares') {
         const inst = institutionStore.getInstitution(data.id);
         if (inst && !inst.funded) {

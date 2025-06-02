@@ -379,6 +379,36 @@ module.exports = function(institutionStore, userStore, engine, broadcast, sendTo
             const extra = institutionStore.addGains(id, result.gains);
             broadcast({ type: 'updateInstitution', id, extraEffects: extra, gains: result.gains });
           }
+          if (result && result.feasible) {
+            const scaff = SCAFF_MODELS[Math.floor(Math.random() * SCAFF_MODELS.length)];
+            const existing = Array.isArray(inst.constructions) ? inst.constructions : [];
+            function getOffset() {
+              const angle = Math.random() * Math.PI * 2;
+              const distance = 8 + Math.random() * 4;
+              return [Math.cos(angle) * distance, 0, Math.sin(angle) * distance];
+            }
+            let offset = getOffset();
+            for (let a = 0; a < 20; a++) {
+              const [ox, , oz] = offset;
+              const ok = !existing.some(c => Array.isArray(c.offset) && Math.hypot((c.offset[0] || 0) - ox, (c.offset[2] || 0) - oz) < 4);
+              if (ok) break;
+              offset = getOffset();
+            }
+            const construction = { status: 'scaffolding', url: scaff.url, scale: scaff.scale, offset };
+            const idx = institutionStore.addConstruction(id, construction);
+            broadcast({ type: 'updateInstitution', id, construction, index: idx });
+
+            const prompt = `${prop.project || prop.title || ''} ${prop.description || ''}`.trim();
+            const file = path.join(MODEL_DIR, `inst_${id}_${Date.now()}.glb`);
+            meshy.generateModel(prompt, file)
+              .then(fp => {
+                const rel = path.relative(path.join(__dirname, '..'), fp).replace(/\\/g, '/');
+                const done = { status: 'completed', url: rel, scale: scaff.scale, offset };
+                institutionStore.updateConstruction(id, idx, done);
+                broadcast({ type: 'updateInstitution', id, construction: done, index: idx });
+              })
+              .catch(err => console.error('Meshy generation failed:', err));
+          }
         } else {
           status = 'denied';
         }
