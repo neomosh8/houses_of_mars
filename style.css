@@ -128,10 +128,15 @@ canvas { display: block; width: 100%; height: 100%; }
   color: #fff;
   font-family: sans-serif;
   display: none;
-  z-index: 10;
+  z-index: 10000;
   align-items: center;
   justify-content: center;
   flex-direction: column;
+}
+
+#respawn-btn {
+  position: relative;
+  z-index: 10001;
 }
 
 /* Login */
@@ -255,4 +260,69 @@ canvas { display: block; width: 100%; height: 100%; }
 
 .hidden { display: none; }
 .popup-actions { margin-top: 8px; display: flex; gap: 4px; }
+
+
+.loading-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 0;
+  background: #000c;
+  z-index: 11;
+}
+.loading-box {
+  width: 50%;
+  height: 20px;
+  background: #333;
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+  z-index: 20;
+}
+.loading-bar {
+  height: 100%;
+  width: 0%;
+  background: #0a0;
+  transition: width 0.2s;
+  position: relative;
+  z-index: 20;
+}
+.loading-text {
+  margin-top: 4px;
+  color: #fff;
+  font-size: 14px;
+  text-align: center;
+  position: relative;
+  z-index: 20;
+}
+
+.loading-tip {
+  color: #fff;
+  font-size: 16px;
+  text-align: center;
+  position: relative;
+  z-index: 20;
+}
+
+.loading-image,
+.intro-video {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  margin: 0;
+  z-index: 10;
+}
+
+.intro-video {
+  background: #000;
+}
 
