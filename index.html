@@ -603,11 +603,6 @@ if (window.location.protocol === 'https:') {
         alert('Not enough money');
         return;
       }
-    } else if (currentInstitution && !placingApplication && playerMoney < currentInstitution.price) {
-      // For regular placement, check full price
-      alert('Not enough money');
-      return;
-    }
       const box = new THREE.Box3().setFromObject(ghostInstitution);
       const radius = Math.max(box.max.x - box.min.x, box.max.z - box.min.z) * 0.6;
       const lowestGround = findLowestPointInArea(
@@ -665,6 +660,11 @@ if (window.location.protocol === 'https:') {
       placingApplication = false;
       applicationInfo = null;
       return;
+    } else if (currentInstitution && !placingApplication && playerMoney < currentInstitution.price) {
+      // For regular placement, check full price
+      alert('Not enough money');
+      return;
+    }
 
 
     // Raycast to detect institution click
