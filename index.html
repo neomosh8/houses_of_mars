@@ -354,6 +354,8 @@ function updateStatImages() {
     }
   };
 
+  const marsSkyColor = 0x9B7653; // Dusty orange-red for Mars sky
+
   async function autoLogin(email) {
     const loaderEl = document.getElementById('loading-container');
     try {
@@ -383,6 +385,7 @@ function updateStatImages() {
         }
       );
       await playIntroSequence();
+      initRenderer();
       initNetwork();
       updateMoneyDisplay();
       return true;
@@ -913,6 +916,7 @@ if (window.location.protocol === 'https:') {
       }
     );
     await playIntroSequence();
+    initRenderer();
     initNetwork();
     updateMoneyDisplay();
   }
@@ -934,60 +938,68 @@ if (window.location.protocol === 'https:') {
     }
   };
 
-  // Scene, camera, renderer
-  const scene = new THREE.Scene();
-  const marsSkyColor = 0x9B7653; // Dusty orange-red for Mars sky
-  // Mild atmospheric haze
-  scene.fog = new THREE.FogExp2(marsSkyColor, 0.002);
+  // Scene and renderer objects will be initialised after login
+  let scene, camera, renderer, composer, ssaoPass, bloomPass, outputPass;
+  let listener, audioLoader;
 
-  // Adjusted camera far plane for potentially larger terrain
-  const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 10000);
-  camera.position.set(0, 10, 15);
+  function initRenderer() {
+    if (scene) return; // Already initialised
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Better shadows
-  renderer.setPixelRatio(window.devicePixelRatio);
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setClearColor(marsSkyColor);
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.0;
-  document.body.appendChild(renderer.domElement);
+    scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(marsSkyColor, 0.002);
 
-  // --- Audio setup ---
-  const listener = new THREE.AudioListener();
-  camera.add(listener);
-  const audioLoader = new THREE.AudioLoader();
+    camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 10000);
+    camera.position.set(0, 10, 15);
 
-  // Post-processing setup for bloom
-  const composer = new EffectComposer(renderer);
-  const renderPass = new RenderPass(scene, camera);
-  composer.addPass(renderPass);
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setClearColor(marsSkyColor);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.0;
+    document.body.appendChild(renderer.domElement);
 
-  // Ambient occlusion pass for subtle shading
-  const ssaoPass = new SSAOPass(scene, camera, window.innerWidth, window.innerHeight);
-  ssaoPass.kernelRadius = 8;
-  ssaoPass.minDistance = 0.005;
-  ssaoPass.maxDistance = 0.1;
-  composer.addPass(ssaoPass);
+    listener = new THREE.AudioListener();
+    camera.add(listener);
+    audioLoader = new THREE.AudioLoader();
 
-  // Bloom effect
-  const bloomParams = {
-    strength: 0.1,
-    radius: 0.7,
-    threshold: 0.8
-  };
-  const bloomPass = new UnrealBloomPass(
-    new THREE.Vector2(window.innerWidth, window.innerHeight),
-    bloomParams.strength,
-    bloomParams.radius,
-    bloomParams.threshold
-  );
-  composer.addPass(bloomPass);
+    composer = new EffectComposer(renderer);
+    const renderPass = new RenderPass(scene, camera);
+    composer.addPass(renderPass);
 
-  // Output pass to properly handle tone mapping
-  const outputPass = new OutputPass();
-  composer.addPass(outputPass);
+    ssaoPass = new SSAOPass(scene, camera, window.innerWidth, window.innerHeight);
+    ssaoPass.kernelRadius = 8;
+    ssaoPass.minDistance = 0.005;
+    ssaoPass.maxDistance = 0.1;
+    composer.addPass(ssaoPass);
+
+    const bloomParams = { strength: 0.1, radius: 0.7, threshold: 0.8 };
+    bloomPass = new UnrealBloomPass(
+      new THREE.Vector2(window.innerWidth, window.innerHeight),
+      bloomParams.strength,
+      bloomParams.radius,
+      bloomParams.threshold
+    );
+    composer.addPass(bloomPass);
+
+    outputPass = new OutputPass();
+    composer.addPass(outputPass);
+
+    window.addEventListener('resize', onWindowResize);
+    animate();
+  }
+
+  function onWindowResize() {
+    if (!camera) return;
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    composer.setSize(window.innerWidth, window.innerHeight);
+    ssaoPass.setSize(window.innerWidth, window.innerHeight);
+    bloomPass.resolution.set(window.innerWidth, window.innerHeight);
+  }
 
   // --- Multiplayer Networking ---
   let socket;
@@ -3266,21 +3278,7 @@ function showInstitutionPopup(id) {
     composer.render();
 }
 
-  animate();
-
-  // Resize handler
-  window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    composer.setSize(window.innerWidth, window.innerHeight);
-
-    ssaoPass.setSize(window.innerWidth, window.innerHeight);
-
-    // Update bloom pass resolution
-    bloomPass.resolution.set(window.innerWidth, window.innerHeight);
-  });
+  // Rendering will start after login via initRenderer()
 </script>
 </body>
 </html>
