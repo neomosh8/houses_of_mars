@@ -939,7 +939,10 @@ if (window.location.protocol === 'https:') {
     const email = document.getElementById('login-email').value;
     document.getElementById('login-error').textContent = '';
     if (await startVerification(email)) {
-      document.getElementById('code-section').style.display = 'block';
+      const codeSec = document.getElementById('code-section');
+      codeSec.classList.remove('hidden');
+      codeSec.style.display = 'block';
+      document.getElementById('login-code').focus();
     } else {
       document.getElementById('login-error').textContent = 'Failed to send code';
     }
