@@ -513,15 +513,14 @@ if (window.location.protocol === 'https:') {
   function openPartnerForm(inst) {
     const form = document.getElementById('partner-form');
     form.style.display = 'flex';
-    const totalDefault = 10;
-    const shareDefault = Math.max(1, Math.floor(inst.price / totalDefault));
-    document.getElementById('partner-total').value = totalDefault;
-    document.getElementById('partner-price').value = shareDefault;
+    document.getElementById('partner-total').value = 10;
+    document.getElementById('partner-price').value = Math.ceil(inst.price / 10);
     document.getElementById('partner-my').value = 1;
     placingApplication = false;
     applicationInfo = null;
     const save = document.getElementById('partner-save');
-    save.onclick = () => {
+    save.onclick = e => {
+      e.stopPropagation();
       const total = parseInt(document.getElementById('partner-total').value) || 1;
       const price = parseInt(document.getElementById('partner-price').value) || 1;
       const mine = parseInt(document.getElementById('partner-my').value) || 0;
@@ -539,7 +538,8 @@ if (window.location.protocol === 'https:') {
     document.getElementById('partner-price').value = inst.sharePrice;
     document.getElementById('partner-my').value = 1;
     const save = document.getElementById('partner-save');
-    save.onclick = () => {
+    save.onclick = e => {
+      e.stopPropagation();
       const shares = parseInt(document.getElementById('partner-my').value) || 0;
       form.style.display = 'none';
       if (socket && socket.readyState === WebSocket.OPEN) {
@@ -598,7 +598,8 @@ if (window.location.protocol === 'https:') {
   function handleClick(event) {
     if (institutionPopupOpen) return;
     if (placingInstitution && ghostInstitution && currentInstitution) {
-      if (!placingApplication && playerMoney < currentInstitution.price) {
+      const cost = typeof currentInstitution.price === 'number' ? currentInstitution.price : 0;
+      if (!placingApplication && playerMoney < cost) {
         alert('Not enough money');
         return;
       }
