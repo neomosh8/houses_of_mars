@@ -754,15 +754,22 @@ if (window.location.protocol === 'https:') {
   }
 
   function getMeanHeightInRect(minX, maxX, minZ, maxZ) {
-    const step = 1;
     let sum = 0;
     let count = 0;
-    for (let x = minX; x <= maxX; x += step) {
-      for (let z = minZ; z <= maxZ; z += step) {
-        sum += getGroundHeightAt(x, z);
-        count++;
+    const world = new THREE.Vector3();
+    terrainMeshes.forEach(mesh => {
+      const geom = mesh.geometry;
+      if (!geom || !geom.attributes || !geom.attributes.position) return;
+      const pos = geom.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        world.fromBufferAttribute(pos, i);
+        world.applyMatrix4(mesh.matrixWorld);
+        if (world.x >= minX && world.x <= maxX && world.z >= minZ && world.z <= maxZ) {
+          sum += world.y;
+          count++;
+        }
       }
-    }
+    });
     if (count === 0) return getGroundHeightAt((minX + maxX) / 2, (minZ + maxZ) / 2);
     return sum / count;
   }
