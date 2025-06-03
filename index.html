@@ -1228,11 +1228,13 @@ if (window.location.protocol === 'https:') {
 
         obj.scale.setScalar(c.scale || inst.scale || 1);
         obj.rotation.y = inst.rotation || 0;
+        obj.position.copy(pos);
         scene.add(obj);
         const boxTmp = new THREE.Box3().setFromObject(obj);
         const fp = createBuildingFootprint(obj);
         const ground = flattenTerrain(fp.minX, fp.maxX, fp.minZ, fp.maxZ);
-        obj.position.set(pos.x, ground - boxTmp.min.y, pos.z);
+        const offY = boxTmp.min.y - obj.position.y;
+        obj.position.y = ground - offY;
 
         const cbox = createBuildingFootprint(obj);
         constructionBoxes.push({ id: inst.id, index: idx, box: cbox });
@@ -1266,6 +1268,11 @@ if (window.location.protocol === 'https:') {
         }
         obj.position.copy(pos);
         scene.add(obj);
+        const boxTmp2 = new THREE.Box3().setFromObject(obj);
+        const fp2 = createBuildingFootprint(obj);
+        const ground2 = flattenTerrain(fp2.minX, fp2.maxX, fp2.minZ, fp2.maxZ);
+        const offY2 = boxTmp2.min.y - obj.position.y;
+        obj.position.y = ground2 - offY2;
         const cbox = createBuildingFootprint(obj);
         constructionBoxes.push({ id: inst.id, index: idx, box: cbox });
         if (!constructionMap[inst.id][idx]) constructionMap[inst.id][idx] = {};
@@ -1351,6 +1358,11 @@ if (window.location.protocol === 'https:') {
         obj.position.copy(pos);
         obj.rotation.y = inst.rotation || 0;
         scene.add(obj);
+        const boxTmp = new THREE.Box3().setFromObject(obj);
+        const fp = createBuildingFootprint(obj);
+        const ground = flattenTerrain(fp.minX, fp.maxX, fp.minZ, fp.maxZ);
+        const offY = boxTmp.min.y - obj.position.y;
+        obj.position.y = ground - offY;
         obj.traverse(o => {
           o.userData.weaponInstId = inst.id;
           o.userData.weaponIndex = idx;
@@ -1367,6 +1379,7 @@ if (window.location.protocol === 'https:') {
         addPointLightsFromGLTF(gltf);
       obj.scale.setScalar(w.scale || 1);
       obj.rotation.y = inst.rotation || 0;
+      obj.position.copy(pos);
       scene.add(obj);
       if (gltf.animations && gltf.animations.length > 0) {
         const mix = new THREE.AnimationMixer(obj);
@@ -1399,7 +1412,8 @@ if (window.location.protocol === 'https:') {
       const boxTmp = new THREE.Box3().setFromObject(obj);
         const fp = createBuildingFootprint(obj);
         const ground = flattenTerrain(fp.minX, fp.maxX, fp.minZ, fp.maxZ);
-        obj.position.set(pos.x, ground - boxTmp.min.y, pos.z);
+        const offY = boxTmp.min.y - obj.position.y;
+        obj.position.y = ground - offY;
         obj.traverse(o => {
           o.userData.weaponInstId = inst.id;
           o.userData.weaponIndex = idx;
@@ -1421,12 +1435,14 @@ if (window.location.protocol === 'https:') {
       }, undefined, () => {
         if (inst.weapons[idx] !== w) return;
         const obj = createPlaceholder(w.scale || 1, 0xff0000);
+        obj.position.copy(pos);
+        obj.rotation.y = inst.rotation || 0;
+        scene.add(obj);
         const boxTmp2 = new THREE.Box3().setFromObject(obj);
         const fp2 = createBuildingFootprint(obj);
         const ground2 = flattenTerrain(fp2.minX, fp2.maxX, fp2.minZ, fp2.maxZ);
-        obj.position.set(pos.x, ground2 - boxTmp2.min.y, pos.z);
-        obj.rotation.y = inst.rotation || 0;
-        scene.add(obj);
+        const offY2 = boxTmp2.min.y - obj.position.y;
+        obj.position.y = ground2 - offY2;
         obj.traverse(o => {
           o.userData.weaponInstId = inst.id;
           o.userData.weaponIndex = idx;
@@ -1651,7 +1667,8 @@ if (window.location.protocol === 'https:') {
       const boxTmp = new THREE.Box3().setFromObject(obj);
       const fp = createBuildingFootprint(obj);
       const ground = flattenTerrain(fp.minX, fp.maxX, fp.minZ, fp.maxZ);
-      obj.position.y = ground - boxTmp.min.y;
+      const offY = boxTmp.min.y - obj.position.y;
+      obj.position.y = ground - offY;
       scene.add(obj);
 
       const instAudioFile = institutionAudioFiles[inst.name];
@@ -1716,6 +1733,11 @@ if (window.location.protocol === 'https:') {
       obj.position.fromArray(inst.position);
       obj.rotation.y = inst.rotation || 0;
       scene.add(obj);
+      const boxTmp = new THREE.Box3().setFromObject(obj);
+      const fp = createBuildingFootprint(obj);
+      const ground = flattenTerrain(fp.minX, fp.maxX, fp.minZ, fp.maxZ);
+      const offY = boxTmp.min.y - obj.position.y;
+      obj.position.y = ground - offY;
       obj.traverse(o => { o.userData.institutionId = inst.id; });
       institutionsMap[inst.id] = obj;
       const box = createBuildingFootprint(obj);
