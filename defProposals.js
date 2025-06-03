@@ -1,4 +1,10 @@
-export function renderDefProposals(container, proposals, instId) {
+export function renderDefProposals(
+  container,
+  proposals,
+  instId,
+  institutionDataMap,
+  playerEmail
+) {
   container.innerHTML = '';
   console.log('[DEFENCE UI] renderDefProposals', { instId, count: proposals ? proposals.length : 0 });
   if (!Array.isArray(proposals) || proposals.length === 0) {
