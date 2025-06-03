@@ -988,6 +988,7 @@ if (window.location.protocol === 'https:') {
     composer.addPass(outputPass);
 
     window.addEventListener('resize', onWindowResize);
+    initSceneObjects();
     animate();
   }
 
@@ -2256,41 +2257,247 @@ function showInstitutionPopup(id) {
     socket.send(JSON.stringify({ type: 'destroyInstitution', id }));
   }
 
+  // Scene objects will be initialised after login
+  let hemiLight, sun, secondaryLight;
+  const textureLoader = new THREE.TextureLoader();
+  let diffuseMap = null;
+  let bumpMap = null;
+  let specMap = null;
+  const baseTextureRepeat = 1000; // Base repeat factor for the texture
+  const texturesLoaded = { diffuse: false, bump: false, spec: false };
+  let dustTexture;
+  const MAX_PARTICLES = 300;
+  let particleSystem;
+  let dustParticles = [];
+  const groundLoader = new GLTFLoader();
+  let gltfTerrain;
+  const terrainScaleFactor = 50;
+  const terrainMeshes = [];
+  let model, mixer;
+  let runAction, walkAction, idleAction, dieAction, flagPlantAction;
+  let activeAction;
+  const modelScale = 1.2;
+  const characterHeight = 1.8 * modelScale;
+  const characterRadius = 0.2 * modelScale;
+  let playerAnimations = null;
+  const footPositions = { left: new THREE.Vector3(), right: new THREE.Vector3(), lastEmitTime: 0 };
 
+  function initSceneObjects() {
+    // Lighting
+    hemiLight = new THREE.HemisphereLight(0xffeedd, 0x775533, 1.2);
+    scene.add(hemiLight);
 
-
-
-  // Lighting
-  const hemiLight = new THREE.HemisphereLight(0xffeedd, 0x775533, 1.2);
-  scene.add(hemiLight);
-
-  // Main directional light (sun) - IMPROVED SHADOW SETTINGS
-  const sun = new THREE.DirectionalLight(0xffffff, 1.8);
-  sun.position.set(20, 30, 15);
-  sun.castShadow = true;
+    // Main directional light (sun) - IMPROVED SHADOW SETTINGS
+    sun = new THREE.DirectionalLight(0xffffff, 1.8);
+    sun.position.set(20, 30, 15);
+    sun.castShadow = true;
 
   // Improved shadow quality
-  sun.shadow.mapSize.width = 4096; // Increased from 2048
-  sun.shadow.mapSize.height = 4096; // Increased from 2048
-  sun.shadow.camera.near = 0.5;
-  sun.shadow.camera.far = 200; // Extended range
-  sun.shadow.camera.left = -100;
-  sun.shadow.camera.right = 100;
-  sun.shadow.camera.top = 100;
-  sun.shadow.camera.bottom = -100;
-  sun.shadow.bias = -0.0005; // Helps prevent shadow acne
+    sun.shadow.mapSize.width = 4096; // Increased from 2048
+    sun.shadow.mapSize.height = 4096; // Increased from 2048
+    sun.shadow.camera.near = 0.5;
+    sun.shadow.camera.far = 200; // Extended range
+    sun.shadow.camera.left = -100;
+    sun.shadow.camera.right = 100;
+    sun.shadow.camera.top = 100;
+    sun.shadow.camera.bottom = -100;
+    sun.shadow.bias = -0.0005; // Helps prevent shadow acne
 
-  scene.add(sun);
+    scene.add(sun);
 
-  // Uncomment to visualize shadow camera (helpful for debugging)
-  // const helper = new THREE.CameraHelper(sun.shadow.camera);
-  // scene.add(helper);
+    // Uncomment to visualize shadow camera (helpful for debugging)
+    // const helper = new THREE.CameraHelper(sun.shadow.camera);
+    // scene.add(helper);
 
-  // Additional directional light for better terrain illumination
-  const secondaryLight = new THREE.DirectionalLight(0xffd6a5, 1.0); // Warm light
-  secondaryLight.position.set(-15, 20, -10); // From opposite direction of sun
-  secondaryLight.castShadow = false; // Optional shadow from secondary light
-  scene.add(secondaryLight);
+    // Additional directional light for better terrain illumination
+    secondaryLight = new THREE.DirectionalLight(0xffd6a5, 1.0); // Warm light
+    secondaryLight.position.set(-15, 20, -10); // From opposite direction of sun
+    secondaryLight.castShadow = false; // Optional shadow from secondary light
+    scene.add(secondaryLight);
+
+    // Begin loading textures
+    textureLoader.load(
+      'mars_ground.png',
+      (texture) => {
+        texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+        texture.repeat.set(baseTextureRepeat, baseTextureRepeat);
+        texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+        diffuseMap = texture;
+        texturesLoaded.diffuse = true;
+        checkTexturesAndApply();
+      },
+      undefined,
+      () => {
+        texturesLoaded.diffuse = true;
+        checkTexturesAndApply();
+      }
+    );
+
+    textureLoader.load(
+      'mars_ground_bump.png',
+      (texture) => {
+        texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+        texture.repeat.set(baseTextureRepeat, baseTextureRepeat);
+        texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+        bumpMap = texture;
+        texturesLoaded.bump = true;
+        checkTexturesAndApply();
+      },
+      undefined,
+      () => {
+        texturesLoaded.bump = true;
+        checkTexturesAndApply();
+      }
+    );
+
+    textureLoader.load(
+      'mars_ground_spec.png',
+      (texture) => {
+        texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+        texture.repeat.set(baseTextureRepeat, baseTextureRepeat);
+        texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+        specMap = texture;
+        texturesLoaded.spec = true;
+        checkTexturesAndApply();
+      },
+      undefined,
+      () => {
+        texturesLoaded.spec = true;
+        checkTexturesAndApply();
+      }
+    );
+
+    textureLoader.load(
+      'dust.png',
+      (texture) => {
+        dustTexture = texture;
+        initDustParticles();
+      },
+      undefined,
+      () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 64;
+        canvas.height = 64;
+        const ctx = canvas.getContext('2d');
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        const radius = 24;
+        const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius);
+        gradient.addColorStop(0, 'rgba(255, 230, 200, 1.0)');
+        gradient.addColorStop(0.5, 'rgba(230, 200, 170, 0.5)');
+        gradient.addColorStop(1, 'rgba(200, 170, 140, 0.0)');
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+        ctx.fill();
+        dustTexture = new THREE.CanvasTexture(canvas);
+        initDustParticles();
+      }
+    );
+
+    groundLoader.load(
+      'terrain_s.gltf',
+      (gltf) => {
+        gltfTerrain = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+        if (!gltfTerrain) return;
+        addPointLightsFromGLTF(gltf);
+        gltfTerrain.scale.set(terrainScaleFactor, terrainScaleFactor, terrainScaleFactor);
+        gltfTerrain.traverse(o => {
+          if (o.isMesh) {
+            o.receiveShadow = true;
+            o.castShadow = false;
+            terrainMeshes.push(o);
+          }
+        });
+        if (texturesLoaded.diffuse && texturesLoaded.bump && texturesLoaded.spec) {
+          applyTexturesToTerrain(gltfTerrain);
+        }
+        scene.add(gltfTerrain);
+        if (model) {
+          findGroundBelow();
+        }
+      },
+      undefined,
+      () => {
+        createFallbackTerrain();
+      }
+    );
+
+    new GLTFLoader().load(
+      'character.glb',
+      gltf => {
+        model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+        if (!model) return;
+        addPointLightsFromGLTF(gltf);
+        model.scale.set(modelScale, modelScale, modelScale);
+        model.rotation.y = 0;
+        model.traverse(o => {
+          if (o.isMesh) {
+            o.castShadow = true;
+            o.receiveShadow = false;
+            const oldMat = o.material;
+            if (oldMat && !oldMat.isMeshStandardMaterial) {
+              o.material = new THREE.MeshStandardMaterial({
+                map: oldMat.map || null,
+                color: oldMat.color ? oldMat.color.clone() : new THREE.Color(0xffffff),
+                metalness: 0.2,
+                roughness: 0.8,
+                skinning: !!o.isSkinnedMesh
+              });
+            }
+          }
+        });
+        scene.add(model);
+        footstepSound = new THREE.PositionalAudio(listener);
+        audioLoader.load('walking.mp3', buffer => {
+          footstepSound.setBuffer(buffer);
+          footstepSound.setLoop(true);
+          footstepSound.setRefDistance(5);
+          footstepSound.setVolume(0);
+          footstepSound.play();
+        });
+        model.add(footstepSound);
+        if (DEBUG_LOG) {
+          console.log('[DEBUG] Player model loaded', {
+            position: { x: startPosition[0], y: startPosition[1], z: startPosition[2] }
+          });
+        }
+        model.position.set(startPosition[0], startPosition[1], startPosition[2]);
+        mixer = new THREE.AnimationMixer(model);
+        const animations = gltf.animations;
+        idleAction = mixer.clipAction(animations.find(a => a.name.toLowerCase() === 'idle'));
+        walkAction = mixer.clipAction(animations.find(a => a.name.toLowerCase() === 'walk'));
+        runAction = mixer.clipAction(animations.find(a => a.name.toLowerCase() === 'run'));
+        dieAction = mixer.clipAction(animations.find(a => a.name.toLowerCase() === 'die'));
+        flagPlantAction = mixer.clipAction(animations.find(a => a.name.toLowerCase() === 'target'));
+        if (flagPlantAction) {
+          flagPlantAction.setLoop(THREE.LoopOnce, 1);
+          flagPlantAction.clampWhenFinished = true;
+        }
+        if (dieAction) {
+          dieAction.setLoop(THREE.LoopOnce, 1);
+          dieAction.clampWhenFinished = true;
+        }
+        playerAnimations = animations;
+        if (runAction || walkAction) {
+          mixer.addEventListener('loop', function(e) {
+            if ((e.action === runAction || e.action === walkAction) && isMovingForward && onGround) {
+              calculateFootPositions();
+            }
+          });
+        }
+        activeAction = idleAction || walkAction || runAction;
+        if (activeAction) activeAction.play();
+        if (terrainMeshes.length > 0) {
+          findGroundBelow();
+        }
+        handlePendingRemotePlayers();
+      },
+      undefined,
+      () => {}
+    );
+
+  }
 
   // --- Day/Night Cycle Settings ---
   const DAY_DURATION = 600;   // seconds of daylight
@@ -2344,98 +2551,6 @@ function showInstitutionPopup(id) {
     }
   }
 
-  // Load diffuse texture (base color)
-  textureLoader.load(
-    'mars_ground.png',
-    (texture) => {
-      texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-      texture.repeat.set(baseTextureRepeat, baseTextureRepeat);
-      texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
-      diffuseMap = texture;
-      texturesLoaded.diffuse = true;
-
-      checkTexturesAndApply();
-    },
-    undefined,
-    (error) => {
-      texturesLoaded.diffuse = true; // Mark as done even if error
-      checkTexturesAndApply();
-    }
-  );
-
-  // Load bump map
-  textureLoader.load(
-    'mars_ground_bump.png', // Adjust filename to match your bump map
-    (texture) => {
-      texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-      texture.repeat.set(baseTextureRepeat, baseTextureRepeat);
-      texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
-      bumpMap = texture;
-      texturesLoaded.bump = true;
-
-      checkTexturesAndApply();
-    },
-    undefined,
-    (error) => {
-      texturesLoaded.bump = true; // Mark as done even if error
-      checkTexturesAndApply();
-    }
-  );
-
-  // Load specular map
-  textureLoader.load(
-    'mars_ground_spec.png', // Adjust filename to match your specular map
-    (texture) => {
-      texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-      texture.repeat.set(baseTextureRepeat, baseTextureRepeat);
-      texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
-      specMap = texture;
-      texturesLoaded.spec = true;
-
-      checkTexturesAndApply();
-    },
-    undefined,
-    (error) => {
-      texturesLoaded.spec = true; // Mark as done even if error
-      checkTexturesAndApply();
-    }
-  );
-
-  // Load dust particle texture
-  let dustTexture;
-  textureLoader.load(
-    'dust.png',
-    (texture) => {
-      dustTexture = texture;
-      // Initialize dust particles system once texture is loaded
-      initDustParticles();
-    },
-    undefined,
-    (error) => {
-      // Create a fallback texture - a simple circle
-      const canvas = document.createElement('canvas');
-      canvas.width = 64;
-      canvas.height = 64;
-      const ctx = canvas.getContext('2d');
-      const centerX = canvas.width / 2;
-      const centerY = canvas.height / 2;
-      const radius = 24;
-
-      // Draw a simple radial gradient for the particle
-      const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius);
-      gradient.addColorStop(0, 'rgba(255, 230, 200, 1.0)');
-      gradient.addColorStop(0.5, 'rgba(230, 200, 170, 0.5)');
-      gradient.addColorStop(1, 'rgba(200, 170, 140, 0.0)');
-
-      ctx.fillStyle = gradient;
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-      ctx.fill();
-
-      dustTexture = new THREE.CanvasTexture(canvas);
-      initDustParticles();
-    }
-  );
 
   // Helper function to apply textures to terrain
   function applyTexturesToTerrain(terrain) {
@@ -2675,53 +2790,7 @@ function showInstitutionPopup(id) {
   const raycaster = new THREE.Raycaster();
 
   // --- LOAD GLTF GROUND MODEL ---
-  const groundLoader = new GLTFLoader();
-  let gltfTerrain;
-  const terrainScaleFactor = 50; // Adjust this to scale your terrain
 
-  // Array to store all terrain meshes for raycasting
-  const terrainMeshes = [];
-
-  groundLoader.load(
-    'terrain_s.gltf', // Replace this with the path to your ground GLTF file
-    (gltf) => {
-      gltfTerrain = gltf.scene || (gltf.scenes && gltf.scenes[0]);
-      if (!gltfTerrain) return;
-      addPointLightsFromGLTF(gltf);
-
-      gltfTerrain.scale.set(terrainScaleFactor, terrainScaleFactor, terrainScaleFactor);
-
-      // Optional: Adjust terrain position if needed
-      // gltfTerrain.position.y = -someValueToCorrect;
-
-      gltfTerrain.traverse(o => {
-        if (o.isMesh) {
-          o.receiveShadow = true;
-          o.castShadow = false;
-
-          // Add mesh to our array for raycasting
-          terrainMeshes.push(o);
-        }
-      });
-
-      // Apply textures if they're already loaded
-      if (texturesLoaded.diffuse && texturesLoaded.bump && texturesLoaded.spec) {
-        applyTexturesToTerrain(gltfTerrain);
-      }
-
-      scene.add(gltfTerrain);
-
-      // Position model on the terrain if it's already loaded
-      if (model) {
-        findGroundBelow();
-      }
-    },
-    undefined,
-    (error) => {
-      // Create a fallback terrain with some hills
-      createFallbackTerrain();
-    }
-  );
 
   // Create a fallback procedural terrain with variation for testing
   function createFallbackTerrain() {
@@ -2782,123 +2851,6 @@ function showInstitutionPopup(id) {
       findGroundBelow();
     }
   }
-
-  // Player model and animations
-  let model, mixer;
-  let runAction, walkAction, idleAction, dieAction, flagPlantAction;
-  let activeAction;
-  const modelScale = 1.2;
-  const characterHeight = 1.8 * modelScale; // Approximate height of character
-  const characterRadius = 0.2 * modelScale; // Radius used for collision checks
-  let playerAnimations = null;
-
-  // Track foot positions for dust particles
-  const footPositions = {
-    left: new THREE.Vector3(),
-    right: new THREE.Vector3(),
-    lastEmitTime: 0
-  };
-
-  // Load player model
-  new GLTFLoader().load(
-    'character.glb',
-    gltf => {
-      model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
-      if (!model) return;
-      addPointLightsFromGLTF(gltf);
-      model.scale.set(modelScale, modelScale, modelScale);
-      model.rotation.y =0
-      // Setup shadow casting
-      model.traverse(o => {
-        if (o.isMesh) {
-          o.castShadow = true;
-          o.receiveShadow = false;
-
-          const oldMat = o.material;
-          if (oldMat && !oldMat.isMeshStandardMaterial) {
-            o.material = new THREE.MeshStandardMaterial({
-              map: oldMat.map || null,
-              color: oldMat.color ? oldMat.color.clone() : new THREE.Color(0xffffff),
-              metalness: 0.2,
-              roughness: 0.8,
-              skinning: !!o.isSkinnedMesh
-            });
-          }
-        }
-      });
-      scene.add(model);
-
-      // Footstep audio attached to the player
-      footstepSound = new THREE.PositionalAudio(listener);
-      audioLoader.load('walking.mp3', buffer => {
-        footstepSound.setBuffer(buffer);
-        footstepSound.setLoop(true);
-        footstepSound.setRefDistance(5);
-        footstepSound.setVolume(0);
-        footstepSound.play();
-      });
-      model.add(footstepSound);
-
-      // Debug: log when player model is loaded and its starting position
-      if (DEBUG_LOG) {
-        console.log('[DEBUG] Player model loaded', {
-          position: {
-            x: startPosition[0],
-            y: startPosition[1],
-            z: startPosition[2]
-          }
-        });
-      }
-
-      // Position the model based on saved state
-      model.position.set(startPosition[0], startPosition[1], startPosition[2]);
-
-      // Setup animations
-      mixer = new THREE.AnimationMixer(model);
-      const animations = gltf.animations;
-      idleAction = mixer.clipAction(animations.find(a => a.name.toLowerCase() === 'idle'));
-      walkAction = mixer.clipAction(animations.find(a => a.name.toLowerCase() === 'walk'));
-      runAction = mixer.clipAction(animations.find(a => a.name.toLowerCase() === 'run'));
-      dieAction = mixer.clipAction(animations.find(a => a.name.toLowerCase() === 'die'));
-      flagPlantAction = mixer.clipAction(animations.find(a => a.name.toLowerCase() === 'target'));
-      if (flagPlantAction) {
-        flagPlantAction.setLoop(THREE.LoopOnce, 1);
-        flagPlantAction.clampWhenFinished = true;
-      }
-      if (dieAction) {
-        dieAction.setLoop(THREE.LoopOnce, 1);
-        dieAction.clampWhenFinished = true;
-      }
-      playerAnimations = animations;
-
-
-      // Set up animation events for dust particles
-      if (runAction || walkAction) {
-        // Add an event that fires at specific points in animation
-        // (these numbers would need adjustment based on the actual animation)
-        const leftFootStep = 0.3; // 30% through animation
-        const rightFootStep = 0.8; // 80% through animation
-
-        // Set up animation events using mixer
-        mixer.addEventListener('loop', function(e) {
-          if ((e.action === runAction || e.action === walkAction) && isMovingForward && onGround) {
-            // Calculate foot positions and emit dust at each step
-            calculateFootPositions();
-          }
-        });
-      }
-
-      activeAction = idleAction || walkAction || runAction;
-      if (activeAction) activeAction.play();
-
-      // If terrain is already loaded, we can find the ground
-      if (terrainMeshes.length > 0) {
-        findGroundBelow();
-      }
-      handlePendingRemotePlayers();
-    },
-    undefined,
-  );
 
   // Calculate foot positions based on model
   function calculateFootPositions() {
