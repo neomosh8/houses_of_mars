@@ -26,6 +26,15 @@
       <div id="login-error"></div>
     </div>
   </div>
+  <div id="loading-container" class="loading-container hidden">
+    <div id="loading-tip" class="loading-tip"></div>
+    <div class="loading-box">
+      <div id="loading-bar" class="loading-bar"></div>
+    </div>
+    <div id="loading-text" class="loading-text"></div>
+    <img id="loading-image" class="loading-image hidden" />
+    <video id="intro-video" class="intro-video hidden" src="intro.mp4" preload="auto" autoplay muted playsinline></video>
+  </div>
   <div id="money-display">Money: 0</div>
   <div id="status-panel">
     <div class="stat"><img id="health-img" /></div>
@@ -79,7 +88,8 @@
     <button id="partner-save">Save</button>
   </div>
   <script type="module">
-  const DEBUG_LOG = false;
+
+  const DEBUG_LOG = true;
   import * as THREE from 'three';
   import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
   import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -91,10 +101,92 @@
   import { renderProposals } from './proposals.js';
   import { renderDefProposals } from './defProposals.js';
 
+  import { preloadAssets } from "./preloadAssets.js";
 
   let playerEmail = null;
   let playerMoney = 0;
   let startPosition = [70, 100, -50];
+
+  const SLIDES = ['slide1.png', 'slide2.png', 'slide3.png'];
+  const SLIDE_TIPS = [
+    'Stay healthy to survive the harsh environment.',
+    'Efficient transport keeps the colony running.',
+    'Handle chemicals with extreme caution.'
+  ];
+  const SLIDE_DURATION = 3000; // ms
+  let slideIndex = 0;
+  let slideTimer = null;
+  let slideshowAudio = null;
+
+  function playAudioWithUserGesture(audio) {
+    if (!audio) return;
+    const attempt = () => {
+      if (!audio.paused) {
+        document.removeEventListener('click', attempt);
+        document.removeEventListener('keydown', attempt);
+        return;
+      }
+      audio.play().then(() => {
+        document.removeEventListener('click', attempt);
+        document.removeEventListener('keydown', attempt);
+      }).catch(() => {/* ignore until next user gesture */});
+    };
+    attempt();
+    document.addEventListener('click', attempt);
+    document.addEventListener('keydown', attempt);
+  }
+
+
+  function startSlideshow() {
+    const img = document.getElementById('loading-image');
+    const tipEl = document.getElementById('loading-tip');
+    if (!img) return;
+    img.classList.remove('hidden');
+    img.src = SLIDES[0];
+    if (tipEl) tipEl.textContent = SLIDE_TIPS[0] || '';
+    slideIndex = 0;
+    if (!slideshowAudio) {
+      slideshowAudio = new Audio('intro_music.mp3');
+      slideshowAudio.loop = true;
+    }
+    playAudioWithUserGesture(slideshowAudio);
+
+    slideTimer = setInterval(() => {
+      slideIndex = (slideIndex + 1) % SLIDES.length;
+      img.src = SLIDES[slideIndex];
+      if (tipEl) tipEl.textContent = SLIDE_TIPS[slideIndex] || '';
+    }, SLIDE_DURATION);
+  }
+
+  function stopSlideshow() {
+    if (slideTimer) clearInterval(slideTimer);
+    slideTimer = null;
+    const tipEl = document.getElementById('loading-tip');
+    if (tipEl) tipEl.textContent = '';
+  }
+
+  async function playIntroSequence() {
+    stopSlideshow();
+    const img = document.getElementById('loading-image');
+    if (img) {
+      img.src = SLIDES[SLIDES.length - 1];
+    }
+    await new Promise(r => setTimeout(r, SLIDE_DURATION));
+    const video = document.getElementById('intro-video');
+    if (video) {
+      video.classList.remove('hidden');
+      try { await video.play(); } catch (e) { console.error('Video play failed', e); }
+      await new Promise(res => video.onended = res);
+      video.classList.add('hidden');
+    }
+    if (slideshowAudio) {
+      slideshowAudio.pause();
+      slideshowAudio.currentTime = 0;
+    }
+    const loaderEl = document.getElementById('loading-container');
+    loaderEl.classList.add('hidden');
+    loaderEl.style.display = 'none';
+  }
 
 const icons = {
   health_full: 'healthfull.png',
@@ -116,14 +208,59 @@ const icons = {
     return mesh;
   }
 
-  function addPointLightsFromGLTF(gltf) {
-    if (!gltf || !gltf.scene) return;
-    gltf.scene.traverse(node => {
-      if (node.isPointLight) {
-        scene.add(node);
-      }
-    });
+  // Create a 2D ground footprint (X/Z) for an object. This footprint is used
+  // for all collision checks so that only horizontal space on the terrain is
+  // considered.
+  function createBuildingFootprint(obj) {
+    const box = new THREE.Box3().setFromObject(obj);
+    return {
+      minX: box.min.x,
+      maxX: box.max.x,
+      minZ: box.min.z,
+      maxZ: box.max.z,
+    };
   }
+
+  // Update an existing footprint with a new object's bounds
+  function updateBuildingFootprint(fp, obj) {
+    const box = new THREE.Box3().setFromObject(obj);
+    fp.minX = box.min.x;
+    fp.maxX = box.max.x;
+    fp.minZ = box.min.z;
+    fp.maxZ = box.max.z;
+  }
+
+  // Test if a THREE.Sphere intersects the ground footprint
+  function sphereIntersectsFootprint(fp, sphere) {
+    const x = sphere.center.x;
+    const z = sphere.center.z;
+    const dx = Math.max(fp.minX - x, 0, x - fp.maxX);
+    const dz = Math.max(fp.minZ - z, 0, z - fp.maxZ);
+    return dx * dx + dz * dz <= sphere.radius * sphere.radius;
+  }
+
+  function printGLTFHierarchy(obj, prefix = '') {
+    if (!obj || typeof obj.traverse !== 'function') return;
+    console.log(prefix + (obj.name || obj.type));
+    obj.children?.forEach(child => printGLTFHierarchy(child, prefix + '  '));
+  }
+
+  function addPointLightsFromGLTF(gltf) {
+  if (!gltf) return;
+  const root = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+  if (!root || typeof root.traverse !== 'function') return;
+
+  // (Optional) dump out the hierarchy for debugging:
+  if (DEBUG_LOG) printGLTFHierarchy(root);
+
+  root.traverse(node => {
+    if (node.isLight) {
+      // ← clone() instead of reparenting the exact node
+      scene.add(node.clone());
+    }
+  });
+}
+
 
   const healthImg = document.getElementById('health-img');
   const hydrationImg = document.getElementById('hydration-img');
@@ -196,6 +333,7 @@ function updateStatImages() {
   };
 
   async function autoLogin(email) {
+    const loaderEl = document.getElementById('loading-container');
     try {
       const res = await fetch('/api/state/' + encodeURIComponent(email));
       if (!res.ok) throw new Error('state');
@@ -208,17 +346,42 @@ function updateStatImages() {
       updateStatImages();
       playerEmail = email;
       document.getElementById('login-container').style.display = 'none';
+      loaderEl.classList.remove('hidden');
+      loaderEl.style.display = 'flex';
+      document.getElementById('loading-bar').style.width = '0%';
+      document.getElementById('loading-text').textContent = 'Fetching files list...';
+      startSlideshow();
+      await preloadAssets(
+        PRELOAD_ASSETS,
+        p => {
+          document.getElementById('loading-bar').style.width = `${Math.floor(p * 100)}%`;
+        },
+        msg => {
+          document.getElementById('loading-text').textContent = msg;
+        }
+      );
+      await playIntroSequence();
       initNetwork();
       updateMoneyDisplay();
       return true;
-    } catch {
+    } catch (e) {
+      console.error('autoLogin failed:', e);
+      loaderEl.classList.add('hidden');
+      loaderEl.style.display = 'none';
+      document.getElementById('login-container').style.display = 'flex';
       return false;
     }
   }
 
   const stored = localStorage.getItem('playerEmail');
   if (stored) {
-    autoLogin(stored);
+    (async () => {
+      try {
+        await autoLogin(stored);
+      } catch (e) {
+        console.error('Stored login failed:', e);
+      }
+    })();
   }
 
     // --- Institution placement ---
@@ -228,23 +391,23 @@ function updateStatImages() {
       url: 'watox.glb',
       thumbnail: 'watox.png',
       scale: 1,
-      price: 100,
+      price: 150,
       effects: { hydration: 0.5, oxygen: 0.5 },
       animated: false
     },
     {
       name: 'agriFood',
       url: 'agriFood.glb',
-      thumbnail: 'https://placehold.co/100x100?text=Lab',
+      thumbnail: 'agriFood.png',
       scale: 1,
       price: 200,
       effects: { health: 0.2 },
-      animated: true
+      animated: false
     },
     {
       name: 'Depot',
       url: 'base.glb',
-      thumbnail: 'https://placehold.co/100x100?text=Depot',
+      thumbnail: 'transport.png',
       scale: 0.5,
       price: 150,
       effects: { money: 1 },
@@ -252,8 +415,8 @@ function updateStatImages() {
     },
     {
       name: 'Defence Base',
-      url: 'defba.glb',
-      thumbnail: 'https://placehold.co/100x100?text=DefBase',
+      url: 'defbase.glb',
+      thumbnail: 'defbase.png',
       scale: 10,
       price: 300,
       effects: {},
@@ -267,15 +430,26 @@ function updateStatImages() {
     'Depot': 'depot.mp3',
     'Defence Base': 'defence_base.mp3'
   };
-
   const weaponAudioFiles = {
-    laser: 'laser.mp3',
-    bullet: 'bullet.mp3',
-    missile: 'missile.mp3',
-    drone: 'drone.mp3',
-    kamikaze: 'kamikaze.mp3'
+    laser: "laser.mp3",
+    bullet: "bullet.mp3",
+    missile: "missile.mp3",
+    drone: "drone.mp3",
+    kamikaze: "kamikaze.mp3"
   };
 
+const PRELOAD_ASSETS = [
+  "watox.glb","agrifood.glb","base.glb","defbase.glb","character.glb","flag.glb",
+  "walking.mp3"
+];
+// Debug helper for remote server issues
+console.log('Current location:', window.location.href);
+console.log('Asset URLs will resolve to:', PRELOAD_ASSETS.map(url => new URL(url, window.location.href).href));
+
+// Check if we're on HTTPS and warn about mixed content
+if (window.location.protocol === 'https:') {
+  console.warn('Site is on HTTPS - ensure all assets are also HTTPS to avoid mixed content issues');
+}
   const panel = document.getElementById('institution-panel');
   const panelTab = panel.querySelector('.panel-tab');
   const panelContent = document.getElementById('institution-content');
@@ -393,11 +567,14 @@ function updateStatImages() {
     }
     const loader = new GLTFLoader();
     loader.load(inst.url, gltf => {
-      ghostInstitution = gltf.scene;
+      const root = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+      if (!root) return;
+      ghostInstitution = root;
       addPointLightsFromGLTF(gltf);
       ghostInstitution.scale.setScalar(inst.scale || 1);
       const box = new THREE.Box3().setFromObject(ghostInstitution);
       const size = box.getSize(new THREE.Vector3());
+      ghostInstitution.userData.radius = Math.max(size.x, size.z) * 0.6;
       ghostInstitution.userData.safeDistance = Math.max(size.x, size.z) * 1.5;
       ghostInstitution.traverse(o => {
         if (o.isMesh) {
@@ -426,14 +603,25 @@ function updateStatImages() {
         alert('Not enough money');
         return;
       }
+    } else if (!placingApplication && playerMoney < currentInstitution.price) {
+      // For regular placement, check full price
+      alert('Not enough money');
+      return;
+    }
       const box = new THREE.Box3().setFromObject(ghostInstitution);
-      const ground = getGroundHeightAt(
+      const radius = Math.max(box.max.x - box.min.x, box.max.z - box.min.z) * 0.6;
+      const lowestGround = findLowestPointInArea(
         ghostInstitution.position.x,
-        ghostInstitution.position.z
+        ghostInstitution.position.z,
+        radius
       );
       // Flatten the terrain under the institution before placing it
-      const radius = Math.max(box.max.x - box.min.x, box.max.z - box.min.z) * 0.6;
-      flattenTerrain(ghostInstitution.position.x, ghostInstitution.position.z, radius, ground);
+      flattenTerrain(
+        ghostInstitution.position.x,
+        ghostInstitution.position.z,
+        radius,
+        lowestGround
+      );
       const newGround = getGroundHeightAt(
         ghostInstitution.position.x,
         ghostInstitution.position.z
@@ -477,7 +665,7 @@ function updateStatImages() {
       placingApplication = false;
       applicationInfo = null;
       return;
-    }
+
 
     // Raycast to detect institution click
     const mouse = new THREE.Vector2(
@@ -525,6 +713,7 @@ function updateStatImages() {
 
   window.addEventListener('click', handleClick);
 
+  let ghostSample = { x: null, z: null, y: 0 };
   function updateGhostInstitution() {
     if (!placingInstitution || !ghostInstitution || !model) return;
     const distance = ghostInstitution.userData.safeDistance || 20;
@@ -533,6 +722,20 @@ function updateStatImages() {
     const target = model.position.clone().add(offset);
     ghostInstitution.position.copy(target);
     ghostInstitution.rotation.y = model.rotation.y;
+    const rad = ghostInstitution.userData.radius || (function(){
+      const b = new THREE.Box3().setFromObject(ghostInstitution);
+      return Math.max(b.max.x - b.min.x, b.max.z - b.min.z) * 0.6;
+    })();
+    const dx = ghostSample.x === null ? Infinity : Math.abs(target.x - ghostSample.x);
+    const dz = ghostSample.z === null ? Infinity : Math.abs(target.z - ghostSample.z);
+    if (dx > 0.25 || dz > 0.25) {
+      ghostSample.x = target.x;
+      ghostSample.z = target.z;
+      ghostSample.y = findLowestPointInArea(target.x, target.z, rad);
+    }
+    const box = new THREE.Box3().setFromObject(ghostInstitution);
+    const offY = box.min.y - ghostInstitution.position.y;
+    ghostInstitution.position.y = ghostSample.y - offY;
   }
 
   function getGroundHeightAt(x, z) {
@@ -544,6 +747,29 @@ function updateStatImages() {
       return hits[0].point.y;
     }
     return 0;
+  }
+
+  function findLowestPointInArea(cx, cz, radius) {
+    const samples = [
+      [0, 0],
+      [radius, 0],
+      [-radius, 0],
+      [0, radius],
+      [0, -radius],
+      [radius * 0.7, radius * 0.7],
+      [-radius * 0.7, radius * 0.7],
+      [radius * 0.7, -radius * 0.7],
+      [-radius * 0.7, -radius * 0.7]
+    ];
+    let min = Infinity;
+    for (let i = 0; i < samples.length; i++) {
+      const x = cx + samples[i][0];
+      const z = cz + samples[i][1];
+      const h = getGroundHeightAt(x, z);
+      if (h < min) min = h;
+    }
+    if (min === Infinity) return getGroundHeightAt(cx, cz);
+    return min;
   }
 
   function flattenTerrain(x, z, radius, height) {
@@ -665,7 +891,23 @@ function updateStatImages() {
     updateStatImages();
     playerEmail = email;
     localStorage.setItem('playerEmail', email);
+    const loaderEl = document.getElementById('loading-container');
+    loaderEl.classList.remove('hidden');
+    loaderEl.style.display = 'flex';
+    document.getElementById('loading-bar').style.width = '0%';
+    document.getElementById('loading-text').textContent = 'Fetching files list...';
+    startSlideshow();
     document.getElementById('login-container').style.display = 'none';
+    await preloadAssets(
+      PRELOAD_ASSETS,
+      p => {
+        document.getElementById('loading-bar').style.width = `${Math.floor(p * 100)}%`;
+      },
+      msg => {
+        document.getElementById('loading-text').textContent = msg;
+      }
+    );
+    await playIntroSequence();
     initNetwork();
     updateMoneyDisplay();
   }
@@ -750,6 +992,7 @@ function updateStatImages() {
   const institutionsMap = {};
   const institutionMixers = {};
   const institutionDataMap = {};
+  // Lists of ground footprints for institutions and constructions
   const institutionBoxes = [];
   const constructionBoxes = [];
   const sinking = [];
@@ -765,7 +1008,8 @@ function updateStatImages() {
   const fundingIndicators = {};
 
   function initNetwork() {
-    socket = new WebSocket('ws://localhost:3000?email=' + encodeURIComponent(playerEmail));
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    socket = new WebSocket(`${protocol}//${window.location.host}/?email=${encodeURIComponent(playerEmail)}`);
     socket.addEventListener('message', e => {
       const msg = JSON.parse(e.data);
       if (msg.type === 'welcome') {
@@ -955,7 +1199,8 @@ function updateStatImages() {
       const loader = new GLTFLoader();
       loader.load(c.url, gltf => {
         if (inst.constructions[idx] !== c) return; // ignore outdated load
-        const obj = gltf.scene;
+        const obj = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+        if (!obj) return;
         addPointLightsFromGLTF(gltf);
         const offset = Array.isArray(c.offset)
           ? new THREE.Vector3().fromArray(c.offset)
@@ -967,9 +1212,8 @@ function updateStatImages() {
         } else {
           const boxEntry = institutionBoxes.find(b => b.id === inst.id);
           if (boxEntry) {
-            const size = new THREE.Vector3();
-            boxEntry.box.getSize(size);
-            const off = new THREE.Vector3(size.x / 2 + 5, 0, 0);
+            const width = boxEntry.box.maxX - boxEntry.box.minX;
+            const off = new THREE.Vector3(width / 2 + 5, 0, 0);
             off.applyAxisAngle(new THREE.Vector3(0, 1, 0), inst.rotation || 0);
             pos.add(off);
           } else {
@@ -982,11 +1226,11 @@ function updateStatImages() {
         scene.add(obj);
         const boxTmp = new THREE.Box3().setFromObject(obj);
         const radius = Math.max(boxTmp.max.x - boxTmp.min.x, boxTmp.max.z - boxTmp.min.z) * 0.6;
-        const ground = getGroundHeightAt(pos.x, pos.z);
-        flattenTerrain(pos.x, pos.z, radius, ground);
-        obj.position.set(pos.x, ground - boxTmp.min.y, pos.z);
+        const lowestGround = findLowestPointInArea(pos.x, pos.z, radius);
+        flattenTerrain(pos.x, pos.z, radius, lowestGround);
+        obj.position.set(pos.x, lowestGround - boxTmp.min.y, pos.z);
 
-        const cbox = new THREE.Box3().setFromObject(obj);
+        const cbox = createBuildingFootprint(obj);
         constructionBoxes.push({ id: inst.id, index: idx, box: cbox });
 
         if (!constructionMap[inst.id][idx]) constructionMap[inst.id][idx] = {};
@@ -1008,9 +1252,8 @@ function updateStatImages() {
         } else {
           const boxEntry = institutionBoxes.find(b => b.id === inst.id);
           if (boxEntry) {
-            const size = new THREE.Vector3();
-            boxEntry.box.getSize(size);
-            const off = new THREE.Vector3(size.x / 2 + 5, 0, 0);
+            const width = boxEntry.box.maxX - boxEntry.box.minX;
+            const off = new THREE.Vector3(width / 2 + 5, 0, 0);
             off.applyAxisAngle(new THREE.Vector3(0, 1, 0), inst.rotation || 0);
             pos.add(off);
           } else {
@@ -1019,7 +1262,7 @@ function updateStatImages() {
         }
         obj.position.copy(pos);
         scene.add(obj);
-        const cbox = new THREE.Box3().setFromObject(obj);
+        const cbox = createBuildingFootprint(obj);
         constructionBoxes.push({ id: inst.id, index: idx, box: cbox });
         if (!constructionMap[inst.id][idx]) constructionMap[inst.id][idx] = {};
         if (c.status === 'scaffolding') {
@@ -1038,7 +1281,8 @@ function updateStatImages() {
     if (existing) scene.remove(existing);
     const loader = new GLTFLoader();
     loader.load('flag.glb', gltf => {
-      const obj = gltf.scene;
+      const obj = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+      if (!obj) return;
       obj.position.copy(pos);
       scene.add(obj);
       flagObjects[id] = obj;
@@ -1054,8 +1298,8 @@ function updateStatImages() {
 
   function createFundingIndicator(id, position) {
     const pos = new THREE.Vector3().fromArray(position);
-    pos.y += 10;
-    const geom = new THREE.SphereGeometry(1, 16, 16);
+    pos.y += 30;
+    const geom = new THREE.SphereGeometry(4, 16, 16);
     const mat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
     const sph = new THREE.Mesh(geom, mat);
     sph.position.copy(pos);
@@ -1114,7 +1358,8 @@ function updateStatImages() {
       const loader = new GLTFLoader();
       loader.load(w.model, gltf => {
         if (inst.weapons[idx] !== w) return; // ignore outdated load
-        const obj = gltf.scene;
+        const obj = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+        if (!obj) return;
         addPointLightsFromGLTF(gltf);
       obj.scale.setScalar(w.scale || 1);
       obj.rotation.y = inst.rotation || 0;
@@ -1149,9 +1394,9 @@ function updateStatImages() {
 
       const boxTmp = new THREE.Box3().setFromObject(obj);
         const radius = Math.max(boxTmp.max.x - boxTmp.min.x, boxTmp.max.z - boxTmp.min.z) * 0.6;
-        const ground = getGroundHeightAt(pos.x, pos.z);
-        flattenTerrain(pos.x, pos.z, radius, ground);
-        obj.position.set(pos.x, ground - boxTmp.min.y, pos.z);
+        const lowestGround = findLowestPointInArea(pos.x, pos.z, radius);
+        flattenTerrain(pos.x, pos.z, radius, lowestGround);
+        obj.position.set(pos.x, lowestGround - boxTmp.min.y, pos.z);
         obj.traverse(o => {
           o.userData.weaponInstId = inst.id;
           o.userData.weaponIndex = idx;
@@ -1173,7 +1418,11 @@ function updateStatImages() {
       }, undefined, () => {
         if (inst.weapons[idx] !== w) return;
         const obj = createPlaceholder(w.scale || 1, 0xff0000);
-        obj.position.copy(pos);
+        const boxTmp2 = new THREE.Box3().setFromObject(obj);
+        const radius2 = Math.max(boxTmp2.max.x - boxTmp2.min.x, boxTmp2.max.z - boxTmp2.min.z) * 0.6;
+        const lowestGround2 = findLowestPointInArea(pos.x, pos.z, radius2);
+        flattenTerrain(pos.x, pos.z, radius2, lowestGround2);
+        obj.position.set(pos.x, lowestGround2 - boxTmp2.min.y, pos.z);
         obj.rotation.y = inst.rotation || 0;
         scene.add(obj);
         obj.traverse(o => {
@@ -1246,7 +1495,7 @@ function updateStatImages() {
       for (const entry of institutionBoxes) {
         const data = institutionDataMap[entry.id];
         if (!data || data.destroyed) continue;
-        if (entry.box.intersectsSphere(sphere)) {
+        if (sphereIntersectsFootprint(entry.box, sphere)) {
           hitInst = entry.id;
           break;
         }
@@ -1379,7 +1628,8 @@ function updateStatImages() {
     if (!def) return;
     const loader = new GLTFLoader();
     loader.load(def.url, gltf => {
-      const obj = gltf.scene;
+      const obj = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+      if (!obj) return;
       obj.userData.animations = gltf.animations || [];
       addPointLightsFromGLTF(gltf);
       obj.scale.setScalar(inst.scale || def.scale || 1);
@@ -1398,8 +1648,8 @@ function updateStatImages() {
       });
       const boxTmp = new THREE.Box3().setFromObject(obj);
       const radius = Math.max(boxTmp.max.x - boxTmp.min.x, boxTmp.max.z - boxTmp.min.z) * 0.6;
-      const ground = getGroundHeightAt(inst.position[0], inst.position[2]);
-      flattenTerrain(inst.position[0], inst.position[2], radius, ground);
+      const lowestGround = findLowestPointInArea(inst.position[0], inst.position[2], radius);
+      flattenTerrain(inst.position[0], inst.position[2], radius, lowestGround);
       scene.add(obj);
 
       const instAudioFile = institutionAudioFiles[inst.name];
@@ -1439,7 +1689,7 @@ function updateStatImages() {
       const cons = inst.constructions || (inst.construction ? [inst.construction] : []);
       institutionDataMap[inst.id] = { ...inst, effects: def.effects, workforce: inst.workforce || [], extraEffects: inst.extraEffects || {}, constructions: cons };
       obj.traverse(o => { o.userData.institutionId = inst.id; });
-      const box = new THREE.Box3().setFromObject(obj);
+      const box = createBuildingFootprint(obj);
       institutionBoxes.push({ id: inst.id, box });
       if (!inst.destroyed) {
         applyConstruction(institutionDataMap[inst.id]);
@@ -1466,7 +1716,7 @@ function updateStatImages() {
       scene.add(obj);
       obj.traverse(o => { o.userData.institutionId = inst.id; });
       institutionsMap[inst.id] = obj;
-      const box = new THREE.Box3().setFromObject(obj);
+      const box = createBuildingFootprint(obj);
       institutionBoxes.push({ id: inst.id, box });
       institutionDataMap[inst.id] = { ...inst, effects: def.effects, workforce: inst.workforce || [], extraEffects: inst.extraEffects || {}, constructions: inst.constructions || [] };
       if (!inst.destroyed) {
@@ -1476,401 +1726,420 @@ function updateStatImages() {
     });
   }
 
-  function showInstitutionPopup(id) {
-    const popup = document.getElementById('institution-popup');
-    const infoTabBtn = document.getElementById('info-tab-btn');
-    const workforceTabBtn = document.getElementById('workforce-tab-btn');
-    const chatTabBtn = document.getElementById('chat-tab-btn');
-    const proposalsTabBtn = document.getElementById('proposals-tab-btn');
-    const weaponsTabBtn = document.getElementById('weapons-tab-btn');
-    const infoDiv = document.getElementById('popup-info');
-    const workforceDiv = document.getElementById('popup-workforce');
-    const chatDiv = document.getElementById('popup-chat');
-    const proposalsDiv = document.getElementById('popup-proposals');
-    const weaponsDiv = document.getElementById('popup-weapons');
-    const chatContainer = document.getElementById('chat-container');
-    const ownerSpan = document.getElementById('popup-owner');
-    const resDiv = document.getElementById('popup-resources');
-    const closeBtn = document.getElementById('popup-close');
+// In index.html, replace the showInstitutionPopup function with this updated version:
 
-    let chatInterval = null;
+function showInstitutionPopup(id) {
+  const popup = document.getElementById('institution-popup');
+  const infoTabBtn = document.getElementById('info-tab-btn');
+  const workforceTabBtn = document.getElementById('workforce-tab-btn');
+  const chatTabBtn = document.getElementById('chat-tab-btn');
+  const proposalsTabBtn = document.getElementById('proposals-tab-btn');
+  const weaponsTabBtn = document.getElementById('weapons-tab-btn');
+  const infoDiv = document.getElementById('popup-info');
+  const workforceDiv = document.getElementById('popup-workforce');
+  const chatDiv = document.getElementById('popup-chat');
+  const proposalsDiv = document.getElementById('popup-proposals');
+  const weaponsDiv = document.getElementById('popup-weapons');
+  const chatContainer = document.getElementById('chat-container');
+  const ownerSpan = document.getElementById('popup-owner');
+  const resDiv = document.getElementById('popup-resources');
+  const closeBtn = document.getElementById('popup-close');
 
-    const instData = institutionDataMap[id];
-    if (!instData || instData.destroyed) return;
-    const isOwner = instData.owner === playerEmail;
-    const def = institutions.find(i => i.name === instData.name);
-    let count = 0;
+  let chatInterval = null;
+
+  const instData = institutionDataMap[id];
+  if (!instData || instData.destroyed) return;
+
+  // Check if user is owner OR has shares (is a partner)
+  const isOwner = instData.owner === playerEmail;
+  const userShares = instData.shares && instData.shares[playerEmail] ? instData.shares[playerEmail] : 0;
+  const hasAccess = isOwner || userShares > 0;
+
+  const def = institutions.find(i => i.name === instData.name);
+  let count = 0;
+  Object.values(institutionDataMap).forEach(d => {
+    if (d.owner === instData.owner && d.name === instData.name) count++;
+  });
+  const effects = Object.assign({}, def.effects || {});
+  if (instData.extraEffects) {
+    for (const k of Object.keys(instData.extraEffects)) {
+      const val = instData.extraEffects[k];
+      if (typeof val === 'number' && isFinite(val)) {
+        effects[k] = (effects[k] || 0) + val;
+      }
+    }
+  }
+  const lines = [];
+  Object.keys(effects).forEach(k => {
+    if (typeof effects[k] === 'number' && isFinite(effects[k])) {
+      lines.push(`${k}: +${effects[k]} (${(effects[k] * count).toFixed(2)} total)`);
+    }
+  });
+  resDiv.textContent = lines.join(' | ');
+
+  const actionsDiv = popup.querySelector('.popup-actions');
+
+  // Show controls if user has access (owner or partner)
+  if (hasAccess) {
+    actionsDiv.style.display = 'flex';
+    resDiv.style.display = 'block';
+
+    // Show ownership info with shares
+    let ownerText = `Owner: ${instData.owner}`;
+    if (userShares > 0) {
+      ownerText += ` | Your shares: ${userShares}/${instData.totalShares}`;
+    }
+    ownerSpan.innerHTML = isOwner
+      ? `<span id="owner-click" style="text-decoration:underline;cursor:pointer;">${ownerText}</span>`
+      : ownerText;
+  } else {
+    actionsDiv.style.display = 'none';
+    resDiv.style.display = 'none';
+    ownerSpan.textContent = `Owner: ${instData.owner}`;
+  }
+
+  function showInfo() {
+    infoDiv.style.display = 'block';
+    workforceDiv.style.display = 'none';
+    chatDiv.style.display = 'none';
+    proposalsDiv.style.display = 'none';
+    weaponsDiv.style.display = 'none';
+    if (chatInterval) {
+      clearInterval(chatInterval);
+      chatInterval = null;
+    }
+    const carousel = document.getElementById('popup-workforce-carousel');
+    carousel.innerHTML = '';
+    const workers = [];
     Object.values(institutionDataMap).forEach(d => {
-      if (d.owner === instData.owner && d.name === instData.name) count++;
-    });
-    const effects = Object.assign({}, def.effects || {});
-    if (instData.extraEffects) {
-      for (const k of Object.keys(instData.extraEffects)) {
-        const val = instData.extraEffects[k];
-        if (typeof val === 'number' && isFinite(val)) {
-          effects[k] = (effects[k] || 0) + val;
-        }
-      }
-    }
-    const lines = [];
-    Object.keys(effects).forEach(k => {
-      if (typeof effects[k] === 'number' && isFinite(effects[k])) {
-        lines.push(`${k}: +${effects[k]} (${(effects[k] * count).toFixed(2)} total)`);
+      if (d.owner === instData.owner && d.name === instData.name && Array.isArray(d.workforce)) {
+        workers.push(...d.workforce);
       }
     });
-    resDiv.textContent = lines.join(' | ');
-    const actionsDiv = popup.querySelector('.popup-actions');
-    if (isOwner) {
-      actionsDiv.style.display = 'flex';
-      resDiv.style.display = 'block';
-      ownerSpan.innerHTML = `Owner: <span id="owner-click" style="text-decoration:underline;cursor:pointer;">${instData.owner}</span>`;
-    } else {
-      actionsDiv.style.display = 'none';
-      resDiv.style.display = 'none';
-      ownerSpan.textContent = `Owner: ${instData.owner}`;
+    if (workers.length === 0) {
+      carousel.textContent = 'No workforce';
+      return;
     }
+    workers.forEach(w => {
+      const item = document.createElement('div');
+      item.style.minWidth = '80px';
+      item.style.display = 'flex';
+      item.style.flexDirection = 'column';
+      item.style.alignItems = 'center';
+      const img = document.createElement('img');
+      img.src = w.image;
+      img.style.width = '60px';
+      img.style.height = '80px';
+      item.appendChild(img);
+      const name = document.createElement('div');
+      name.textContent = w.name + (w.director ? ' \u2605' : '');
+      name.style.fontSize = '12px';
+      item.appendChild(name);
+      carousel.appendChild(item);
+    });
+  }
 
-    function showInfo() {
-      infoDiv.style.display = 'block';
-      workforceDiv.style.display = 'none';
-      chatDiv.style.display = 'none';
-      proposalsDiv.style.display = 'none';
-      weaponsDiv.style.display = 'none';
-      if (chatInterval) {
-        clearInterval(chatInterval);
-        chatInterval = null;
+  async function showWorkforce() {
+    infoDiv.style.display = 'none';
+    workforceDiv.style.display = 'block';
+    chatDiv.style.display = 'none';
+    proposalsDiv.style.display = 'none';
+    weaponsDiv.style.display = 'none';
+    if (chatInterval) {
+      clearInterval(chatInterval);
+      chatInterval = null;
+    }
+    const container = document.getElementById('workforce-container');
+    // Immediately show loading spinner
+    container.innerHTML = '<div class="spinner" style="display: flex; justify-content: center; align-items: center; height: 200px; color: #fff;">Loading applicants...</div>';
+
+    try {
+      const res = await fetch(`/api/workforce/generate/${id}`, { method: 'POST' });
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
       }
-      const carousel = document.getElementById('popup-workforce-carousel');
-      carousel.innerHTML = '';
-      const workers = [];
-      Object.values(institutionDataMap).forEach(d => {
-        if (d.owner === instData.owner && d.name === instData.name && Array.isArray(d.workforce)) {
-          workers.push(...d.workforce);
-        }
-      });
-      if (workers.length === 0) {
-        carousel.textContent = 'No workforce';
+      const workersData = await res.json();
+
+      // Clear loading and display workers
+      container.innerHTML = '';
+
+      if (!workersData.workers || workersData.workers.length === 0) {
+        container.innerHTML = '<div style="color: #fff; text-align: center;">No applicants available</div>';
         return;
       }
-      workers.forEach(w => {
-        const item = document.createElement('div');
-        item.style.minWidth = '80px';
-        item.style.display = 'flex';
-        item.style.flexDirection = 'column';
-        item.style.alignItems = 'center';
-        const img = document.createElement('img');
-        img.src = w.image;
-        img.style.width = '60px';
-        img.style.height = '80px';
-        item.appendChild(img);
-        const name = document.createElement('div');
-        name.textContent = w.name + (w.director ? ' \u2605' : '');
-        name.style.fontSize = '12px';
-        item.appendChild(name);
-        carousel.appendChild(item);
-      });
-    }
 
-    async function showWorkforce() {
-      infoDiv.style.display = 'none';
-      workforceDiv.style.display = 'block';
-      chatDiv.style.display = 'none';
-      proposalsDiv.style.display = 'none';
-      weaponsDiv.style.display = 'none';
-      if (chatInterval) {
-        clearInterval(chatInterval);
-        chatInterval = null;
-      }
-      const container = document.getElementById('workforce-container');
-      // Immediately show loading spinner
-      container.innerHTML = '<div class="spinner" style="display: flex; justify-content: center; align-items: center; height: 200px; color: #fff;">Loading applicants...</div>';
-
-      try {
-        const res = await fetch(`/api/workforce/generate/${id}`, { method: 'POST' });
-        if (!res.ok) {
-          throw new Error(`HTTP error! status: ${res.status}`);
-        }
-        const workersData = await res.json();
-
-        // Clear loading and display workers
-        container.innerHTML = '';
-
-        if (!workersData.workers || workersData.workers.length === 0) {
-          container.innerHTML = '<div style="color: #fff; text-align: center;">No applicants available</div>';
-          return;
-        }
-
-        workersData.workers.forEach(w => {
-          const card = document.createElement('div');
-          card.className = 'worker-card';
-          card.style.width = '150px';
-          card.style.perspective = '800px';
-          const inner = document.createElement('div');
-          inner.className = 'card-inner';
-          inner.style.position = 'relative';
-          inner.style.width = '100%';
-          inner.style.height = '200px';
-          inner.style.transition = 'transform 0.6s';
-          inner.style.transformStyle = 'preserve-3d';
-          const front = document.createElement('div');
-          front.style.position = 'absolute';
-          front.style.backfaceVisibility = 'hidden';
-          front.style.width = '100%';
-          front.style.height = '100%';
-          front.style.backgroundImage = `url(${w.image})`;
-          front.style.backgroundSize = 'cover';
-          front.style.backgroundPosition = 'center';
-          front.textContent = w.name + (w.director ? ' \u2605' : '');
-          front.style.display = 'flex';
-          front.style.alignItems = 'flex-end';
-          front.style.justifyContent = 'center';
-          front.style.color = '#fff';
-          front.style.textShadow = '0 1px 3px rgba(0,0,0,0.8)';
-          front.style.padding = '8px';
-          front.style.textAlign = 'center';
-          front.style.fontSize = '14px';
-          front.style.fontWeight = 'bold';
-          const back = document.createElement('div');
-          back.style.position = 'absolute';
-          back.style.transform = 'rotateY(180deg)';
-          back.style.backfaceVisibility = 'hidden';
-          back.style.width = '100%';
-          back.style.height = '100%';
-          back.style.background = '#333';
-          back.style.color = '#fff';
-          back.style.fontSize = '12px';
-          back.style.padding = '8px';
-          back.style.overflowY = 'auto';
-          back.style.boxSizing = 'border-box';
-          back.innerHTML = `
-            <div style="margin-bottom: 8px;"><strong>${w.role}${w.director ? ' \u2605' : ''}</strong></div>
-            <div style="margin-bottom: 8px; font-size: 11px;">${w.backstory}</div>
-            <div style="margin-bottom: 8px; font-size: 11px;">${w.resume}</div>
-            <div style="font-weight: bold;">Wage: $${w.wage}/day</div>
-          `;
-          inner.appendChild(front);
-          inner.appendChild(back);
-          card.appendChild(inner);
-          card.onclick = () => {
-            inner.style.transform = inner.style.transform === 'rotateY(180deg)' ? '' : 'rotateY(180deg)';
-          };
-          const hireBtn = document.createElement('button');
-          hireBtn.textContent = 'Hire';
-          hireBtn.style.width = '100%';
-          hireBtn.style.marginTop = '20px';
-          hireBtn.onclick = async (e) => {
-            e.stopPropagation();
-            try {
-              const hireRes = await fetch(`/api/workforce/hire/${id}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ worker: w })
-              });
-              if (hireRes.ok) {
-                if (!instData.workforce) instData.workforce = [];
-                instData.workforce.push(w);
-                container.removeChild(card);
-                if (container.children.length === 0) {
-                  container.innerHTML = '<div style="color: #fff; text-align: center;">All applicants hired!</div>';
-                }
-              } else {
-                alert('Failed to hire worker');
+      workersData.workers.forEach(w => {
+        const card = document.createElement('div');
+        card.className = 'worker-card';
+        card.style.width = '150px';
+        card.style.perspective = '800px';
+        const inner = document.createElement('div');
+        inner.className = 'card-inner';
+        inner.style.position = 'relative';
+        inner.style.width = '100%';
+        inner.style.height = '200px';
+        inner.style.transition = 'transform 0.6s';
+        inner.style.transformStyle = 'preserve-3d';
+        const front = document.createElement('div');
+        front.style.position = 'absolute';
+        front.style.backfaceVisibility = 'hidden';
+        front.style.width = '100%';
+        front.style.height = '100%';
+        front.style.backgroundImage = `url(${w.image})`;
+        front.style.backgroundSize = 'cover';
+        front.style.backgroundPosition = 'center';
+        front.textContent = w.name + (w.director ? ' \u2605' : '');
+        front.style.display = 'flex';
+        front.style.alignItems = 'flex-end';
+        front.style.justifyContent = 'center';
+        front.style.color = '#fff';
+        front.style.textShadow = '0 1px 3px rgba(0,0,0,0.8)';
+        front.style.padding = '8px';
+        front.style.textAlign = 'center';
+        front.style.fontSize = '14px';
+        front.style.fontWeight = 'bold';
+        const back = document.createElement('div');
+        back.style.position = 'absolute';
+        back.style.transform = 'rotateY(180deg)';
+        back.style.backfaceVisibility = 'hidden';
+        back.style.width = '100%';
+        back.style.height = '100%';
+        back.style.background = '#333';
+        back.style.color = '#fff';
+        back.style.fontSize = '12px';
+        back.style.padding = '8px';
+        back.style.overflowY = 'auto';
+        back.style.boxSizing = 'border-box';
+        back.innerHTML = `
+          <div style="margin-bottom: 8px;"><strong>${w.role}${w.director ? ' \u2605' : ''}</strong></div>
+          <div style="margin-bottom: 8px; font-size: 11px;">${w.backstory}</div>
+          <div style="margin-bottom: 8px; font-size: 11px;">${w.resume}</div>
+          <div style="font-weight: bold;">Wage: $${w.wage}/day</div>
+        `;
+        inner.appendChild(front);
+        inner.appendChild(back);
+        card.appendChild(inner);
+        card.onclick = () => {
+          inner.style.transform = inner.style.transform === 'rotateY(180deg)' ? '' : 'rotateY(180deg)';
+        };
+        const hireBtn = document.createElement('button');
+        hireBtn.textContent = 'Hire';
+        hireBtn.style.width = '100%';
+        hireBtn.style.marginTop = '20px';
+        hireBtn.onclick = async (e) => {
+          e.stopPropagation();
+          try {
+            const hireRes = await fetch(`/api/workforce/hire/${id}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ worker: w })
+            });
+            if (hireRes.ok) {
+              if (!instData.workforce) instData.workforce = [];
+              instData.workforce.push(w);
+              container.removeChild(card);
+              if (container.children.length === 0) {
+                container.innerHTML = '<div style="color: #fff; text-align: center;">All applicants hired!</div>';
               }
-            } catch (err) {
+            } else {
               alert('Failed to hire worker');
             }
-          };
-          card.appendChild(hireBtn);
-          container.appendChild(card);
-        });
-      } catch (err) {
-        container.innerHTML = '<div style="color: #ff6666; text-align: center;">Failed to load applicants. Please try again.</div>';
-      }
-    }
-
-    async function showChat() {
-      infoDiv.style.display = 'none';
-      workforceDiv.style.display = 'none';
-      chatDiv.style.display = 'block';
-      proposalsDiv.style.display = 'none';
-      weaponsDiv.style.display = 'none';
-      if (chatInterval) clearInterval(chatInterval);
-      const input = document.getElementById('chat-input');
-      const sendBtn = document.getElementById('chat-send');
-      let lastHeight = 0;
-      async function load() {
-        try {
-          const res = await fetch(`/api/workforce/chat/${id}`);
-          if (res.ok) {
-            const data = await res.json();
-            chatContainer.innerHTML = '';
-            data.messages.forEach(m => {
-              const box = document.createElement('div');
-              box.className = 'chat-msg';
-              let text = m.text;
-              if (typeof m.text === 'object' && m.text !== null) {
-                text = m.text.dialogue || '';
-                if (m.text.is_proposal && m.text.proposal) {
-                  const p = m.text.proposal;
-                  const parts = [];
-                  if (p.title) parts.push(`Title: ${p.title}`);
-                  if (p.description) parts.push(`Description: ${p.description}`);
-                  if (p.cost !== undefined) parts.push(`Cost: $${p.cost}`);
-                  const info = parts.join(' | ');
-                  if (info) text += ` (Proposal - ${info})`;
-                }
-              }
-              box.textContent = `${m.worker}: ${text}`;
-              chatContainer.appendChild(box);
-              if (typeof m.text === 'object' && m.text !== null && m.text.raw) {
-                const preRaw = document.createElement('pre');
-                preRaw.className = 'chat-raw';
-                preRaw.textContent = m.text.raw;
-                chatContainer.appendChild(preRaw);
-                if (m.text.proposal) {
-                  const preObj = document.createElement('pre');
-                  preObj.className = 'chat-raw';
-                  preObj.textContent = JSON.stringify(m.text.proposal, null, 2);
-                  chatContainer.appendChild(preObj);
-                }
-              }
-            });
-            if (chatContainer.scrollHeight !== lastHeight) {
-              chatContainer.scrollTop = chatContainer.scrollHeight;
-              lastHeight = chatContainer.scrollHeight;
-            }
+          } catch (err) {
+            alert('Failed to hire worker');
           }
-        } catch (err) {
-        }
-      }
-      await load();
-      chatInterval = setInterval(load, 5000);
-
-      async function send() {
-        const text = input.value.trim();
-        if (!text) return;
-        input.value = '';
-        await fetch(`/api/workforce/chat/${id}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text })
-        });
-        await load();
-      }
-
-      sendBtn.onclick = send;
-      input.addEventListener('keydown', e => {
-        if (e.key === 'Enter') send();
+        };
+        card.appendChild(hireBtn);
+        container.appendChild(card);
       });
+    } catch (err) {
+      container.innerHTML = '<div style="color: #ff6666; text-align: center;">Failed to load applicants. Please try again.</div>';
     }
+  }
 
-    async function showProposals() {
-      infoDiv.style.display = 'none';
-      workforceDiv.style.display = 'none';
-      chatDiv.style.display = 'none';
-      proposalsDiv.style.display = 'block';
-      weaponsDiv.style.display = 'none';
-      if (chatInterval) { clearInterval(chatInterval); chatInterval = null; }
-      const container = document.getElementById('proposals-container');
-      container.innerHTML = '<div class="spinner" style="height:100px;color:#fff">Loading...</div>';
-      if (DEBUG_LOG) console.log('[DEFENCE UI] showProposals', { instId: id });
+  async function showChat() {
+    infoDiv.style.display = 'none';
+    workforceDiv.style.display = 'none';
+    chatDiv.style.display = 'block';
+    proposalsDiv.style.display = 'none';
+    weaponsDiv.style.display = 'none';
+    if (chatInterval) clearInterval(chatInterval);
+    const input = document.getElementById('chat-input');
+    const sendBtn = document.getElementById('chat-send');
+    let lastHeight = 0;
+    async function load() {
       try {
-        if (instData.name === 'Defence Base') {
-          const res = await fetch(`/api/defence/proposals/${id}`);
-          if (res.ok) {
-            const data = await res.json();
-            renderDefProposals(container, data.proposals || [], id);
-          }
-        } else {
-          const res = await fetch(`/api/workforce/proposals/${id}`);
-          const hist = await fetch(`/api/workforce/proposals/history/${id}`);
-          if (res.ok && hist.ok) {
-            const data = await res.json();
-            const h = await hist.json();
-            renderProposals(container, data.proposals || [], id, institutionDataMap, playerEmail, ownedInstitutions, h.history || []);
-          }
-        }
-      } catch(err){
-        container.innerHTML = '<div style="color:#ff6666">Failed</div>';
-      }
-    }
-
-    async function showWeapons() {
-      infoDiv.style.display = 'none';
-      workforceDiv.style.display = 'none';
-      chatDiv.style.display = 'none';
-      proposalsDiv.style.display = 'none';
-      weaponsDiv.style.display = 'block';
-      if (chatInterval) { clearInterval(chatInterval); chatInterval = null; }
-      const container = document.getElementById('weapons-container');
-      container.innerHTML = '<div class="spinner" style="height:100px;color:#fff">Loading...</div>';
-      try {
-        const res = await fetch(`/api/defence/weapons/${id}`);
+        const res = await fetch(`/api/workforce/chat/${id}`);
         if (res.ok) {
           const data = await res.json();
-          container.innerHTML = '';
-          (data.weapons || []).forEach(w => {
-            const div = document.createElement('div');
-            div.textContent = `${w.name} - movement ${w.movement.toFixed(2)}`;
-            div.className = 'weapon-entry';
-            div.onclick = () => alert('Using weapon ' + w.name);
-            container.appendChild(div);
+          chatContainer.innerHTML = '';
+          data.messages.forEach(m => {
+            const box = document.createElement('div');
+            box.className = 'chat-msg';
+            let text = m.text;
+            if (typeof m.text === 'object' && m.text !== null) {
+              text = m.text.dialogue || '';
+              if (m.text.is_proposal && m.text.proposal) {
+                const p = m.text.proposal;
+                const parts = [];
+                if (p.title) parts.push(`Title: ${p.title}`);
+                if (p.description) parts.push(`Description: ${p.description}`);
+                if (p.cost !== undefined) parts.push(`Cost: $${p.cost}`);
+                const info = parts.join(' | ');
+                if (info) text += ` (Proposal - ${info})`;
+              }
+            }
+            box.textContent = `${m.worker}: ${text}`;
+            chatContainer.appendChild(box);
+            if (typeof m.text === 'object' && m.text !== null && m.text.raw) {
+              const preRaw = document.createElement('pre');
+              preRaw.className = 'chat-raw';
+              preRaw.textContent = m.text.raw;
+              chatContainer.appendChild(preRaw);
+              if (m.text.proposal) {
+                const preObj = document.createElement('pre');
+                preObj.className = 'chat-raw';
+                preObj.textContent = JSON.stringify(m.text.proposal, null, 2);
+                chatContainer.appendChild(preObj);
+              }
+            }
           });
-          if (!data.weapons || data.weapons.length === 0) {
-            container.textContent = 'No weapons';
+          if (chatContainer.scrollHeight !== lastHeight) {
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            lastHeight = chatContainer.scrollHeight;
           }
         }
-      } catch {
-        container.innerHTML = '<div style="color:#ff6666">Failed</div>';
+      } catch (err) {
       }
     }
+    await load();
+    chatInterval = setInterval(load, 5000);
 
-    if (isOwner) {
-      infoTabBtn.onclick = showInfo;
-      workforceTabBtn.onclick = showWorkforce;
-      chatTabBtn.onclick = showChat;
-      proposalsTabBtn.onclick = showProposals;
-      if (instData.name === 'Defence Base') {
-        weaponsTabBtn.style.display = 'inline-block';
-        weaponsTabBtn.onclick = showWeapons;
-      } else {
-        weaponsTabBtn.style.display = 'none';
-        weaponsTabBtn.onclick = null;
-      }
-    } else {
-      infoTabBtn.onclick = null;
-      workforceTabBtn.onclick = null;
-      chatTabBtn.onclick = null;
-      proposalsTabBtn.onclick = null;
-      weaponsTabBtn.onclick = null;
-      weaponsTabBtn.style.display = 'none';
+    async function send() {
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = '';
+      await fetch(`/api/workforce/chat/${id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
+      await load();
     }
 
-   function closePopup() {
-     popup.style.display = 'none';
-     institutionPopupOpen = false;
-     document.removeEventListener('keydown', escHandler);
-      if (chatInterval) {
-        clearInterval(chatInterval);
-        chatInterval = null;
-      }
-      proposalsDiv.style.display = 'none';
-      weaponsDiv.style.display = 'none';
-    }
-
-    function escHandler(e) {
-      if (e.key === 'Escape') closePopup();
-    }
-
-    popup.style.display = 'block';
-    popup.focus();
-    institutionPopupOpen = true;
-    showInfo();
-    document.addEventListener('keydown', escHandler);
-    closeBtn.onclick = closePopup;
-    const ownerLink = document.getElementById('owner-click');
-    if (ownerLink && isOwner) ownerLink.onclick = showWorkforce;
+    sendBtn.onclick = send;
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') send();
+    });
   }
+
+  async function showProposals() {
+    infoDiv.style.display = 'none';
+    workforceDiv.style.display = 'none';
+    chatDiv.style.display = 'none';
+    proposalsDiv.style.display = 'block';
+    weaponsDiv.style.display = 'none';
+    if (chatInterval) { clearInterval(chatInterval); chatInterval = null; }
+    const container = document.getElementById('proposals-container');
+    container.innerHTML = '<div class="spinner" style="height:100px;color:#fff">Loading...</div>';
+    if (DEBUG_LOG) console.log('[DEFENCE UI] showProposals', { instId: id });
+    try {
+      if (instData.name === 'Defence Base') {
+        const res = await fetch(`/api/defence/proposals/${id}`);
+        if (res.ok) {
+          const data = await res.json();
+          renderDefProposals(container, data.proposals || [], id);
+        }
+      } else {
+        const res = await fetch(`/api/workforce/proposals/${id}`);
+        const hist = await fetch(`/api/workforce/proposals/history/${id}`);
+        if (res.ok && hist.ok) {
+          const data = await res.json();
+          const h = await hist.json();
+          renderProposals(container, data.proposals || [], id, institutionDataMap, playerEmail, ownedInstitutions, h.history || []);
+        }
+      }
+    } catch(err){
+      container.innerHTML = '<div style="color:#ff6666">Failed</div>';
+    }
+  }
+
+  async function showWeapons() {
+    infoDiv.style.display = 'none';
+    workforceDiv.style.display = 'none';
+    chatDiv.style.display = 'none';
+    proposalsDiv.style.display = 'none';
+    weaponsDiv.style.display = 'block';
+    if (chatInterval) { clearInterval(chatInterval); chatInterval = null; }
+    const container = document.getElementById('weapons-container');
+    container.innerHTML = '<div class="spinner" style="height:100px;color:#fff">Loading...</div>';
+    try {
+      const res = await fetch(`/api/defence/weapons/${id}`);
+      if (res.ok) {
+        const data = await res.json();
+        container.innerHTML = '';
+        (data.weapons || []).forEach(w => {
+          const div = document.createElement('div');
+          div.textContent = `${w.name} - movement ${w.movement.toFixed(2)}`;
+          div.className = 'weapon-entry';
+          div.onclick = () => alert('Using weapon ' + w.name);
+          container.appendChild(div);
+        });
+        if (!data.weapons || data.weapons.length === 0) {
+          container.textContent = 'No weapons';
+        }
+      }
+    } catch {
+      container.innerHTML = '<div style="color:#ff6666">Failed</div>';
+    }
+  }
+
+  // Enable buttons if user has access (owner or partner)
+  if (hasAccess) {
+    infoTabBtn.onclick = showInfo;
+    workforceTabBtn.onclick = showWorkforce;
+    chatTabBtn.onclick = showChat;
+    proposalsTabBtn.onclick = showProposals;
+    if (instData.name === 'Defence Base') {
+      weaponsTabBtn.style.display = 'inline-block';
+      weaponsTabBtn.onclick = showWeapons;
+    } else {
+      weaponsTabBtn.style.display = 'none';
+      weaponsTabBtn.onclick = null;
+    }
+  } else {
+    infoTabBtn.onclick = null;
+    workforceTabBtn.onclick = null;
+    chatTabBtn.onclick = null;
+    proposalsTabBtn.onclick = null;
+    weaponsTabBtn.onclick = null;
+    weaponsTabBtn.style.display = 'none';
+  }
+
+  function closePopup() {
+    popup.style.display = 'none';
+    institutionPopupOpen = false;
+    document.removeEventListener('keydown', escHandler);
+    if (chatInterval) {
+      clearInterval(chatInterval);
+      chatInterval = null;
+    }
+    proposalsDiv.style.display = 'none';
+    weaponsDiv.style.display = 'none';
+  }
+
+  function escHandler(e) {
+    if (e.key === 'Escape') closePopup();
+  }
+
+  popup.style.display = 'block';
+  popup.focus();
+  institutionPopupOpen = true;
+  showInfo();
+  document.addEventListener('keydown', escHandler);
+  closeBtn.onclick = closePopup;
+  const ownerLink = document.getElementById('owner-click');
+  if (ownerLink && (isOwner || hasAccess)) ownerLink.onclick = showWorkforce;
+}
 
   function updateSinking(dt) {
     for (let i = sinking.length - 1; i >= 0; i--) {
@@ -1906,7 +2175,7 @@ function updateStatImages() {
   function updateInstitutionBoxes() {
     institutionBoxes.forEach(entry => {
       const obj = institutionsMap[entry.id];
-      if (obj) entry.box.setFromObject(obj);
+      if (obj) updateBuildingFootprint(entry.box, obj);
     });
   }
 
@@ -1915,7 +2184,7 @@ function updateStatImages() {
       const list = constructionMap[entry.id];
       const c = list && list[entry.index];
       const obj = c && (c.scaff || c.final);
-      if (obj) entry.box.setFromObject(obj);
+      if (obj) updateBuildingFootprint(entry.box, obj);
     });
   }
 
@@ -2374,7 +2643,8 @@ function updateStatImages() {
   groundLoader.load(
     'terrain_s.gltf', // Replace this with the path to your ground GLTF file
     (gltf) => {
-      gltfTerrain = gltf.scene;
+      gltfTerrain = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+      if (!gltfTerrain) return;
       addPointLightsFromGLTF(gltf);
 
       gltfTerrain.scale.set(terrainScaleFactor, terrainScaleFactor, terrainScaleFactor);
@@ -2491,7 +2761,8 @@ function updateStatImages() {
   new GLTFLoader().load(
     'character.glb',
     gltf => {
-      model = gltf.scene;
+      model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+      if (!model) return;
       addPointLightsFromGLTF(gltf);
       model.scale.set(modelScale, modelScale, modelScale);
       model.rotation.y =0
@@ -2885,10 +3156,10 @@ function updateStatImages() {
                 sphereCenter.y += characterHeight / 2;
                 const sphere = new THREE.Sphere(sphereCenter, characterRadius);
                 institutionBoxes.forEach(entry => {
-                    if (entry.box.intersectsSphere(sphere)) blocked = true;
+                    if (sphereIntersectsFootprint(entry.box, sphere)) blocked = true;
                 });
                 constructionBoxes.forEach(entry => {
-                    if (entry.box.intersectsSphere(sphere)) blocked = true;
+                    if (sphereIntersectsFootprint(entry.box, sphere)) blocked = true;
                 });
                 if (!blocked) {
                     model.position.copy(proposed);
