@@ -133,3 +133,21 @@ export async function preloadAssets(urls, onProgress = () => {}, onStatus = () =
 
   onProgress(1);
 }
+
+export async function assetsInCache(urls) {
+  try {
+    const cache = await caches.open('asset-cache');
+    for (const url of urls) {
+      const absolute =
+        url.startsWith('http://') || url.startsWith('https://')
+          ? url
+          : new URL(url, window.location.href).href;
+      const match = await cache.match(absolute);
+      if (!match) return false;
+    }
+    return true;
+  } catch (e) {
+    console.warn('Asset cache check failed:', e);
+    return false;
+  }
+}
