@@ -2049,7 +2049,13 @@ function showInstitutionPopup(id) {
         const res = await fetch(`/api/defence/proposals/${id}`);
         if (res.ok) {
           const data = await res.json();
-          renderDefProposals(container, data.proposals || [], id);
+          renderDefProposals(
+            container,
+            data.proposals || [],
+            id,
+            institutionDataMap,
+            playerEmail
+          );
         }
       } else {
         const res = await fetch(`/api/workforce/proposals/${id}`);
