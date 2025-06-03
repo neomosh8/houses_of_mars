@@ -393,6 +393,7 @@ function updateStatImages() {
       }
       initNetwork();
       updateMoneyDisplay();
+      startGame();
       return true;
     } catch (e) {
       console.error('autoLogin failed:', e);
@@ -931,12 +932,19 @@ if (window.location.protocol === 'https:') {
     }
     initNetwork();
     updateMoneyDisplay();
+    startGame();
   }
 
   document.getElementById('send-code').onclick = async () => {
     const email = document.getElementById('login-email').value;
+    document.getElementById('login-error').textContent = '';
     if (await startVerification(email)) {
-      document.getElementById('code-section').style.display = 'block';
+      const codeSec = document.getElementById('code-section');
+      codeSec.classList.remove('hidden');
+      codeSec.style.display = 'block';
+      document.getElementById('login-code').focus();
+    } else {
+      document.getElementById('login-error').textContent = 'Failed to send code';
     }
   };
 
@@ -968,7 +976,7 @@ if (window.location.protocol === 'https:') {
   renderer.setClearColor(marsSkyColor);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.0;
-  document.body.appendChild(renderer.domElement);
+  // Canvas is added after login
 
   // --- Audio setup ---
   const listener = new THREE.AudioListener();
@@ -3283,7 +3291,14 @@ function showInstitutionPopup(id) {
     composer.render();
 }
 
-  animate();
+  // Start the game loop after login
+  let gameStarted = false;
+  function startGame() {
+    if (gameStarted) return;
+    document.body.appendChild(renderer.domElement);
+    animate();
+    gameStarted = true;
+  }
 
   // Resize handler
   window.addEventListener('resize', () => {
