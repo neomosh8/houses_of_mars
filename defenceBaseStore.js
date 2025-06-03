@@ -31,7 +31,7 @@ function getProposals(id) {
 function addProposal(id, proposal) {
   const data = load();
   const entry = ensure(data, id);
-  const full = Object.assign({ status: 'pending' }, proposal);
+  const full = Object.assign({ status: 'pending', votes: {} }, proposal);
   entry.proposals.push(full);
   console.log('[DEFENCE STORE] addProposal', { id, proposal: full });
   save(data);

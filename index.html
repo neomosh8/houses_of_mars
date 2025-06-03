@@ -41,7 +41,7 @@
     <div class="panel-tab">Institutions</div>
     <div class="panel-content" id="institution-content"></div>
   </div>
-    <div id="institution-popup" class="panel" tabindex="0">
+  <div id="institution-popup" class="panel" tabindex="0">
     <div id="popup-close" >X</div>
     <div id="popup-info">
       <div id="popup-owner"></div>
@@ -71,6 +71,12 @@
       <button id="proposals-tab-btn">Proposals</button>
       <button id="weapons-tab-btn">Weapon Catalogue</button>
     </div>
+  </div>
+  <div id="partner-form" class="panel" style="display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);padding:10px;gap:4px;flex-direction:column;">
+    <label>Total Shares <input id="partner-total" type="number" value="10" min="1"></label>
+    <label>Share Price <input id="partner-price" type="number" value="10" min="1"></label>
+    <label>My Shares <input id="partner-my" type="number" value="1" min="1"></label>
+    <button id="partner-save">Save</button>
   </div>
   <script type="module">
   const DEBUG_LOG = false;
@@ -281,7 +287,11 @@ function updateStatImages() {
   const ownedInstitutions = [];
   function addInstitutionEffects(id, effects) {
     if (!effects || typeof effects !== 'object') return;
-    ownedInstitutions.push(Object.assign({ id }, effects));
+    const inst = institutionDataMap[id];
+    const share = inst && inst.shares && inst.shares[playerEmail] || 0;
+    const total = inst && inst.totalShares || 1;
+    const factor = total ? share / total : 0;
+    ownedInstitutions.push(Object.assign({ id, factor }, effects));
   }
 
   function removeInstitutionEffects(id) {
@@ -304,6 +314,8 @@ function updateStatImages() {
     const overlay = document.createElement('div');
     overlay.className = 'institution-overlay';
     overlay.innerHTML = '<div>Not enough money</div><button>Request partners</button>';
+    const reqBtn = overlay.querySelector('button');
+    reqBtn.onclick = e => { e.stopPropagation(); openPartnerForm(inst); };
     tile.appendChild(overlay);
     tile.addEventListener('click', () => {
       if (playerMoney >= inst.price) {
@@ -324,11 +336,51 @@ function updateStatImages() {
     });
   }
 
+  function openPartnerForm(inst) {
+    const form = document.getElementById('partner-form');
+    form.style.display = 'flex';
+    document.getElementById('partner-total').value = 10;
+    document.getElementById('partner-price').value = Math.ceil(inst.price / 10);
+    document.getElementById('partner-my').value = 1;
+    placingApplication = false;
+    applicationInfo = null;
+    const save = document.getElementById('partner-save');
+    save.onclick = e => {
+      e.stopPropagation();
+      const total = parseInt(document.getElementById('partner-total').value) || 1;
+      const price = parseInt(document.getElementById('partner-price').value) || 1;
+      const mine = parseInt(document.getElementById('partner-my').value) || 0;
+      applicationInfo = { totalShares: total, sharePrice: price, myShares: mine };
+      form.style.display = 'none';
+      placingApplication = true;
+      selectInstitution(inst);
+    };
+  }
+
+  function openBuySharesForm(inst) {
+    const form = document.getElementById('partner-form');
+    form.style.display = 'flex';
+    document.getElementById('partner-total').value = inst.totalShares;
+    document.getElementById('partner-price').value = inst.sharePrice;
+    document.getElementById('partner-my').value = 1;
+    const save = document.getElementById('partner-save');
+    save.onclick = e => {
+      e.stopPropagation();
+      const shares = parseInt(document.getElementById('partner-my').value) || 0;
+      form.style.display = 'none';
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: 'buyShares', id: inst.id, shares }));
+      }
+    };
+  }
+
   let ghostInstitution = null;
   let ghostMixer = null;
   let placingInstitution = false;
   let currentInstitution = null;
   let institutionPopupOpen = false;
+  let placingApplication = false;
+  let applicationInfo = null;
 
   function selectInstitution(inst) {
     if (ghostInstitution) {
@@ -369,7 +421,8 @@ function updateStatImages() {
   function handleClick(event) {
     if (institutionPopupOpen) return;
     if (placingInstitution && ghostInstitution && currentInstitution) {
-      if (playerMoney < currentInstitution.price) {
+      const cost = typeof currentInstitution.price === 'number' ? currentInstitution.price : 0;
+      if (!placingApplication && playerMoney < cost) {
         alert('Not enough money');
         return;
       }
@@ -389,13 +442,27 @@ function updateStatImages() {
       const offsetY = box.min.y - ghostInstitution.position.y;
       const targetY = newGround - offsetY;
 
-      const data = {
-        type: 'addInstitution',
-        name: currentInstitution.name,
-        position: [ghostInstitution.position.x, targetY, ghostInstitution.position.z],
-        rotation: ghostInstitution.rotation.y,
-        scale: currentInstitution.scale
-      };
+      let data;
+      if (placingApplication && applicationInfo) {
+        data = {
+          type: 'addInstitutionApplication',
+          name: currentInstitution.name,
+          position: [ghostInstitution.position.x, targetY, ghostInstitution.position.z],
+          rotation: ghostInstitution.rotation.y,
+          scale: currentInstitution.scale,
+          totalShares: applicationInfo.totalShares,
+          sharePrice: applicationInfo.sharePrice,
+          myShares: applicationInfo.myShares
+        };
+      } else {
+        data = {
+          type: 'addInstitution',
+          name: currentInstitution.name,
+          position: [ghostInstitution.position.x, targetY, ghostInstitution.position.z],
+          rotation: ghostInstitution.rotation.y,
+          scale: currentInstitution.scale
+        };
+      }
       if (socket && socket.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify(data));
       }
@@ -407,6 +474,8 @@ function updateStatImages() {
       }
       placingInstitution = false;
       currentInstitution = null;
+      placingApplication = false;
+      applicationInfo = null;
       return;
     }
 
@@ -427,7 +496,11 @@ function updateStatImages() {
         const id = obj.userData.institutionId;
         const data = institutionDataMap[id];
         if (data && !data.destroyed) {
-          showInstitutionPopup(id);
+          if (data.funded === false) {
+            openBuySharesForm(data);
+          } else {
+            showInstitutionPopup(id);
+          }
         }
         return;
       }
@@ -531,11 +604,12 @@ function updateStatImages() {
   function applyInstitutionEffects() {
     ownedInstitutions.forEach(e => {
       if (!e || typeof e !== 'object') return;
-      if (typeof e.hydration === 'number') hydration = Math.min(hydration + e.hydration, 1000);
-      if (typeof e.oxygen === 'number') oxygen = Math.min(oxygen + e.oxygen, 1000);
-      if (typeof e.health === 'number') health = Math.min(health + e.health, 1000);
+      const f = e.factor || 1;
+      if (typeof e.hydration === 'number') hydration = Math.min(hydration + e.hydration * f, 1000);
+      if (typeof e.oxygen === 'number') oxygen = Math.min(oxygen + e.oxygen * f, 1000);
+      if (typeof e.health === 'number') health = Math.min(health + e.health * f, 1000);
       if (typeof e.money === 'number') {
-        playerMoney += e.money;
+        playerMoney += e.money * f;
         updateMoneyDisplay();
       }
     });
@@ -688,6 +762,7 @@ function updateStatImages() {
   let footstepSound = null;
   const flagObjects = {}; // player id -> flag object
   let currentFlagPos = null;
+  const fundingIndicators = {};
 
   function initNetwork() {
     socket = new WebSocket('ws://localhost:3000?email=' + encodeURIComponent(playerEmail));
@@ -735,6 +810,21 @@ function updateStatImages() {
             !Array.isArray(msg.gains)
           ) {
             addInstitutionEffects(msg.id, msg.gains);
+          }
+        }
+      } else if (msg.type === 'updateInstitutionShares') {
+        const inst = institutionDataMap[msg.id];
+        if (inst) {
+          inst.shares = msg.info.shares ? { ...inst.shares, [playerEmail]: msg.info.shares } : inst.shares;
+          inst.soldShares = msg.info.soldShares;
+          inst.totalShares = msg.info.totalShares;
+          inst.sharePrice = msg.info.sharePrice;
+          const wasFunded = inst.funded;
+          inst.funded = msg.info.funded;
+          if (!wasFunded && inst.funded) {
+            removeFundingIndicator(inst.id);
+            const obj = institutionsMap[inst.id];
+            if (obj) obj.traverse(o=>{ if(o.isMesh && o.material && o.material.transparent){ o.material.opacity=1;o.material.transparent=false; }});
           }
         }
       } else if (msg.type === 'updateWeapon') {
@@ -960,6 +1050,22 @@ function updateStatImages() {
       flagObjects[id] = obj;
       if (id === clientId) currentFlagPos = obj.position;
     });
+  }
+
+  function createFundingIndicator(id, position) {
+    const pos = new THREE.Vector3().fromArray(position);
+    pos.y += 10;
+    const geom = new THREE.SphereGeometry(1, 16, 16);
+    const mat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+    const sph = new THREE.Mesh(geom, mat);
+    sph.position.copy(pos);
+    scene.add(sph);
+    fundingIndicators[id] = sph;
+  }
+
+  function removeFundingIndicator(id) {
+    const obj = fundingIndicators[id];
+    if (obj) { scene.remove(obj); delete fundingIndicators[id]; }
   }
 
   function plantFlag() {
@@ -1283,6 +1389,11 @@ function updateStatImages() {
         if (o.isMesh) {
           o.castShadow = true;
           o.receiveShadow = true;
+          if (inst.funded === false) {
+            o.material = o.material.clone();
+            o.material.transparent = true;
+            o.material.opacity = 0.5;
+          }
         }
       });
       const boxTmp = new THREE.Box3().setFromObject(obj);
@@ -1333,6 +1444,9 @@ function updateStatImages() {
       if (!inst.destroyed) {
         applyConstruction(institutionDataMap[inst.id]);
         applyWeapons(institutionDataMap[inst.id]);
+      }
+      if (inst.funded === false) {
+        createFundingIndicator(inst.id, inst.position);
       }
       if (inst.owner === playerEmail && !inst.destroyed) {
         if (def.effects) addInstitutionEffects(inst.id, def.effects);

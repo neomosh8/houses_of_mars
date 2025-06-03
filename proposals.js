@@ -88,6 +88,23 @@ export function renderProposals(container, proposals, instId, institutionDataMap
       if (all) approve.disabled = false;
     }
 
+    const votesDiv = document.createElement('div');
+    votesDiv.style.fontSize = '12px';
+    votesDiv.style.marginTop = '4px';
+    const votes = p.votes || {};
+    const instShares = institutionDataMap[instId] && institutionDataMap[instId].shares || {};
+    let approveCount = 0;
+    let denyCount = 0;
+    Object.entries(votes).forEach(([em, val]) => {
+      const s = instShares[em] || 0;
+      if (val) approveCount += s; else denyCount += s;
+    });
+    votesDiv.textContent = `Approvals: ${approveCount}, Denials: ${denyCount}`;
+    if (votes[playerEmail] !== undefined) {
+      approve.disabled = true;
+      deny.disabled = true;
+    }
+
     approve.onclick = async () => {
       approve.disabled = true;
       deny.disabled = true;
@@ -95,17 +112,11 @@ export function renderProposals(container, proposals, instId, institutionDataMap
       const res = await fetch(`/api/workforce/proposals/${instId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ index: idx, approve: true })
+        body: JSON.stringify({ index: idx, approve: true, email: playerEmail })
       });
       if (res.ok) {
         const data = await res.json();
-        if (
-          data.result &&
-          data.result.feasible &&
-          data.result.gains &&
-          typeof data.result.gains === 'object' &&
-          !Array.isArray(data.result.gains)
-        ) {
+        if (data.result && data.result.gains && data.result.feasible) {
           const inst = institutionDataMap[instId];
           if (inst) {
             inst.extraEffects = inst.extraEffects || {};
@@ -115,14 +126,13 @@ export function renderProposals(container, proposals, instId, institutionDataMap
             }
           }
         }
-        if (data.result && data.result.feasible) {
-          approve.textContent = 'Started';
-          approve.style.backgroundColor = '#0a0';
-          statusDiv.textContent = 'Status: approved';
+        if (data.status && data.status !== 'pending') {
+          approve.textContent = data.status === 'approved' ? 'Started' : 'Denied';
+          approve.style.backgroundColor = data.status === 'approved' ? '#0a0' : '#a00';
+          statusDiv.textContent = 'Status: ' + data.status;
         } else {
-          approve.textContent = 'Project failed';
-          approve.style.backgroundColor = '#a00';
-          statusDiv.textContent = 'Status: rejected';
+          approve.textContent = 'Vote sent';
+          votesDiv.textContent = `Approvals: ${data.votes.approve}, Denials: ${data.votes.deny}`;
         }
       } else {
         approve.textContent = 'Error';
@@ -131,17 +141,26 @@ export function renderProposals(container, proposals, instId, institutionDataMap
     };
 
     deny.onclick = async () => {
-      await fetch(`/api/workforce/proposals/${instId}`, {
+      const res = await fetch(`/api/workforce/proposals/${instId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ index: idx, approve: false })
+        body: JSON.stringify({ index: idx, approve: false, email: playerEmail })
       });
-      card.remove();
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status && data.status !== 'pending') {
+          statusDiv.textContent = 'Status: ' + data.status;
+        } else {
+          votesDiv.textContent = `Approvals: ${data.votes.approve}, Denials: ${data.votes.deny}`;
+          deny.textContent = 'Vote sent';
+        }
+      }
     };
 
     card.appendChild(approve);
     card.appendChild(deny);
     card.appendChild(statusDiv);
+    card.appendChild(votesDiv);
     container.appendChild(card);
   });
   }
