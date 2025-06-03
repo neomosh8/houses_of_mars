@@ -212,6 +212,7 @@ const icons = {
   // for all collision checks so that only horizontal space on the terrain is
   // considered.
   function createBuildingFootprint(obj) {
+    obj.updateWorldMatrix(true, false);
     const box = new THREE.Box3();
     obj.traverse(node => {
       if (node.isMesh && node.geometry) {
@@ -233,6 +234,7 @@ const icons = {
 
   // Update an existing footprint with a new object's bounds
   function updateBuildingFootprint(fp, obj) {
+    obj.updateWorldMatrix(true, false);
     const box = new THREE.Box3();
     obj.traverse(node => {
       if (node.isMesh && node.geometry) {
