@@ -101,7 +101,7 @@
   import { renderProposals } from './proposals.js';
   import { renderDefProposals } from './defProposals.js';
 
-  import { preloadAssets } from "./preloadAssets.js";
+  import { preloadAssets, assetsInCache } from "./preloadAssets.js";
 
   let playerEmail = null;
   let playerMoney = 0;
@@ -371,18 +371,26 @@ function updateStatImages() {
       loaderEl.classList.remove('hidden');
       loaderEl.style.display = 'flex';
       document.getElementById('loading-bar').style.width = '0%';
-      document.getElementById('loading-text').textContent = 'Fetching files list...';
-      startSlideshow();
-      await preloadAssets(
-        PRELOAD_ASSETS,
-        p => {
-          document.getElementById('loading-bar').style.width = `${Math.floor(p * 100)}%`;
-        },
-        msg => {
-          document.getElementById('loading-text').textContent = msg;
-        }
-      );
-      await playIntroSequence();
+      const cached = await assetsInCache(PRELOAD_ASSETS);
+      if (!cached) {
+        document.getElementById('loading-text').textContent = 'Fetching files list...';
+        startSlideshow();
+        await preloadAssets(
+          PRELOAD_ASSETS,
+          p => {
+            document.getElementById('loading-bar').style.width = `${Math.floor(p * 100)}%`;
+          },
+          msg => {
+            document.getElementById('loading-text').textContent = msg;
+          }
+        );
+        await playIntroSequence();
+      } else {
+        document.getElementById('loading-text').textContent = 'Using cached assets...';
+        document.getElementById('loading-bar').style.width = '100%';
+        loaderEl.classList.add('hidden');
+        loaderEl.style.display = 'none';
+      }
       initNetwork();
       updateMoneyDisplay();
       return true;
@@ -900,19 +908,27 @@ if (window.location.protocol === 'https:') {
     loaderEl.classList.remove('hidden');
     loaderEl.style.display = 'flex';
     document.getElementById('loading-bar').style.width = '0%';
-    document.getElementById('loading-text').textContent = 'Fetching files list...';
-    startSlideshow();
     document.getElementById('login-container').style.display = 'none';
-    await preloadAssets(
-      PRELOAD_ASSETS,
-      p => {
-        document.getElementById('loading-bar').style.width = `${Math.floor(p * 100)}%`;
-      },
-      msg => {
-        document.getElementById('loading-text').textContent = msg;
-      }
-    );
-    await playIntroSequence();
+    const cached = await assetsInCache(PRELOAD_ASSETS);
+    if (!cached) {
+      document.getElementById('loading-text').textContent = 'Fetching files list...';
+      startSlideshow();
+      await preloadAssets(
+        PRELOAD_ASSETS,
+        p => {
+          document.getElementById('loading-bar').style.width = `${Math.floor(p * 100)}%`;
+        },
+        msg => {
+          document.getElementById('loading-text').textContent = msg;
+        }
+      );
+      await playIntroSequence();
+    } else {
+      document.getElementById('loading-text').textContent = 'Using cached assets...';
+      document.getElementById('loading-bar').style.width = '100%';
+      loaderEl.classList.add('hidden');
+      loaderEl.style.display = 'none';
+    }
     initNetwork();
     updateMoneyDisplay();
   }
