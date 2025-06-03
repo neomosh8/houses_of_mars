@@ -212,7 +212,18 @@ const icons = {
   // for all collision checks so that only horizontal space on the terrain is
   // considered.
   function createBuildingFootprint(obj) {
-    const box = new THREE.Box3().setFromObject(obj);
+    obj.updateWorldMatrix(true, false);
+    const box = new THREE.Box3();
+    obj.traverse(node => {
+      if (node.isMesh && node.geometry) {
+        const geom = node.geometry;
+        if (!geom.boundingBox) geom.computeBoundingBox();
+        const bb = geom.boundingBox.clone();
+        bb.applyMatrix4(node.matrixWorld);
+        box.expandByPoint(bb.min);
+        box.expandByPoint(bb.max);
+      }
+    });
     return {
       minX: box.min.x,
       maxX: box.max.x,
@@ -223,7 +234,18 @@ const icons = {
 
   // Update an existing footprint with a new object's bounds
   function updateBuildingFootprint(fp, obj) {
-    const box = new THREE.Box3().setFromObject(obj);
+    obj.updateWorldMatrix(true, false);
+    const box = new THREE.Box3();
+    obj.traverse(node => {
+      if (node.isMesh && node.geometry) {
+        const geom = node.geometry;
+        if (!geom.boundingBox) geom.computeBoundingBox();
+        const bb = geom.boundingBox.clone();
+        bb.applyMatrix4(node.matrixWorld);
+        box.expandByPoint(bb.min);
+        box.expandByPoint(bb.max);
+      }
+    });
     fp.minX = box.min.x;
     fp.maxX = box.max.x;
     fp.minZ = box.min.z;
@@ -610,23 +632,8 @@ if (window.location.protocol === 'https:') {
     }
     if (placingInstitution && ghostInstitution && currentInstitution) {
       const box = new THREE.Box3().setFromObject(ghostInstitution);
-      const radius = Math.max(box.max.x - box.min.x, box.max.z - box.min.z) * 0.6;
-      const lowestGround = findLowestPointInArea(
-        ghostInstitution.position.x,
-        ghostInstitution.position.z,
-        radius
-      );
-      // Flatten the terrain under the institution before placing it
-      flattenTerrain(
-        ghostInstitution.position.x,
-        ghostInstitution.position.z,
-        radius,
-        lowestGround
-      );
-      const newGround = getGroundHeightAt(
-        ghostInstitution.position.x,
-        ghostInstitution.position.z
-      );
+      const fp = createBuildingFootprint(ghostInstitution);
+      const newGround = flattenTerrain(fp.minX, fp.maxX, fp.minZ, fp.maxZ);
       // Align the bottom of the model with the ground
       const offsetY = box.min.y - ghostInstitution.position.y;
       const targetY = newGround - offsetY;
@@ -724,16 +731,13 @@ if (window.location.protocol === 'https:') {
     const target = model.position.clone().add(offset);
     ghostInstitution.position.copy(target);
     ghostInstitution.rotation.y = model.rotation.y;
-    const rad = ghostInstitution.userData.radius || (function(){
-      const b = new THREE.Box3().setFromObject(ghostInstitution);
-      return Math.max(b.max.x - b.min.x, b.max.z - b.min.z) * 0.6;
-    })();
     const dx = ghostSample.x === null ? Infinity : Math.abs(target.x - ghostSample.x);
     const dz = ghostSample.z === null ? Infinity : Math.abs(target.z - ghostSample.z);
     if (dx > 0.25 || dz > 0.25) {
       ghostSample.x = target.x;
       ghostSample.z = target.z;
-      ghostSample.y = findLowestPointInArea(target.x, target.z, rad);
+      const box = createBuildingFootprint(ghostInstitution);
+      ghostSample.y = getMeanHeightInRect(box.minX, box.maxX, box.minZ, box.maxZ);
     }
     const box = new THREE.Box3().setFromObject(ghostInstitution);
     const offY = box.min.y - ghostInstitution.position.y;
@@ -751,32 +755,32 @@ if (window.location.protocol === 'https:') {
     return 0;
   }
 
-  function findLowestPointInArea(cx, cz, radius) {
-    const samples = [
-      [0, 0],
-      [radius, 0],
-      [-radius, 0],
-      [0, radius],
-      [0, -radius],
-      [radius * 0.7, radius * 0.7],
-      [-radius * 0.7, radius * 0.7],
-      [radius * 0.7, -radius * 0.7],
-      [-radius * 0.7, -radius * 0.7]
-    ];
-    let min = Infinity;
-    for (let i = 0; i < samples.length; i++) {
-      const x = cx + samples[i][0];
-      const z = cz + samples[i][1];
-      const h = getGroundHeightAt(x, z);
-      if (h < min) min = h;
-    }
-    if (min === Infinity) return getGroundHeightAt(cx, cz);
-    return min;
+  function getMeanHeightInRect(minX, maxX, minZ, maxZ) {
+    let sum = 0;
+    let count = 0;
+    const world = new THREE.Vector3();
+    terrainMeshes.forEach(mesh => {
+      const geom = mesh.geometry;
+      if (!geom || !geom.attributes || !geom.attributes.position) return;
+      const pos = geom.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        world.fromBufferAttribute(pos, i);
+        world.applyMatrix4(mesh.matrixWorld);
+        if (world.x >= minX && world.x <= maxX && world.z >= minZ && world.z <= maxZ) {
+          sum += world.y;
+          count++;
+        }
+      }
+    });
+    if (count === 0) return getGroundHeightAt((minX + maxX) / 2, (minZ + maxZ) / 2);
+    return sum / count;
   }
 
-  function flattenTerrain(x, z, radius, height) {
+  function flattenTerrain(minX, maxX, minZ, maxZ) {
+    const height = getMeanHeightInRect(minX, maxX, minZ, maxZ);
     const target = new THREE.Vector3();
     const inv = new THREE.Matrix4();
+    const world = new THREE.Vector3();
     terrainMeshes.forEach(mesh => {
       const geom = mesh.geometry;
       if (!geom || !geom.attributes || !geom.attributes.position) return;
@@ -784,18 +788,17 @@ if (window.location.protocol === 'https:') {
       inv.copy(mesh.matrixWorld).invert();
       for (let i = 0; i < pos.count; i++) {
         target.fromBufferAttribute(pos, i);
-        target.applyMatrix4(mesh.matrixWorld);
-        const dx = target.x - x;
-        const dz = target.z - z;
-        if (dx * dx + dz * dz <= radius * radius) {
-          target.y = height;
-          target.applyMatrix4(inv);
+        world.copy(target).applyMatrix4(mesh.matrixWorld);
+        if (world.x >= minX && world.x <= maxX && world.z >= minZ && world.z <= maxZ) {
+          world.y = height;
+          target.copy(world).applyMatrix4(inv);
           pos.setXYZ(i, target.x, target.y, target.z);
         }
       }
       pos.needsUpdate = true;
       geom.computeVertexNormals();
     });
+    return height;
   }
 
   function updateStats() {
@@ -1227,10 +1230,9 @@ if (window.location.protocol === 'https:') {
         obj.rotation.y = inst.rotation || 0;
         scene.add(obj);
         const boxTmp = new THREE.Box3().setFromObject(obj);
-        const radius = Math.max(boxTmp.max.x - boxTmp.min.x, boxTmp.max.z - boxTmp.min.z) * 0.6;
-        const lowestGround = findLowestPointInArea(pos.x, pos.z, radius);
-        flattenTerrain(pos.x, pos.z, radius, lowestGround);
-        obj.position.set(pos.x, lowestGround - boxTmp.min.y, pos.z);
+        const fp = createBuildingFootprint(obj);
+        const ground = flattenTerrain(fp.minX, fp.maxX, fp.minZ, fp.maxZ);
+        obj.position.set(pos.x, ground - boxTmp.min.y, pos.z);
 
         const cbox = createBuildingFootprint(obj);
         constructionBoxes.push({ id: inst.id, index: idx, box: cbox });
@@ -1395,10 +1397,9 @@ if (window.location.protocol === 'https:') {
       }
 
       const boxTmp = new THREE.Box3().setFromObject(obj);
-        const radius = Math.max(boxTmp.max.x - boxTmp.min.x, boxTmp.max.z - boxTmp.min.z) * 0.6;
-        const lowestGround = findLowestPointInArea(pos.x, pos.z, radius);
-        flattenTerrain(pos.x, pos.z, radius, lowestGround);
-        obj.position.set(pos.x, lowestGround - boxTmp.min.y, pos.z);
+        const fp = createBuildingFootprint(obj);
+        const ground = flattenTerrain(fp.minX, fp.maxX, fp.minZ, fp.maxZ);
+        obj.position.set(pos.x, ground - boxTmp.min.y, pos.z);
         obj.traverse(o => {
           o.userData.weaponInstId = inst.id;
           o.userData.weaponIndex = idx;
@@ -1421,10 +1422,9 @@ if (window.location.protocol === 'https:') {
         if (inst.weapons[idx] !== w) return;
         const obj = createPlaceholder(w.scale || 1, 0xff0000);
         const boxTmp2 = new THREE.Box3().setFromObject(obj);
-        const radius2 = Math.max(boxTmp2.max.x - boxTmp2.min.x, boxTmp2.max.z - boxTmp2.min.z) * 0.6;
-        const lowestGround2 = findLowestPointInArea(pos.x, pos.z, radius2);
-        flattenTerrain(pos.x, pos.z, radius2, lowestGround2);
-        obj.position.set(pos.x, lowestGround2 - boxTmp2.min.y, pos.z);
+        const fp2 = createBuildingFootprint(obj);
+        const ground2 = flattenTerrain(fp2.minX, fp2.maxX, fp2.minZ, fp2.maxZ);
+        obj.position.set(pos.x, ground2 - boxTmp2.min.y, pos.z);
         obj.rotation.y = inst.rotation || 0;
         scene.add(obj);
         obj.traverse(o => {
@@ -1649,9 +1649,9 @@ if (window.location.protocol === 'https:') {
         }
       });
       const boxTmp = new THREE.Box3().setFromObject(obj);
-      const radius = Math.max(boxTmp.max.x - boxTmp.min.x, boxTmp.max.z - boxTmp.min.z) * 0.6;
-      const lowestGround = findLowestPointInArea(inst.position[0], inst.position[2], radius);
-      flattenTerrain(inst.position[0], inst.position[2], radius, lowestGround);
+      const fp = createBuildingFootprint(obj);
+      const ground = flattenTerrain(fp.minX, fp.maxX, fp.minZ, fp.maxZ);
+      obj.position.y = ground - boxTmp.min.y;
       scene.add(obj);
 
       const instAudioFile = institutionAudioFiles[inst.name];
