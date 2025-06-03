@@ -603,7 +603,7 @@ if (window.location.protocol === 'https:') {
         alert('Not enough money');
         return;
       }
-    } else if (!placingApplication && playerMoney < currentInstitution.price) {
+    } else if (currentInstitution && !placingApplication && playerMoney < currentInstitution.price) {
       // For regular placement, check full price
       alert('Not enough money');
       return;
