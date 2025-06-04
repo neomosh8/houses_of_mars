@@ -19,6 +19,9 @@ const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
 const verifySid = process.env.TWILIO_VERIFY_SERVICE_SID;
 const client = twilio(accountSid, authToken);
+if (!accountSid || !authToken || !verifySid) {
+  console.warn('Twilio environment variables missing; SMS features may not work');
+}
 
 const userStore = require('./userStore');
 const institutionStore = require('./institutionStore');
@@ -315,4 +318,6 @@ wss.on('connection', (ws, req) => {
  });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT);
+server.listen(PORT, () => {
+  console.log('Server listening on port', PORT);
+});

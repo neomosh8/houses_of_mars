@@ -197,15 +197,18 @@ module.exports = function(institutionStore, userStore, engine, broadcast, sendTo
   router.post('/generate/:id', async (req, res) => {
     try {
       const institutionId = Number(req.params.id);
+      console.log('Generating applicants for institution', institutionId);
       const institution = institutionStore.getInstitution(institutionId);
 
       const institutionName = institution ? institution.name : 'Mars Colony';
       const num = Math.floor(Math.random() * 5) + 1; // 1-5 workers
 
       const workers = await generateWorkers(num, institutionName);
+      console.log('Workers generated:', workers);
 
       res.json({ workers });
-    } catch {
+    } catch (err) {
+      console.error('Error generating workers:', err);
       res.status(500).json({ error: 'Failed to generate workers' });
     }
   });
