@@ -269,6 +269,46 @@ const icons = {
     return mesh;
   }
 
+  // Load a GLB model using the Cache API if available. Falls back to
+  // fetching from the network and stores the result in the cache for
+  // future use.
+  async function loadGLTFCached(url) {
+    const absolute = url.startsWith('http://') || url.startsWith('https://')
+      ? url
+      : new URL(url, window.location.href).href;
+    let cache = null;
+    try {
+      cache = await caches.open('asset-cache');
+      const cached = await cache.match(absolute);
+      if (cached) {
+        const arrayBuffer = await cached.arrayBuffer();
+        return await new Promise((resolve, reject) => {
+          new GLTFLoader().parse(arrayBuffer, '', resolve, reject);
+        });
+      }
+    } catch (e) {
+      console.warn('Cache lookup failed for', url, e);
+      cache = null;
+    }
+
+    const response = await fetch(absolute);
+    if (!response.ok) throw new Error(`Failed to fetch ${url}: ${response.status}`);
+    const clone = response.clone();
+    const arrayBuffer = await response.arrayBuffer();
+
+    if (cache) {
+      try {
+        await cache.put(absolute, clone);
+      } catch (e) {
+        console.warn('Cache store failed for', url, e);
+      }
+    }
+
+    return await new Promise((resolve, reject) => {
+      new GLTFLoader().parse(arrayBuffer, '', resolve, reject);
+    });
+  }
+
   // Create a 2D ground footprint (X/Z) for an object. This footprint is used
   // for all collision checks so that only horizontal space on the terrain is
   // considered.
@@ -890,7 +930,7 @@ if (window.location.protocol === 'https:') {
   let placingApplication = false;
   let applicationInfo = null;
 
-  function selectInstitution(inst) {
+  async function selectInstitution(inst) {
     if (ghostInstitution) {
       scene.remove(ghostInstitution);
       ghostInstitution = null;
@@ -899,8 +939,8 @@ if (window.location.protocol === 'https:') {
         ghostMixer = null;
       }
     }
-    const loader = new GLTFLoader();
-    loader.load(inst.url, gltf => {
+    try {
+      const gltf = await loadGLTFCached(inst.url);
       const root = gltf.scene || (gltf.scenes && gltf.scenes[0]);
       if (!root) return;
       ghostInstitution = root;
@@ -926,7 +966,9 @@ if (window.location.protocol === 'https:') {
       scene.add(ghostInstitution);
       placingInstitution = true;
       currentInstitution = inst;
-    });
+    } catch (e) {
+      console.error('Failed to load institution model:', e);
+    }
   }
 
   function handleClick(event) {
@@ -1971,11 +2013,11 @@ if (window.location.protocol === 'https:') {
     }
   }
 
-  function createInstitution(inst, animate) {
+  async function createInstitution(inst, animate) {
     const def = institutions.find(i => i.name === inst.name);
     if (!def) return;
-    const loader = new GLTFLoader();
-    loader.load(def.url, gltf => {
+    try {
+      const gltf = await loadGLTFCached(def.url);
       const obj = gltf.scene || (gltf.scenes && gltf.scenes[0]);
       if (!obj) return;
       obj.userData.animations = gltf.animations || [];
@@ -2057,7 +2099,8 @@ if (window.location.protocol === 'https:') {
         obj.position.y = startY;
         sinking.push({ obj, start: startY, end: endY, t: 0, emit: 0 });
       }
-    }, undefined, () => {
+    } catch (e) {
+      console.error('Failed to load institution', def.url, e);
       const obj = createPlaceholder(inst.scale || def.scale || 1, 0x00aa00);
       obj.userData.animations = [];
       obj.position.fromArray(inst.position);
@@ -2077,7 +2120,7 @@ if (window.location.protocol === 'https:') {
         applyConstruction(institutionDataMap[inst.id]);
         applyWeapons(institutionDataMap[inst.id]);
       }
-    });
+    }
   }
 
 // In index.html, replace the showInstitutionPopup function with this updated version:
