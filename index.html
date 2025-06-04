@@ -396,11 +396,15 @@ const icons = {
 
     updateWorkforce(institutionId, workerIndex, worker) {
       const key = `${institutionId}:${workerIndex}`;
+      const effects = Object.assign({}, worker.effects || {});
+      if (worker.wage) {
+        effects.money = (effects.money || 0) - worker.wage;
+      }
       this.sources.workforce.set(key, {
         name: worker.name,
         role: worker.role,
         institutionId,
-        effects: worker.effects || {}
+        effects
       });
     },
 
@@ -783,10 +787,19 @@ if (window.location.protocol === 'https:') {
   function addInstitutionEffects(id, effects) {
     if (!effects || typeof effects !== 'object') return;
     const inst = institutionDataMap[id];
-    const share = inst && inst.shares && inst.shares[playerEmail] || 0;
-    const total = inst && inst.totalShares || 1;
+    const share = (inst && inst.shares && inst.shares[playerEmail]) || 0;
+    const total = (inst && inst.totalShares) || 1;
     const factor = total ? share / total : 0;
-    ownedInstitutions.push(Object.assign({ id, factor }, effects));
+    let entry = ownedInstitutions.find(e => e.id === id);
+    if (!entry) {
+      entry = { id, factor };
+      ownedInstitutions.push(entry);
+    } else {
+      entry.factor = factor;
+    }
+    for (const [k, v] of Object.entries(effects)) {
+      if (typeof v === 'number') entry[k] = (entry[k] || 0) + v;
+    }
   }
 
   function removeInstitutionEffects(id) {
