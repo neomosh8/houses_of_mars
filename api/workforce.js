@@ -273,6 +273,29 @@ module.exports = function(institutionStore, userStore, engine, broadcast, sendTo
     }
   });
 
+  router.post('/fire/:id', async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const index = req.body.index;
+      if (typeof index !== 'number') {
+        return res.status(400).json({ error: 'index required' });
+      }
+
+      const inst = institutionStore.getInstitution(id);
+      if (!inst || !Array.isArray(inst.workforce) || !inst.workforce[index]) {
+        return res.status(404).json({ error: 'worker not found' });
+      }
+
+      const [worker] = inst.workforce.splice(index, 1);
+      institutionStore.updateInstitution(id, { workforce: inst.workforce });
+      chatManager.removeWorker(inst.owner, inst.name, worker);
+
+      res.json({ ok: true });
+    } catch {
+      res.status(500).json({ error: 'Failed to fire worker' });
+    }
+  });
+
   router.get('/:id', (req, res) => {
     try {
       const id = Number(req.params.id);

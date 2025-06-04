@@ -108,6 +108,27 @@ class WorkforceChatManager {
     this._start(key);
   }
 
+  removeWorker(email, name, worker) {
+    const key = this._key(email, name);
+    const chat = this.chats[key];
+    if (!chat) return;
+    const idx = chat.workers.findIndex(
+      w => w.name === worker.name && w.role === worker.role
+    );
+    if (idx === -1) return;
+    chat.workers.splice(idx, 1);
+    if (chat.workers.length === 0) {
+      if (this.timers[key]) {
+        clearTimeout(this.timers[key]);
+        delete this.timers[key];
+      }
+      chat.nextIndex = 0;
+    } else if (chat.nextIndex >= chat.workers.length) {
+      chat.nextIndex = 0;
+    }
+    this._save();
+  }
+
   _start(key) {
     if (this.timers[key]) return;
     if (!this.chats[key].nextIndex) this.chats[key].nextIndex = 0;
