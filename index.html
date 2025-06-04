@@ -1902,7 +1902,9 @@ function showInstitutionPopup(id) {
     container.innerHTML = '<div class="spinner" style="display: flex; justify-content: center; align-items: center; height: 200px; color: #fff;">Loading applicants...</div>';
 
     try {
+      console.log('Requesting applicants from', `/api/workforce/generate/${id}`);
       const res = await fetch(`/api/workforce/generate/${id}`, { method: 'POST' });
+      console.log('Generate response status', res.status);
       if (!res.ok) {
         throw new Error(`HTTP error! status: ${res.status}`);
       }
@@ -2000,6 +2002,7 @@ function showInstitutionPopup(id) {
         container.appendChild(card);
       });
     } catch (err) {
+      console.error('Failed to load applicants', err);
       container.innerHTML = '<div style="color: #ff6666; text-align: center;">Failed to load applicants. Please try again.</div>';
     }
   }
