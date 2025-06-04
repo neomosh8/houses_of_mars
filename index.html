@@ -1892,17 +1892,12 @@ function showInstitutionPopup(id) {
     }
     const carousel = document.getElementById('popup-workforce-carousel');
     carousel.innerHTML = '';
-    const workers = [];
-    Object.values(institutionDataMap).forEach(d => {
-      if (d.owner === instData.owner && d.name === instData.name && Array.isArray(d.workforce)) {
-        workers.push(...d.workforce);
-      }
-    });
+    const workers = Array.isArray(instData.workforce) ? instData.workforce : [];
     if (workers.length === 0) {
       carousel.textContent = 'No workforce';
       return;
     }
-    workers.forEach(w => {
+    workers.forEach((w, idx) => {
       const item = document.createElement('div');
       item.style.minWidth = '80px';
       item.style.display = 'flex';
@@ -1922,7 +1917,7 @@ function showInstitutionPopup(id) {
       item.appendChild(name);
 
       item.onclick = () => {
-        showWorkerProfile(w, id, true);
+        showWorkerProfile(w, id, true, idx);
       };
 
       carousel.appendChild(item);
@@ -2246,7 +2241,7 @@ async function showWorkforce() {
   if (ownerLink && (isOwner || hasAccess)) ownerLink.onclick = showWorkforce;
 }
 
-function showWorkerProfile(worker, institutionId, isHired = false) {
+function showWorkerProfile(worker, institutionId, isHired = false, index = null) {
   const overlay = document.getElementById('worker-profile-overlay');
   const nameEl = document.getElementById('profile-name');
   const roleEl = document.getElementById('profile-role');
@@ -2318,8 +2313,31 @@ function showWorkerProfile(worker, institutionId, isHired = false) {
     hireBtn.style.display = 'none';
     fireBtn.style.display = 'block';
     fireBtn.onclick = async () => {
-      alert('Fire functionality not yet implemented');
-      overlay.classList.add('hidden');
+      try {
+        const res = await fetch(`/api/workforce/fire/${institutionId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ index })
+        });
+        if (res.ok) {
+          const inst = institutionDataMap[institutionId];
+          if (inst && Array.isArray(inst.workforce)) {
+            inst.workforce.splice(index, 1);
+          }
+          const carousel = document.getElementById('popup-workforce-carousel');
+          if (carousel && carousel.children[index]) {
+            carousel.removeChild(carousel.children[index]);
+            if (carousel.children.length === 0) {
+              carousel.textContent = 'No workforce';
+            }
+          }
+          overlay.classList.add('hidden');
+        } else {
+          alert('Failed to fire worker');
+        }
+      } catch (err) {
+        alert('Failed to fire worker');
+      }
     };
   } else {
     hireBtn.style.display = 'block';
