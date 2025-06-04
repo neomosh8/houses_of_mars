@@ -201,9 +201,7 @@ canvas { display: block; width: 100%; height: 100%; }
   margin-bottom: 15px;
 
 }
-#popup-workforce {
-  display: none;
-}
+
 #workforce-container {
   display: flex;
   gap: 12px;

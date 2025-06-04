@@ -1887,9 +1887,10 @@ function showInstitutionPopup(id) {
     });
   }
 
-  async function showWorkforce() {
+async function showWorkforce() {
     infoDiv.classList.add('hidden');
     workforceDiv.classList.remove('hidden');
+    workforceDiv.style.display = 'block';  // Explicitly set display to override CSS
     chatDiv.classList.add('hidden');
     proposalsDiv.classList.add('hidden');
     weaponsDiv.classList.add('hidden');
