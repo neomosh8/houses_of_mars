@@ -502,3 +502,158 @@ canvas { display: block; width: 100%; height: 100%; }
   box-shadow: 0 4px 12px rgba(244, 67, 54, 0.4);
 }
 
+/* Resource Breakdown Popup */
+.resource-popup {
+  display: none;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 600px;
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: 24px;
+  z-index: 1000;
+}
+
+.resource-popup h2 {
+  color: #fff;
+  margin: 0 0 20px 0;
+  font-size: 24px;
+}
+
+.resource-popup h3 {
+  color: #fff;
+  margin: 0 0 12px 0;
+  font-size: 18px;
+}
+
+.breakdown-section {
+  margin-bottom: 24px;
+}
+
+.net-flow-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.resource-flow-card {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.resource-flow-card h4 {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.flow-value {
+  font-size: 24px;
+  font-weight: bold;
+  margin: 4px 0;
+}
+
+.flow-positive {
+  color: #4CAF50;
+}
+
+.flow-negative {
+  color: #f44336;
+}
+
+.flow-neutral {
+  color: #fff;
+}
+
+.flow-breakdown {
+  font-size: 12px;
+  color: #aaa;
+}
+
+.breakdown-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.tab-btn {
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.3s;
+}
+
+.tab-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.tab-btn.active {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: #fff;
+}
+
+.breakdown-details {
+  display: flex;
+  gap: 20px;
+}
+
+.producers-list,
+.consumers-list {
+  flex: 1;
+}
+
+.producers-list h4,
+.consumers-list h4 {
+  color: #fff;
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+.breakdown-item {
+  background: rgba(255, 255, 255, 0.05);
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  border-radius: 4px;
+  font-size: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.breakdown-item-name {
+  flex: 1;
+  color: #fff;
+}
+
+.breakdown-item-source {
+  font-size: 11px;
+  color: #888;
+  margin-left: 8px;
+}
+
+.breakdown-item-value {
+  font-weight: bold;
+  margin-left: 8px;
+}
+
+/* Make status panel clickable */
+#status-panel {
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+#status-panel:hover {
+  background: rgba(0, 0, 0, 0.5);
+}
+

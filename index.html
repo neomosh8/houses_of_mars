@@ -81,6 +81,33 @@
       <button id="weapons-tab-btn">Weapon Catalogue</button>
     </div>
   </div>
+  <!-- Resource Breakdown Popup -->
+  <div id="resource-breakdown-popup" class="panel resource-popup" style="display:none;">
+    <div id="breakdown-close" class="popup-close">×</div>
+    <h2>Resource Breakdown</h2>
+
+    <!-- Aggregated Overview -->
+    <div class="breakdown-section">
+      <h3>Net Resource Flow</h3>
+      <div id="net-flow-container" class="net-flow-grid">
+        <!-- Will be populated dynamically -->
+      </div>
+    </div>
+
+    <!-- Detailed Breakdown -->
+    <div class="breakdown-section">
+      <h3>Top Producers & Consumers</h3>
+      <div id="breakdown-tabs" class="breakdown-tabs">
+        <button class="tab-btn active" data-resource="hydration">💧 Hydration</button>
+        <button class="tab-btn" data-resource="oxygen">🌬️ Oxygen</button>
+        <button class="tab-btn" data-resource="health">❤️ Health</button>
+        <button class="tab-btn" data-resource="money">💰 Money</button>
+      </div>
+      <div id="breakdown-details" class="breakdown-details">
+        <!-- Will be populated dynamically -->
+      </div>
+    </div>
+  </div>
   <div id="partner-form" class="panel" style="display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);padding:10px;gap:4px;flex-direction:column;">
     <label>Total Shares <input id="partner-total" type="number" value="10" min="1"></label>
     <label>Share Price <input id="partner-price" type="number" value="10" min="1"></label>
@@ -337,6 +364,239 @@ const icons = {
   oxygenImg.src = icons.oxygen_full;
   oxygenImg.dataset.current = icons.oxygen_full;
 
+  // Resource tracking system
+  const resourceTracking = {
+    sources: {
+      institutions: new Map(), // id -> { name, owner, effects }
+      workforce: new Map(),    // id:workerIndex -> { name, institutionId, effects }
+      activity: { hydration: 0, oxygen: 0, health: 0, money: 0 },
+      proposals: new Map()     // placeholder for future use
+    },
+
+    trackActivity(hydrationRate, oxygenRate) {
+      this.sources.activity.hydration = -hydrationRate;
+      this.sources.activity.oxygen = -oxygenRate;
+    },
+
+    updateInstitution(id, name, owner, effects, share) {
+      const factor = share == null ? 1 : share;
+      const scaledEffects = {};
+      for (const [key, value] of Object.entries(effects)) {
+        scaledEffects[key] = value * factor;
+      }
+      if (this.sources.institutions.has(id)) {
+        const existing = this.sources.institutions.get(id);
+        for (const [k, val] of Object.entries(scaledEffects)) {
+          existing.effects[k] = (existing.effects[k] || 0) + val;
+        }
+      } else {
+        this.sources.institutions.set(id, { name, owner, effects: scaledEffects });
+      }
+    },
+
+    updateWorkforce(institutionId, workerIndex, worker) {
+      const key = `${institutionId}:${workerIndex}`;
+      const effects = Object.assign({}, worker.effects || {});
+      if (worker.wage) {
+        effects.money = (effects.money || 0) - worker.wage;
+      }
+      this.sources.workforce.set(key, {
+        name: worker.name,
+        role: worker.role,
+        institutionId,
+        effects
+      });
+    },
+
+    calculateRates() {
+      const rates = {
+        hydration: { total: 0, producers: [], consumers: [] },
+        oxygen: { total: 0, producers: [], consumers: [] },
+        health: { total: 0, producers: [], consumers: [] },
+        money: { total: 0, producers: [], consumers: [] }
+      };
+
+      this.sources.institutions.forEach((inst, id) => {
+        for (const [resource, value] of Object.entries(inst.effects)) {
+          if (typeof value === 'number' && value !== 0) {
+            rates[resource].total += value;
+            const item = {
+              name: inst.name,
+              source: `Institution (${inst.owner})`,
+              value: value,
+              id: id
+            };
+            if (value > 0) rates[resource].producers.push(item);
+            else rates[resource].consumers.push(item);
+          }
+        }
+      });
+
+      this.sources.workforce.forEach((worker, key) => {
+        for (const [resource, value] of Object.entries(worker.effects)) {
+          if (typeof value === 'number' && value !== 0) {
+            rates[resource].total += value;
+            const inst = institutionDataMap[worker.institutionId];
+            const item = {
+              name: `${worker.name} (${worker.role})`,
+              source: inst ? inst.name : 'Unknown',
+              value: value,
+              id: key
+            };
+            if (value > 0) rates[resource].producers.push(item);
+            else rates[resource].consumers.push(item);
+          }
+        }
+      });
+
+      for (const [resource, value] of Object.entries(this.sources.activity)) {
+        if (value !== 0) {
+          rates[resource].total += value;
+          const item = {
+            name: 'Character Activity',
+            source: isRunning ? 'Running' : isMovingForward ? 'Walking' : 'Idle',
+            value: value
+          };
+          if (value > 0) rates[resource].producers.push(item);
+          else rates[resource].consumers.push(item);
+        }
+      }
+
+      for (const resource of ['hydration', 'oxygen', 'health', 'money']) {
+        rates[resource].producers.sort((a, b) => b.value - a.value).splice(10);
+        rates[resource].consumers.sort((a, b) => a.value - b.value).splice(10);
+      }
+
+      return rates;
+    }
+  };
+
+  function updateResourceTracking() {
+    resourceTracking.sources.institutions.clear();
+    resourceTracking.sources.workforce.clear();
+
+    ownedInstitutions.forEach(inst => {
+      const instData = institutionDataMap[inst.id];
+      if (instData && !instData.destroyed) {
+        const share = inst.factor || 1;
+        const effects = {};
+        ['hydration', 'oxygen', 'health', 'money'].forEach(k => {
+          if (typeof inst[k] === 'number') effects[k] = inst[k];
+        });
+        resourceTracking.updateInstitution(
+          inst.id,
+          instData.name,
+          instData.owner,
+          effects,
+          share
+        );
+      }
+    });
+
+    Object.values(institutionDataMap).forEach(inst => {
+      if (inst.owner === playerEmail && Array.isArray(inst.workforce)) {
+        inst.workforce.forEach((worker, idx) => {
+          if (worker.effects) resourceTracking.updateWorkforce(inst.id, idx, worker);
+        });
+      }
+    });
+
+    const hydrationRate = isMovingForward ? (isRunning ? 0.05 : 0.05) : 0.02;
+    const oxygenRate = isMovingForward ? 0.02 : 0.005;
+    resourceTracking.trackActivity(hydrationRate, oxygenRate);
+  }
+
+  function showResourceBreakdown() {
+    updateResourceTracking();
+    const rates = resourceTracking.calculateRates();
+
+    const netFlowContainer = document.getElementById('net-flow-container');
+    netFlowContainer.innerHTML = '';
+
+    const resourceInfo = {
+      hydration: { icon: '💧', name: 'Hydration' },
+      oxygen: { icon: '🌬️', name: 'Oxygen' },
+      health: { icon: '❤️', name: 'Health' },
+      money: { icon: '💰', name: 'Money' }
+    };
+
+    for (const [resource, info] of Object.entries(resourceInfo)) {
+      const rate = rates[resource];
+      const card = document.createElement('div');
+      card.className = 'resource-flow-card';
+
+      const flowClass = rate.total > 0 ? 'flow-positive' : rate.total < 0 ? 'flow-negative' : 'flow-neutral';
+      const sign = rate.total > 0 ? '+' : '';
+
+      card.innerHTML = `
+        <h4>${info.icon} ${info.name}</h4>
+        <div class="flow-value ${flowClass}">${sign}${rate.total.toFixed(2)}/cycle</div>
+        <div class="flow-breakdown">
+          <div>Producers: ${rate.producers.length}</div>
+          <div>Consumers: ${rate.consumers.length}</div>
+        </div>
+      `;
+
+      netFlowContainer.appendChild(card);
+    }
+
+    showResourceDetails('hydration');
+
+    document.getElementById('resource-breakdown-popup').style.display = 'block';
+  }
+
+  function showResourceDetails(resource) {
+    updateResourceTracking();
+    const rates = resourceTracking.calculateRates();
+    const data = rates[resource];
+
+    const detailsContainer = document.getElementById('breakdown-details');
+    detailsContainer.innerHTML = `
+      <div class="producers-list">
+        <h4>Top Producers</h4>
+        ${data.producers.map(item => `
+          <div class="breakdown-item">
+            <span class="breakdown-item-name">
+              ${item.name}
+              <span class="breakdown-item-source">${item.source}</span>
+            </span>
+            <span class="breakdown-item-value flow-positive">+${item.value.toFixed(2)}</span>
+          </div>
+        `).join('') || '<div class="breakdown-item">None</div>'}
+      </div>
+      <div class="consumers-list">
+        <h4>Top Consumers</h4>
+        ${data.consumers.map(item => `
+          <div class="breakdown-item">
+            <span class="breakdown-item-name">
+              ${item.name}
+              <span class="breakdown-item-source">${item.source}</span>
+            </span>
+            <span class="breakdown-item-value flow-negative">${item.value.toFixed(2)}</span>
+          </div>
+        `).join('') || '<div class="breakdown-item">None</div>'}
+      </div>
+    `;
+
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.resource === resource);
+    });
+  }
+
+  document.getElementById('status-panel').addEventListener('click', showResourceBreakdown);
+
+  document.getElementById('breakdown-close').addEventListener('click', () => {
+    document.getElementById('resource-breakdown-popup').style.display = 'none';
+  });
+
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      showResourceDetails(btn.dataset.resource);
+    });
+  });
+
+  setInterval(updateResourceTracking, 5000);
+
   function fadeSwap(img, src) {
     if (img.dataset.current === src) return;
     img.style.opacity = 0;
@@ -527,10 +787,19 @@ if (window.location.protocol === 'https:') {
   function addInstitutionEffects(id, effects) {
     if (!effects || typeof effects !== 'object') return;
     const inst = institutionDataMap[id];
-    const share = inst && inst.shares && inst.shares[playerEmail] || 0;
-    const total = inst && inst.totalShares || 1;
+    const share = (inst && inst.shares && inst.shares[playerEmail]) || 0;
+    const total = (inst && inst.totalShares) || 1;
     const factor = total ? share / total : 0;
-    ownedInstitutions.push(Object.assign({ id, factor }, effects));
+    let entry = ownedInstitutions.find(e => e.id === id);
+    if (!entry) {
+      entry = { id, factor };
+      ownedInstitutions.push(entry);
+    } else {
+      entry.factor = factor;
+    }
+    for (const [k, v] of Object.entries(effects)) {
+      if (typeof v === 'number') entry[k] = (entry[k] || 0) + v;
+    }
   }
 
   function removeInstitutionEffects(id) {
@@ -876,9 +1145,12 @@ if (window.location.protocol === 'https:') {
   }
 
   function applyInstitutionEffects() {
+    // First update tracking
+    updateResourceTracking();
+
     ownedInstitutions.forEach(e => {
       if (!e || typeof e !== 'object') return;
-      const f = e.factor || 1;
+      const f = e.factor == null ? 1 : e.factor;
       if (typeof e.hydration === 'number') hydration = Math.min(hydration + e.hydration * f, 1000);
       if (typeof e.oxygen === 'number') oxygen = Math.min(oxygen + e.oxygen * f, 1000);
       if (typeof e.health === 'number') health = Math.min(health + e.health * f, 1000);
