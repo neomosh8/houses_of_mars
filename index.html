@@ -1847,11 +1847,11 @@ function showInstitutionPopup(id) {
   }
 
   function showInfo() {
-    infoDiv.style.display = 'block';
-    workforceDiv.style.display = 'none';
-    chatDiv.style.display = 'none';
-    proposalsDiv.style.display = 'none';
-    weaponsDiv.style.display = 'none';
+    infoDiv.classList.remove('hidden');
+    workforceDiv.classList.add('hidden');
+    chatDiv.classList.add('hidden');
+    proposalsDiv.classList.add('hidden');
+    weaponsDiv.classList.add('hidden');
     if (chatInterval) {
       clearInterval(chatInterval);
       chatInterval = null;
@@ -1888,11 +1888,11 @@ function showInstitutionPopup(id) {
   }
 
   async function showWorkforce() {
-    infoDiv.style.display = 'none';
-    workforceDiv.style.display = 'block';
-    chatDiv.style.display = 'none';
-    proposalsDiv.style.display = 'none';
-    weaponsDiv.style.display = 'none';
+    infoDiv.classList.add('hidden');
+    workforceDiv.classList.remove('hidden');
+    chatDiv.classList.add('hidden');
+    proposalsDiv.classList.add('hidden');
+    weaponsDiv.classList.add('hidden');
     if (chatInterval) {
       clearInterval(chatInterval);
       chatInterval = null;
@@ -2010,11 +2010,11 @@ function showInstitutionPopup(id) {
   }
 
   async function showChat() {
-    infoDiv.style.display = 'none';
-    workforceDiv.style.display = 'none';
-    chatDiv.style.display = 'block';
-    proposalsDiv.style.display = 'none';
-    weaponsDiv.style.display = 'none';
+    infoDiv.classList.add('hidden');
+    workforceDiv.classList.add('hidden');
+    chatDiv.classList.remove('hidden');
+    proposalsDiv.classList.add('hidden');
+    weaponsDiv.classList.add('hidden');
     if (chatInterval) clearInterval(chatInterval);
     const input = document.getElementById('chat-input');
     const sendBtn = document.getElementById('chat-send');
@@ -2086,11 +2086,11 @@ function showInstitutionPopup(id) {
   }
 
   async function showProposals() {
-    infoDiv.style.display = 'none';
-    workforceDiv.style.display = 'none';
-    chatDiv.style.display = 'none';
-    proposalsDiv.style.display = 'block';
-    weaponsDiv.style.display = 'none';
+    infoDiv.classList.add('hidden');
+    workforceDiv.classList.add('hidden');
+    chatDiv.classList.add('hidden');
+    proposalsDiv.classList.remove('hidden');
+    weaponsDiv.classList.add('hidden');
     if (chatInterval) { clearInterval(chatInterval); chatInterval = null; }
     const container = document.getElementById('proposals-container');
     container.innerHTML = '<div class="spinner" style="height:100px;color:#fff">Loading...</div>';
@@ -2123,11 +2123,11 @@ function showInstitutionPopup(id) {
   }
 
   async function showWeapons() {
-    infoDiv.style.display = 'none';
-    workforceDiv.style.display = 'none';
-    chatDiv.style.display = 'none';
-    proposalsDiv.style.display = 'none';
-    weaponsDiv.style.display = 'block';
+    infoDiv.classList.add('hidden');
+    workforceDiv.classList.add('hidden');
+    chatDiv.classList.add('hidden');
+    proposalsDiv.classList.add('hidden');
+    weaponsDiv.classList.remove('hidden');
     if (chatInterval) { clearInterval(chatInterval); chatInterval = null; }
     const container = document.getElementById('weapons-container');
     container.innerHTML = '<div class="spinner" style="height:100px;color:#fff">Loading...</div>';
@@ -2182,8 +2182,11 @@ function showInstitutionPopup(id) {
       clearInterval(chatInterval);
       chatInterval = null;
     }
-    proposalsDiv.style.display = 'none';
-    weaponsDiv.style.display = 'none';
+    infoDiv.classList.remove('hidden');
+    workforceDiv.classList.add('hidden');
+    chatDiv.classList.add('hidden');
+    proposalsDiv.classList.add('hidden');
+    weaponsDiv.classList.add('hidden');
   }
 
   function escHandler(e) {
