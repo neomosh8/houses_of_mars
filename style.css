@@ -211,7 +211,7 @@ canvas { display: block; width: 100%; height: 100%; }
 }
 
 #popup-chat {
-  display: none;
+  /* display will be controlled via the `hidden` class */
 }
 
 #chat-container {
