@@ -379,12 +379,19 @@ const icons = {
     },
 
     updateInstitution(id, name, owner, effects, share) {
-      const factor = share || 1;
+      const factor = share == null ? 1 : share;
       const scaledEffects = {};
       for (const [key, value] of Object.entries(effects)) {
         scaledEffects[key] = value * factor;
       }
-      this.sources.institutions.set(id, { name, owner, effects: scaledEffects });
+      if (this.sources.institutions.has(id)) {
+        const existing = this.sources.institutions.get(id);
+        for (const [k, val] of Object.entries(scaledEffects)) {
+          existing.effects[k] = (existing.effects[k] || 0) + val;
+        }
+      } else {
+        this.sources.institutions.set(id, { name, owner, effects: scaledEffects });
+      }
     },
 
     updateWorkforce(institutionId, workerIndex, worker) {
@@ -1130,7 +1137,7 @@ if (window.location.protocol === 'https:') {
 
     ownedInstitutions.forEach(e => {
       if (!e || typeof e !== 'object') return;
-      const f = e.factor || 1;
+      const f = e.factor == null ? 1 : e.factor;
       if (typeof e.hydration === 'number') hydration = Math.min(hydration + e.hydration * f, 1000);
       if (typeof e.oxygen === 'number') oxygen = Math.min(oxygen + e.oxygen * f, 1000);
       if (typeof e.health === 'number') health = Math.min(health + e.health * f, 1000);
