@@ -9,7 +9,7 @@ try {
 } catch (_) {}
 
 const CHAT_FILE = path.join(__dirname, 'chatLogs.json');
-const WORKFORCE_INTERVAL_MS = 10000; // how often workers chat
+const WORKFORCE_INTERVAL_MS = 3600000; // how often workers chat
 const USER_BUFFER_MS = 1000; // short delay after user message
 const FIRST_PROMPTS = {
   WatOx:
