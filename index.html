@@ -3156,7 +3156,7 @@ function showWorkerProfile(worker, institutionId, isHired = false, index = null)
   const terrainMeshes = [];
 
   groundLoader.load(
-    'terrain_s.gltf', // Replace this with the path to your ground GLTF file
+    'terrain.gltf', // Replace this with the path to your ground GLTF file
     (gltf) => {
       gltfTerrain = gltf.scene || (gltf.scenes && gltf.scenes[0]);
       if (!gltfTerrain) return;
@@ -3708,8 +3708,8 @@ function showWorkerProfile(worker, institutionId, isHired = false, index = null)
             }
         }
 
-        if (model.position.y < -100) {
-          model.position.y = 60;
+        if (model.position.y < -300) {
+          model.position.y = 40;
           velocity.y = 0;
           groundY = null;
           onGround = false;
