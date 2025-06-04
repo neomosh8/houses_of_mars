@@ -87,6 +87,40 @@
     <label>My Shares <input id="partner-my" type="number" value="1" min="1"></label>
     <button id="partner-save">Save</button>
   </div>
+  <div id="worker-profile-overlay" class="worker-profile-overlay hidden">
+    <div class="worker-profile">
+      <div class="profile-close" id="profile-close">×</div>
+      <div class="profile-header">
+        <img id="profile-image" class="profile-image" src="" alt="">
+        <div class="profile-info">
+          <h2 id="profile-name"></h2>
+          <h3 id="profile-role"></h3>
+          <div class="profile-stats">
+            <div class="wage-info">💰 Wage: $<span id="profile-wage"></span>/day</div>
+            <div class="resource-info">
+              <span class="resource-item">💧 Hydration: <span id="profile-hydration"></span></span>
+              <span class="resource-item">🌬️ Oxygen: <span id="profile-oxygen"></span></span>
+              <span class="resource-item">❤️ Health: <span id="profile-health"></span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="profile-content">
+        <div class="profile-section">
+          <h4>Backstory</h4>
+          <div id="profile-backstory"></div>
+        </div>
+        <div class="profile-section">
+          <h4>Resume</h4>
+          <div id="profile-resume"></div>
+        </div>
+      </div>
+      <div class="profile-actions">
+        <button id="profile-hire-btn" class="profile-btn hire-btn">Hire</button>
+        <button id="profile-fire-btn" class="profile-btn fire-btn">Fire</button>
+      </div>
+    </div>
+  </div>
   <script type="module">
 
   const DEBUG_LOG = true;
@@ -1874,15 +1908,23 @@ function showInstitutionPopup(id) {
       item.style.display = 'flex';
       item.style.flexDirection = 'column';
       item.style.alignItems = 'center';
+      item.style.cursor = 'pointer';
+
       const img = document.createElement('img');
       img.src = w.image;
       img.style.width = '60px';
       img.style.height = '80px';
       item.appendChild(img);
+
       const name = document.createElement('div');
       name.textContent = w.name + (w.director ? ' \u2605' : '');
       name.style.fontSize = '12px';
       item.appendChild(name);
+
+      item.onclick = () => {
+        showWorkerProfile(w, id, true);
+      };
+
       carousel.appendChild(item);
     });
   }
@@ -1973,7 +2015,7 @@ async function showWorkforce() {
         inner.appendChild(back);
         card.appendChild(inner);
         card.onclick = () => {
-          inner.style.transform = inner.style.transform === 'rotateY(180deg)' ? '' : 'rotateY(180deg)';
+          showWorkerProfile(w, id, false);
         };
         const hireBtn = document.createElement('button');
         hireBtn.textContent = 'Hire';
@@ -2202,6 +2244,125 @@ async function showWorkforce() {
   closeBtn.onclick = closePopup;
   const ownerLink = document.getElementById('owner-click');
   if (ownerLink && (isOwner || hasAccess)) ownerLink.onclick = showWorkforce;
+}
+
+function showWorkerProfile(worker, institutionId, isHired = false) {
+  const overlay = document.getElementById('worker-profile-overlay');
+  const nameEl = document.getElementById('profile-name');
+  const roleEl = document.getElementById('profile-role');
+  const imageEl = document.getElementById('profile-image');
+  const wageEl = document.getElementById('profile-wage');
+  const hydrationEl = document.getElementById('profile-hydration');
+  const oxygenEl = document.getElementById('profile-oxygen');
+  const healthEl = document.getElementById('profile-health');
+  const backstoryEl = document.getElementById('profile-backstory');
+  const resumeEl = document.getElementById('profile-resume');
+  const hireBtn = document.getElementById('profile-hire-btn');
+  const fireBtn = document.getElementById('profile-fire-btn');
+
+  nameEl.textContent = worker.name + (worker.director ? ' \u2B50' : '');
+  roleEl.textContent = worker.role;
+  imageEl.src = worker.image;
+  wageEl.textContent = worker.wage;
+  hydrationEl.textContent = worker.effects?.hydration || 0;
+  oxygenEl.textContent = worker.effects?.oxygen || 0;
+  healthEl.textContent = worker.effects?.health || 0;
+
+  backstoryEl.innerHTML = '';
+  if (Array.isArray(worker.backstory)) {
+    const ul = document.createElement('ul');
+    worker.backstory.forEach(it => {
+      const li = document.createElement('li');
+      li.textContent = it;
+      ul.appendChild(li);
+    });
+    backstoryEl.appendChild(ul);
+  } else if (typeof worker.backstory === 'string') {
+    const lines = worker.backstory.split(/\n|\\n/);
+    const ul = document.createElement('ul');
+    lines.forEach(line => {
+      line = line.trim();
+      if (line) {
+        const li = document.createElement('li');
+        li.textContent = line.replace(/^[-*•]\s*/, '');
+        ul.appendChild(li);
+      }
+    });
+    backstoryEl.appendChild(ul);
+  }
+
+  resumeEl.innerHTML = '';
+  if (Array.isArray(worker.resume)) {
+    const ul = document.createElement('ul');
+    worker.resume.forEach(it => {
+      const li = document.createElement('li');
+      li.textContent = it;
+      ul.appendChild(li);
+    });
+    resumeEl.appendChild(ul);
+  } else if (typeof worker.resume === 'string') {
+    const lines = worker.resume.split(/\n|\\n/);
+    const ul = document.createElement('ul');
+    lines.forEach(line => {
+      line = line.trim();
+      if (line) {
+        const li = document.createElement('li');
+        li.textContent = line.replace(/^[-*•]\s*/, '');
+        ul.appendChild(li);
+      }
+    });
+    resumeEl.appendChild(ul);
+  }
+
+  if (isHired) {
+    hireBtn.style.display = 'none';
+    fireBtn.style.display = 'block';
+    fireBtn.onclick = async () => {
+      alert('Fire functionality not yet implemented');
+      overlay.classList.add('hidden');
+    };
+  } else {
+    hireBtn.style.display = 'block';
+    fireBtn.style.display = 'none';
+    hireBtn.onclick = async () => {
+      try {
+        const res = await fetch(`/api/workforce/hire/${institutionId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ worker })
+        });
+        if (res.ok) {
+          overlay.classList.add('hidden');
+          const container = document.getElementById('workforce-container');
+          const cards = container.querySelectorAll('.worker-card');
+          cards.forEach(card => {
+            if (card.querySelector('.card-inner').textContent.includes(worker.name)) {
+              container.removeChild(card);
+            }
+          });
+          if (container.children.length === 0) {
+            container.innerHTML = '<div style="color: #fff; text-align: center;">All applicants hired!</div>';
+          }
+        } else {
+          alert('Failed to hire worker');
+        }
+      } catch (err) {
+        alert('Failed to hire worker');
+      }
+    };
+  }
+
+  overlay.classList.remove('hidden');
+
+  document.getElementById('profile-close').onclick = () => {
+    overlay.classList.add('hidden');
+  };
+
+  overlay.onclick = (e) => {
+    if (e.target === overlay) {
+      overlay.classList.add('hidden');
+    }
+  };
 }
 
   function updateSinking(dt) {
