@@ -80,25 +80,25 @@ module.exports = function(institutionStore, userStore, engine, broadcast, sendTo
     try {
       // Generate worker profile with text using correct API
       const profileResponse = await openai.chat.completions.create({
-        model: "gpt-4",
+        model: "gpt-4.1-nano-2025-04-14",
         messages: [{
           role: "system",
-          content: "You are an assistant that generates detailed worker profiles for a Mars colonization game. Always respond with valid JSON only, no additional text."
+          content: "You are an assistant that generates detailed worker profiles for a Mars colonization game. Always respond with valid JSON only, no additional text. respond in bullet point style, short, dont yap"
         }, {
           role: "user",
-          content: `Generate a detailed worker profile for a Mars colonization game. The worker will be employed at a ${institutionName} facility.
+          content: `Generate a  bullet point style, short, worker profile for a Mars colonization game. The worker will be employed at a ${institutionName} facility.
 
           Please provide:
           1. A realistic full name
           2. A specific job role relevant to Mars colonization
-          3. A compelling 2-sentence backstory
-          4. A professional 2-sentence resume/skills summary
-          5. A fair wage (10-50 credits per day)
+          3. A coherent backstory bullet points - very casual about social behaviour, family relationship, very wierd interest, or past felony, emotional trauma, very positive or very negative incident
+          4. A professional resume/skills  bullet points  -  what they can do very good? and what they built on earth?
+          5. A fair wage (4-200 credits per day)
           6. The resources they consume each day (oxygen, hydration, or health).
 
-          Format the response as JSON with these exact keys: name, role, backstory, resume, wage, effects (where effects is an object with oxygen, hydration, health as numbers between -1 and 0).`
+          Format the response as JSON with these exact keys: name, role, backstory, resume, wage, effects (where effects is an object with oxygen, hydration, health as numbers between -5 and 0).`
         }],
-        temperature: 0.8,
+        temperature: 1,
         max_tokens: 500
       });
 
@@ -119,12 +119,12 @@ module.exports = function(institutionStore, userStore, engine, broadcast, sendTo
             if (aiData.role) workerData.role = aiData.role;
             if (aiData.backstory) workerData.backstory = aiData.backstory;
             if (aiData.resume) workerData.resume = aiData.resume;
-            if (aiData.wage && typeof aiData.wage === 'number') workerData.wage = Math.max(10, Math.min(50, aiData.wage));
+            if (aiData.wage && typeof aiData.wage === 'number') workerData.wage = Math.max(4, Math.min(200, aiData.wage));
             if (aiData.effects && typeof aiData.effects === 'object') {
               workerData.effects = {
-                oxygen: Math.min(0, Math.max(-1, aiData.effects.oxygen || 0)),
-                hydration: Math.min(0, Math.max(-1, aiData.effects.hydration || 0)),
-                health: Math.min(0, Math.max(-1, aiData.effects.health || 0))
+                oxygen: Math.min(-5, Math.max(-1, aiData.effects.oxygen || 0)),
+                hydration: Math.min(-5, Math.max(-1, aiData.effects.hydration || 0)),
+                health: Math.min(-5, Math.max(-1, aiData.effects.health || 0))
               };
             }
           } catch {
