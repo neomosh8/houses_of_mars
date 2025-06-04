@@ -1908,6 +1908,8 @@ function showInstitutionPopup(id) {
       if (!res.ok) {
         throw new Error(`HTTP error! status: ${res.status}`);
       }
+      const rawText = await res.clone().text();
+      console.log('Raw generate response', rawText);
       const workersData = await res.json();
 
       // Clear loading and display workers

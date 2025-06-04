@@ -204,6 +204,7 @@ module.exports = function(institutionStore, userStore, engine, broadcast, sendTo
       const num = Math.floor(Math.random() * 5) + 1; // 1-5 workers
 
       const workers = await generateWorkers(num, institutionName);
+      console.log('Workers generated:', workers);
 
       res.json({ workers });
     } catch (err) {
