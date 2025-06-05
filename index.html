@@ -1227,7 +1227,7 @@ if (window.location.protocol === 'https:') {
     if (terrainMeshes.length === 0) return 0;
     const origin = new THREE.Vector3(x, 1000, z);
     raycaster.set(origin, new THREE.Vector3(0, -1, 0));
-    const hits = raycaster.intersectObjects(terrainMeshes, true);
+    const hits = raycaster.intersectObjects(getNearbyTerrain(origin), true);
     if (hits.length > 0) {
       return hits[0].point.y;
     }
@@ -3333,6 +3333,43 @@ function showWorkerProfile(worker, institutionId, isHired = false, index = null)
   // Array to store all terrain meshes for raycasting
   const terrainMeshes = [];
 
+  // Spatial grid for terrain chunks
+  const terrainGrid = new Map();
+  const GRID_SIZE = 50;
+
+  function addTerrainToGrid(mesh) {
+    const box = new THREE.Box3().setFromObject(mesh);
+    const minX = Math.floor(box.min.x / GRID_SIZE);
+    const maxX = Math.ceil(box.max.x / GRID_SIZE);
+    const minZ = Math.floor(box.min.z / GRID_SIZE);
+    const maxZ = Math.ceil(box.max.z / GRID_SIZE);
+
+    for (let x = minX; x <= maxX; x++) {
+      for (let z = minZ; z <= maxZ; z++) {
+        const key = `${x},${z}`;
+        if (!terrainGrid.has(key)) terrainGrid.set(key, []);
+        terrainGrid.get(key).push(mesh);
+      }
+    }
+  }
+
+  function getNearbyTerrain(position) {
+    const gridX = Math.floor(position.x / GRID_SIZE);
+    const gridZ = Math.floor(position.z / GRID_SIZE);
+    const nearby = [];
+
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dz = -1; dz <= 1; dz++) {
+        const key = `${gridX + dx},${gridZ + dz}`;
+        if (terrainGrid.has(key)) {
+          nearby.push(...terrainGrid.get(key));
+        }
+      }
+    }
+
+    return nearby;
+  }
+
   groundLoader.load(
     'terrain.gltf', // Replace this with the path to your ground GLTF file
     (gltf) => {
@@ -3352,6 +3389,7 @@ function showWorkerProfile(worker, institutionId, isHired = false, index = null)
 
           // Add mesh to our array for raycasting
           terrainMeshes.push(o);
+          addTerrainToGrid(o);
         }
       });
 
@@ -3426,6 +3464,7 @@ function showWorkerProfile(worker, institutionId, isHired = false, index = null)
 
     // Add to terrainMeshes for raycasting
     terrainMeshes.push(fallbackGround);
+    addTerrainToGrid(fallbackGround);
 
 
     // Position the model if it's already loaded
@@ -3600,7 +3639,7 @@ function showWorkerProfile(worker, institutionId, isHired = false, index = null)
       new THREE.Vector3(0, -1, 0) // Direction straight down
     );
 
-    const intersects = raycaster.intersectObjects(terrainMeshes, true);
+    const intersects = raycaster.intersectObjects(getNearbyTerrain(origin), true);
 
     if (intersects.length > 0) {
       // We found ground - but we won't teleport to it
@@ -3665,7 +3704,7 @@ function showWorkerProfile(worker, institutionId, isHired = false, index = null)
 
     // Cast ray downward
     raycaster.set(origin, new THREE.Vector3(0, -1, 0));
-    const intersects = raycaster.intersectObjects(terrainMeshes, true);
+    const intersects = raycaster.intersectObjects(getNearbyTerrain(origin), true);
 
     // Check if we're on or near ground
     if (intersects.length > 0 && intersects[0].distance <= groundCheckDistance) {
@@ -3709,7 +3748,7 @@ function showWorkerProfile(worker, institutionId, isHired = false, index = null)
 
     // Cast ray downward
     raycaster.set(origin, new THREE.Vector3(0, -1, 0));
-    const intersects = raycaster.intersectObjects(terrainMeshes, true);
+    const intersects = raycaster.intersectObjects(getNearbyTerrain(origin), true);
 
     if (intersects.length > 0) {
       const targetY = intersects[0].point.y;
