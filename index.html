@@ -994,17 +994,38 @@ if (window.location.protocol === 'https:') {
     };
   }
 
+  let hallFormOpen = false;
+  let hallEscHandler = null;
+
+  function closeHallForms() {
+    document.getElementById('referendum-form').style.display = 'none';
+    document.getElementById('policy-form').style.display = 'none';
+    hallFormOpen = false;
+    if (hallEscHandler) {
+      document.removeEventListener('keydown', hallEscHandler);
+      hallEscHandler = null;
+    }
+  }
+
   function openReferendumForm() {
+    closeHallForms();
     const form = document.getElementById('referendum-form');
     form.style.display = 'flex';
+    hallFormOpen = true;
     updateReferendumFields();
+    hallEscHandler = e => { if (e.key === 'Escape') closeHallForms(); };
+    document.addEventListener('keydown', hallEscHandler);
   }
 
   function openPolicyForm() {
+    closeHallForms();
     const form = document.getElementById('policy-form');
     form.style.display = 'flex';
     document.getElementById('policy-title').value = '';
     document.getElementById('policy-desc').value = '';
+    hallFormOpen = true;
+    hallEscHandler = e => { if (e.key === 'Escape') closeHallForms(); };
+    document.addEventListener('keydown', hallEscHandler);
   }
 
   function updateReferendumFields() {
@@ -1074,7 +1095,7 @@ if (window.location.protocol === 'https:') {
   }
 
   function handleClick(event) {
-    if (institutionPopupOpen) return;
+    if (institutionPopupOpen || hallFormOpen) return;
     if (placingInstitution && ghostInstitution && currentInstitution) {
       const cost = typeof currentInstitution.price === 'number' ? currentInstitution.price : 0;
       if (!placingApplication && playerMoney < cost) {
@@ -3593,8 +3614,8 @@ function showWorkerProfile(worker, institutionId, isHired = false, index = null)
 
   // Input state
   const keys = { w: false, a: false, s: false, d: false, arrowup: false, arrowleft: false, arrowright: false, arrowdown: false, space: false, shift: false };
-  window.addEventListener('keydown', e => {
-    if (institutionPopupOpen) return;
+    window.addEventListener('keydown', e => {
+      if (institutionPopupOpen || hallFormOpen) return;
     const key = e.code.toLowerCase().replace('key', '').replace('arrow','');
     if (keys.hasOwnProperty(key)) keys[key] = true;
     if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') keys.shift = true;
@@ -3606,8 +3627,8 @@ function showWorkerProfile(worker, institutionId, isHired = false, index = null)
       plantFlag();
     }
   });
-  window.addEventListener('keyup', e => {
-    if (institutionPopupOpen) return;
+    window.addEventListener('keyup', e => {
+      if (institutionPopupOpen || hallFormOpen) return;
     const key = e.code.toLowerCase().replace('key', '').replace('arrow','');
     if (keys.hasOwnProperty(key)) keys[key] = false;
     if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') keys.shift = false;
@@ -4022,6 +4043,7 @@ async function loadReferendum() {
 
 document.getElementById('planethall-close').onclick = () => {
   document.getElementById('planethall-popup').style.display = 'none';
+  closeHallForms();
 };
 
 document.querySelectorAll('.hall-tab').forEach(tab => {
@@ -4053,12 +4075,12 @@ document.getElementById('referendum-submit').onclick = async e => {
     data.text = document.getElementById('policy-text').value.trim();
   }
   try {
-    await fetch('/api/planethall/referendum', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type, data, email: playerEmail })
-    });
-    document.getElementById('referendum-form').style.display = 'none';
+      await fetch('/api/planethall/referendum', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, data, email: playerEmail })
+      });
+      closeHallForms();
   } catch (err) {
     console.error('Failed to start referendum', err);
   }
@@ -4070,12 +4092,12 @@ document.getElementById('policy-save').onclick = async e => {
   const description = document.getElementById('policy-desc').value.trim();
   if (!title || !description) return;
   try {
-    await fetch('/api/planethall/policies', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: playerEmail, title, description })
-    });
-    document.getElementById('policy-form').style.display = 'none';
+      await fetch('/api/planethall/policies', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: playerEmail, title, description })
+      });
+      closeHallForms();
     loadPolicies();
   } catch (err) {
     console.error('Failed to create policy', err);
