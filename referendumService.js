@@ -26,6 +26,7 @@ async function queryVote(worker, owner, question) {
       temperature: 1,
       max_tokens: 100
     });
+    console.log('Query:',JSON.stringify(messages),'Result:',resp.choices[0].message.content);
     const text = resp.choices?.[0]?.message?.content || '';
     const match = text.match(/\{[\s\S]*\}/);
     if (match) {

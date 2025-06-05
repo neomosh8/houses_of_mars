@@ -1,5 +1,199 @@
 {
   "active": null,
-  "history": [],
-  "nextId": 1
+  "history": [
+    {
+      "id": 1,
+      "type": "candidate",
+      "data": {
+        "email": "rabiei.mojtaba@gmail.com",
+        "name": "Mosh"
+      },
+      "proposedBy": "rabiei.mojtaba@gmail.com",
+      "status": "rejected",
+      "totalWorkers": 0,
+      "votes": {},
+      "voted": 0,
+      "result": {
+        "yes": 0,
+        "no": 0
+      }
+    },
+    {
+      "id": 2,
+      "type": "candidate",
+      "data": {
+        "email": "mosh@neocore.tech",
+        "name": "Mosh"
+      },
+      "proposedBy": "mosh@neocore.tech",
+      "status": "rejected",
+      "totalWorkers": 4,
+      "votes": {
+        "rabiei.mojtaba@gmail.com|Dr. Emma Caldwell": false,
+        "rabiei.mojtaba@gmail.com|Dr. Elena Martinez": false,
+        "mosh@neocore.tech|Dr. Lydia Chen": false,
+        "mosh@neocore.tech|Dr. Lisa Chen": false
+      },
+      "voted": 4,
+      "result": {
+        "yes": 0,
+        "no": 4
+      }
+    },
+    {
+      "id": 3,
+      "type": "candidate",
+      "data": {
+        "email": "rabiei.mojtaba@gmail.com",
+        "name": "Mosh"
+      },
+      "proposedBy": "rabiei.mojtaba@gmail.com",
+      "status": "rejected",
+      "totalWorkers": 4,
+      "votes": {
+        "rabiei.mojtaba@gmail.com|Dr. Emma Caldwell": false,
+        "rabiei.mojtaba@gmail.com|Dr. Elena Martinez": false,
+        "mosh@neocore.tech|Dr. Lydia Chen": false,
+        "mosh@neocore.tech|Dr. Lisa Chen": false
+      },
+      "voted": 4,
+      "result": {
+        "yes": 0,
+        "no": 4
+      }
+    },
+    {
+      "id": 4,
+      "type": "candidate",
+      "data": {
+        "email": "rabiei.mojtaba@gmail.com",
+        "name": "Mosh"
+      },
+      "proposedBy": "rabiei.mojtaba@gmail.com",
+      "status": "rejected",
+      "totalWorkers": 4,
+      "votes": {
+        "rabiei.mojtaba@gmail.com|Dr. Emma Caldwell": false,
+        "rabiei.mojtaba@gmail.com|Dr. Elena Martinez": false,
+        "mosh@neocore.tech|Dr. Lydia Chen": false,
+        "mosh@neocore.tech|Dr. Lisa Chen": false
+      },
+      "voted": 4,
+      "result": {
+        "yes": 0,
+        "no": 4
+      }
+    },
+    {
+      "id": 5,
+      "type": "candidate",
+      "data": {
+        "email": "rabiei.mojtaba@gmail.com",
+        "name": "Mosh"
+      },
+      "proposedBy": "rabiei.mojtaba@gmail.com",
+      "status": "rejected",
+      "totalWorkers": 4,
+      "votes": {
+        "rabiei.mojtaba@gmail.com|Dr. Emma Caldwell": false,
+        "rabiei.mojtaba@gmail.com|Dr. Elena Martinez": false,
+        "mosh@neocore.tech|Dr. Lydia Chen": false,
+        "mosh@neocore.tech|Dr. Lisa Chen": false
+      },
+      "voted": 4,
+      "result": {
+        "yes": 0,
+        "no": 4
+      }
+    },
+    {
+      "id": 6,
+      "type": "candidate",
+      "data": {
+        "email": "rabiei.mojtaba@gmail.com",
+        "name": "Mosh"
+      },
+      "proposedBy": "rabiei.mojtaba@gmail.com",
+      "status": "rejected",
+      "totalWorkers": 4,
+      "votes": {
+        "rabiei.mojtaba@gmail.com|Dr. Emma Caldwell": false,
+        "rabiei.mojtaba@gmail.com|Dr. Elena Martinez": false,
+        "mosh@neocore.tech|Dr. Lydia Chen": false,
+        "mosh@neocore.tech|Dr. Lisa Chen": false
+      },
+      "voted": 4,
+      "result": {
+        "yes": 0,
+        "no": 4
+      }
+    },
+    {
+      "id": 7,
+      "type": "candidate",
+      "data": {
+        "email": "rabiei.mojtaba@gmail.com",
+        "name": "Mosh"
+      },
+      "proposedBy": "rabiei.mojtaba@gmail.com",
+      "status": "rejected",
+      "totalWorkers": 4,
+      "votes": {
+        "rabiei.mojtaba@gmail.com|Dr. Emma Caldwell": false,
+        "rabiei.mojtaba@gmail.com|Dr. Elena Martinez": false,
+        "mosh@neocore.tech|Dr. Lydia Chen": false,
+        "mosh@neocore.tech|Dr. Lisa Chen": false
+      },
+      "voted": 4,
+      "result": {
+        "yes": 0,
+        "no": 4
+      }
+    },
+    {
+      "id": 8,
+      "type": "candidate",
+      "data": {
+        "email": "rabiei.mojtaba@gmail.com",
+        "name": "Mosh"
+      },
+      "proposedBy": "rabiei.mojtaba@gmail.com",
+      "status": "rejected",
+      "totalWorkers": 4,
+      "votes": {
+        "rabiei.mojtaba@gmail.com|Dr. Emma Caldwell": true,
+        "rabiei.mojtaba@gmail.com|Dr. Elena Martinez": false,
+        "mosh@neocore.tech|Dr. Lydia Chen": false,
+        "mosh@neocore.tech|Dr. Lisa Chen": true
+      },
+      "voted": 4,
+      "result": {
+        "yes": 2,
+        "no": 2
+      }
+    },
+    {
+      "id": 9,
+      "type": "candidate",
+      "data": {
+        "email": "MOSH@NEOCORE.TECH",
+        "name": "MOSH YOUR BOSS"
+      },
+      "proposedBy": "MOSH@NEOCORE.TECH",
+      "status": "approved",
+      "totalWorkers": 4,
+      "votes": {
+        "rabiei.mojtaba@gmail.com|Dr. Emma Caldwell": true,
+        "rabiei.mojtaba@gmail.com|Dr. Elena Martinez": true,
+        "mosh@neocore.tech|Dr. Lydia Chen": true,
+        "mosh@neocore.tech|Dr. Lisa Chen": true
+      },
+      "voted": 4,
+      "result": {
+        "yes": 4,
+        "no": 0
+      }
+    }
+  ],
+  "nextId": 10
 }
