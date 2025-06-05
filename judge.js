@@ -1,5 +1,6 @@
 const OpenAI = require('openai');
 let openai = null;
+const planetHallStore = require('./planetHallStore');
 
 try {
   if (process.env.OPENAI_API_KEY) {
@@ -15,12 +16,18 @@ async function judgeProposal(proposal, ecosystem) {
     return { feasible: true, gains: proposal.gains || null };
   }
 
+  const basePrompt =
+    'in a game, we are in mars, your are the evaluator , based on the ecosystem situation ( ecosystem numbers which are from 0 to 1, so 1 and 0 is extreme and middle is good  ) and project details , decide is the project is feasible , and if yes what would be deterministic final gain results among the range  and it generate a json with key "feasible":bool and  "gains": { "hydration": 1 to 9, "oxygen": 1 to 9, "health": 1 to 9, "money": 100 to 100 } if it is not feasible , gains:reasoning on why not feasible';
+  const approved = planetHallStore.getApprovedPolicies();
+  const policyText = approved
+    .map(p => `- ${p.title}: ${p.description}`)
+    .join('\n');
+  const systemContent = policyText
+    ? `${basePrompt}\nCurrent Policies:\n${policyText}`
+    : basePrompt;
+
   const messages = [
-    {
-      role: 'system',
-      content:
-        'in a game, we are in mars, your are the evaluator , based on the ecosystem situation ( ecosystem numbers which are from 0 to 1, so 1 and 0 is extreme and middle is good  ) and project details , decide is the project is feasible , and if yes what would be deterministic final gain results among the range  and it generate a json with key "feasible":bool and  "gains": { "hydration": 1 to 9, "oxygen": 1 to 9, "health": 1 to 9, "money": 100 to 100 } if it is not feasible , gains:reasoning on why not feasible'
-    },
+    { role: 'system', content: systemContent },
     { role: 'user', content: JSON.stringify({ ecosystem, proposal }) }
   ];
 
