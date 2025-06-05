@@ -2,6 +2,7 @@ const express = require('express');
 const planetHallStore = require('../planetHallStore');
 const hallChatManager = require('../hallChatManager');
 const referendumManager = require('../referendumManager');
+const referendumService = require('../referendumService');
 const userStore = require('../userStore');
 
 module.exports = function(broadcast) {
@@ -63,10 +64,14 @@ module.exports = function(broadcast) {
     });
   });
 
-  router.post('/referendum', (req, res) => {
+  router.post('/referendum', async (req, res) => {
     const { type, data, email } = req.body;
-    const ref = referendumManager.createReferendum(type, data, email);
-    res.json({ referendum: ref });
+    try {
+      const ref = await referendumService.runReferendum(type, data, email, broadcast);
+      res.json({ referendum: ref });
+    } catch (err) {
+      res.status(500).json({ error: 'failed' });
+    }
   });
 
   return router;

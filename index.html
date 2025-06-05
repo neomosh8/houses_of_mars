@@ -114,6 +114,24 @@
     <label>My Shares <input id="partner-my" type="number" value="1" min="1"></label>
     <button id="partner-save">Save</button>
   </div>
+  <div id="referendum-form" class="panel" style="display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);padding:10px;gap:6px;flex-direction:column;">
+    <select id="referendum-type">
+      <option value="candidate">Board Candidate</option>
+      <option value="fire">Remove Board Member</option>
+      <option value="policy">Open Policy</option>
+    </select>
+    <div id="candidate-fields">
+      <input id="candidate-email" type="text" placeholder="Candidate Email">
+      <input id="candidate-name" type="text" placeholder="Candidate Name">
+    </div>
+    <div id="fire-fields" style="display:none;">
+      <select id="fire-email"></select>
+    </div>
+    <div id="policy-fields" style="display:none;">
+      <input id="policy-text" type="text" placeholder="Policy Text">
+    </div>
+    <button id="referendum-submit">Submit</button>
+  </div>
   <div id="worker-profile-overlay" class="worker-profile-overlay hidden">
     <div class="worker-profile">
       <div class="profile-close" id="profile-close">×</div>
@@ -968,6 +986,29 @@ if (window.location.protocol === 'https:') {
     };
   }
 
+  function openReferendumForm() {
+    const form = document.getElementById('referendum-form');
+    form.style.display = 'flex';
+    updateReferendumFields();
+  }
+
+  function updateReferendumFields() {
+    const type = document.getElementById('referendum-type').value;
+    document.getElementById('candidate-fields').style.display = type === 'candidate' ? 'block' : 'none';
+    document.getElementById('fire-fields').style.display = type === 'fire' ? 'block' : 'none';
+    document.getElementById('policy-fields').style.display = type === 'policy' ? 'block' : 'none';
+    if (type === 'fire') {
+      const sel = document.getElementById('fire-email');
+      sel.innerHTML = '';
+      currentBoardMembers.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m.email;
+        opt.textContent = m.name;
+        sel.appendChild(opt);
+      });
+    }
+  }
+
   let ghostInstitution = null;
   let ghostMixer = null;
   let placingInstitution = false;
@@ -1514,6 +1555,12 @@ if (window.location.protocol === 'https:') {
         loadHallChat();
       } else if (msg.type === 'newPolicy' || msg.type === 'policyVote') {
         loadPolicies();
+      } else if (
+        msg.type === 'referendumStart' ||
+        msg.type === 'referendumProgress' ||
+        msg.type === 'referendumResult'
+      ) {
+        loadReferendum();
       } else if (msg.type === 'respawn') {
   dead = false;
   deathOverlay.style.display = 'none';
@@ -3928,8 +3975,34 @@ async function loadPolicies() {
 }
 
 async function loadReferendum() {
-  document.getElementById('active-referendum').innerHTML = '<div style="color:#888;">No active referendum</div>';
-  document.getElementById('referendum-history').innerHTML = '<div style="color:#888;">No referendum history</div>';
+  try {
+    const res = await fetch('/api/planethall/referendum');
+    const data = await res.json();
+    const activeDiv = document.getElementById('active-referendum');
+    const histDiv = document.getElementById('referendum-history');
+    activeDiv.innerHTML = '';
+    histDiv.innerHTML = '';
+    if (data.active) {
+      const yes = Object.values(data.active.votes || {}).filter(v => v).length;
+      const no = Object.values(data.active.votes || {}).filter(v => !v).length;
+      const total = data.active.totalWorkers || yes + no;
+      activeDiv.innerHTML = `<div>Type: ${data.active.type}</div><div>Votes: ${yes+no}/${total}</div><div>Status: ${data.active.status}</div>`;
+    } else {
+      activeDiv.innerHTML = '<div style="color:#888;">No active referendum</div>';
+    }
+    if (Array.isArray(data.history) && data.history.length > 0) {
+      data.history.slice(-5).forEach(r => {
+        const d = document.createElement('div');
+        d.style.marginTop = '6px';
+        d.textContent = `${r.type} - ${r.status} (${r.result?.yes||0}/${r.result?.no||0})`;
+        histDiv.appendChild(d);
+      });
+    } else {
+      histDiv.innerHTML = '<div style="color:#888;">No referendum history</div>';
+    }
+  } catch (err) {
+    document.getElementById('active-referendum').innerHTML = '<div style="color:#888;">Failed to load</div>';
+  }
 }
 
 document.getElementById('planethall-close').onclick = () => {
@@ -3944,6 +4017,34 @@ document.querySelectorAll('.hall-tab').forEach(tab => {
     document.getElementById(`hall-${tab.dataset.section}`).style.display = 'block';
   };
 });
+
+document.getElementById('request-referendum').onclick = () => {
+  openReferendumForm();
+};
+document.getElementById('referendum-type').onchange = updateReferendumFields;
+document.getElementById('referendum-submit').onclick = async e => {
+  e.stopPropagation();
+  const type = document.getElementById('referendum-type').value;
+  let data = {};
+  if (type === 'candidate') {
+    data.email = document.getElementById('candidate-email').value.trim();
+    data.name = document.getElementById('candidate-name').value.trim();
+  } else if (type === 'fire') {
+    data.email = document.getElementById('fire-email').value;
+  } else {
+    data.text = document.getElementById('policy-text').value.trim();
+  }
+  try {
+    await fetch('/api/planethall/referendum', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, data, email: playerEmail })
+    });
+    document.getElementById('referendum-form').style.display = 'none';
+  } catch (err) {
+    console.error('Failed to start referendum', err);
+  }
+};
 
 document.getElementById('hall-chat-send').onclick = async () => {
   const input = document.getElementById('hall-chat-input');
