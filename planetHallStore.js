@@ -137,6 +137,10 @@ class PlanetHallStore {
   getPolicies() {
     return [...this.data.policies];
   }
+
+  getApprovedPolicies() {
+    return this.data.policies.filter(p => p.status === 'approved');
+  }
 }
 
 module.exports = new PlanetHallStore();
