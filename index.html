@@ -4091,7 +4091,7 @@ document.getElementById('hall-chat-send').onclick = async () => {
   }
 };
 
-async function votePolicy(id, vote) {
+window.votePolicy = async function votePolicy(id, vote) {
   try {
     await fetch(`/api/planethall/policies/${id}/vote`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: playerEmail, vote }) });
     loadPolicies();
