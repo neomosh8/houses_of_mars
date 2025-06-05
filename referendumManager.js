@@ -26,10 +26,27 @@ class ReferendumManager {
 
   createReferendum(type, data, proposedBy) {
     console.log('Creating referendum:', { type, data, proposedBy });
-    const ref = { id: this.data.nextId++, type, data, proposedBy, status: 'pending' };
+    const ref = {
+      id: this.data.nextId++,
+      type,
+      data,
+      proposedBy,
+      status: 'pending'
+    };
     this.data.active = ref;
     this._save();
     return ref;
+  }
+
+  updateActive(ref) {
+    this.data.active = ref;
+    this._save();
+  }
+
+  finalize(ref) {
+    this.data.history.push(ref);
+    this.data.active = null;
+    this._save();
   }
 
   getActiveReferendum() {
