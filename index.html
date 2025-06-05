@@ -132,6 +132,11 @@
     </div>
     <button id="referendum-submit">Submit</button>
   </div>
+  <div id="policy-form" class="panel" style="display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);padding:10px;gap:6px;flex-direction:column;">
+    <input id="policy-title" type="text" placeholder="Policy Title">
+    <textarea id="policy-desc" placeholder="Policy Description" rows="4" style="width:200px;"></textarea>
+    <button id="policy-save">Save</button>
+  </div>
   <div id="worker-profile-overlay" class="worker-profile-overlay hidden">
     <div class="worker-profile">
       <div class="profile-close" id="profile-close">×</div>
@@ -990,6 +995,13 @@ if (window.location.protocol === 'https:') {
     const form = document.getElementById('referendum-form');
     form.style.display = 'flex';
     updateReferendumFields();
+  }
+
+  function openPolicyForm() {
+    const form = document.getElementById('policy-form');
+    form.style.display = 'flex';
+    document.getElementById('policy-title').value = '';
+    document.getElementById('policy-desc').value = '';
   }
 
   function updateReferendumFields() {
@@ -4021,6 +4033,9 @@ document.querySelectorAll('.hall-tab').forEach(tab => {
 document.getElementById('request-referendum').onclick = () => {
   openReferendumForm();
 };
+document.getElementById('new-policy-btn').onclick = () => {
+  openPolicyForm();
+};
 document.getElementById('referendum-type').onchange = updateReferendumFields;
 document.getElementById('referendum-submit').onclick = async e => {
   e.stopPropagation();
@@ -4043,6 +4058,24 @@ document.getElementById('referendum-submit').onclick = async e => {
     document.getElementById('referendum-form').style.display = 'none';
   } catch (err) {
     console.error('Failed to start referendum', err);
+  }
+};
+
+document.getElementById('policy-save').onclick = async e => {
+  e.stopPropagation();
+  const title = document.getElementById('policy-title').value.trim();
+  const description = document.getElementById('policy-desc').value.trim();
+  if (!title || !description) return;
+  try {
+    await fetch('/api/planethall/policies', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: playerEmail, title, description })
+    });
+    document.getElementById('policy-form').style.display = 'none';
+    loadPolicies();
+  } catch (err) {
+    console.error('Failed to create policy', err);
   }
 };
 

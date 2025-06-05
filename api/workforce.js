@@ -3,6 +3,7 @@ require('dotenv').config();
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const planetHallStore = require('../planetHallStore');
 // Set to true to skip AI image generation and use placeholder images
 const USE_PLACEHOLDER_IMAGES = true;
 // Updated OpenAI import and initialization
@@ -79,11 +80,20 @@ module.exports = function(institutionStore, userStore, engine, broadcast, sendTo
 
     try {
       // Generate worker profile with text using correct API
+      const approved = planetHallStore.getApprovedPolicies();
+      const policyText = approved
+        .map(p => `- ${p.title}: ${p.description}`)
+        .join('\n');
+      let systemPrompt =
+        'You are an assistant that generates detailed worker profiles for a Mars colonization game. Always respond with valid JSON only, no additional text. respond in bullet point style, short, dont yap';
+      if (policyText) {
+        systemPrompt += `\nCurrent Policies:\n${policyText}`;
+      }
       const profileResponse = await openai.chat.completions.create({
         model: "gpt-4.1-nano-2025-04-14",
         messages: [{
           role: "system",
-          content: "You are an assistant that generates detailed worker profiles for a Mars colonization game. Always respond with valid JSON only, no additional text. respond in bullet point style, short, dont yap"
+          content: systemPrompt
         }, {
           role: "user",
           content: `Generate a  bullet point style, short, worker profile for a Mars colonization game. The worker will be employed at a ${institutionName} facility.
