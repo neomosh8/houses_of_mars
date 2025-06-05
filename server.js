@@ -27,6 +27,9 @@ const userStore = require('./userStore');
 const institutionStore = require('./institutionStore');
 const defenceStore = require('./defenceBaseStore');
 const chatManager = require('./workforceChatManager');
+const planetHallStore = require('./planetHallStore');
+const hallChatManager = require('./hallChatManager');
+const referendumManager = require('./referendumManager');
 
 const INSTITUTION_PRICES = {
   WatOx: 100,
@@ -49,6 +52,7 @@ function sendToEmail(email, data) {
 
 const workforceRoute = require('./api/workforce')(institutionStore, userStore, engine, broadcast, sendToEmail);
 const defenceRoute = require('./api/defence')(defenceStore, institutionStore, broadcast);
+const planetHallRoute = require('./api/planetHall')(broadcast);
 chatManager.initFromInstitutions(institutionStore.getInstitutions());
 
 app.use('/api/login', loginRoute);
@@ -56,6 +60,7 @@ app.use('/api/verify', verifyRoute);
 app.use('/api/state', stateRoute);
 app.use('/api/workforce', workforceRoute);
 app.use('/api/defence', defenceRoute);
+app.use('/api/planethall', planetHallRoute);
 
  const clients = new Map(); // id -> ws
  const states = new Map();  // id -> { position, rotation, moving }
@@ -108,12 +113,26 @@ wss.on('connection', (ws, req) => {
   for (const [pid, state] of states.entries()) {
     players.push({ id: pid, ...state });
   }
-  const institutions = institutionStore.getInstitutions().map(inst => {
-    if (inst.name === 'Defence Base') {
-      return { ...inst, weapons: defenceStore.getWeapons(inst.id) };
-    }
-    return inst;
-  });
+  const hallData = planetHallStore.getHallData();
+  const hallInstitution = {
+    id: hallData.id,
+    name: 'Planet Hall',
+    owner: 'Mars',
+    position: hallData.position || [50, 0, 50],
+    rotation: 0,
+    scale: 1.5,
+    funded: true,
+    isPlanetHall: true
+  };
+
+  const institutions = institutionStore.getInstitutions()
+    .map(inst => {
+      if (inst.name === 'Defence Base') {
+        return { ...inst, weapons: defenceStore.getWeapons(inst.id) };
+      }
+      return inst;
+    })
+    .concat([hallInstitution]);
   ws.send(
     JSON.stringify({
       type: 'welcome',
