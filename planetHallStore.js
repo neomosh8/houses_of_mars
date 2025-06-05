@@ -2,14 +2,35 @@ const fs = require('fs');
 const path = require('path');
 
 const FILE = path.join(__dirname, 'planetHall.json');
+const TERRAIN_FILE = path.join(__dirname, 'terrain.gltf');
+const TERRAIN_SCALE = 50; // must match scale used in client and engine
+
+function loadTerrainBounds() {
+  try {
+    const data = JSON.parse(fs.readFileSync(TERRAIN_FILE, 'utf8'));
+    const accessor = data.accessors && data.accessors[0];
+    if (accessor && accessor.min && accessor.max) {
+      return {
+        minX: accessor.min[0] * TERRAIN_SCALE,
+        maxX: accessor.max[0] * TERRAIN_SCALE,
+        minZ: accessor.min[2] * TERRAIN_SCALE,
+        maxZ: accessor.max[2] * TERRAIN_SCALE
+      };
+    }
+  } catch (err) {}
+  return { minX: -100, maxX: 100, minZ: -100, maxZ: 100 };
+}
 
 class PlanetHallStore {
   constructor() {
     this.data = this._load();
     this._ensureStructure();
     if (!Array.isArray(this.data.position) || this.data.position.every(v => v === 0)) {
-      const rand = () => Math.floor(Math.random() * 200 - 100);
-      this.data.position = [rand(), 0, rand()];
+      const bounds = loadTerrainBounds();
+      const randRange = (min, max) => Math.random() * (max - min) + min;
+      const x = randRange(bounds.minX, bounds.maxX);
+      const z = randRange(bounds.minZ, bounds.maxZ);
+      this.data.position = [x, 0, z];
       this._save();
     }
   }
