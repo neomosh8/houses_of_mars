@@ -148,6 +148,40 @@
       </div>
     </div>
   </div>
+
+  <div id="planethall-popup" class="panel" style="display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:700px;max-height:80vh;padding:20px;">
+    <div id="planethall-close" style="cursor:pointer;position:absolute;top:10px;right:10px;font-size:20px;">✕</div>
+    <h2 style="text-align:center;margin-bottom:20px;">Mars Planet Hall</h2>
+    <div class="planethall-tabs">
+      <button class="hall-tab active" data-section="board">Governing Board</button>
+      <button class="hall-tab" data-section="referendum">Referendum</button>
+      <button class="hall-tab" data-section="chat">Public Chat</button>
+      <button class="hall-tab" data-section="policies">Policies</button>
+    </div>
+    <div id="hall-board" class="hall-section">
+      <h3>Mars Governing Board</h3>
+      <div id="board-members"></div>
+    </div>
+    <div id="hall-referendum" class="hall-section" style="display:none;">
+      <h3>Referendum</h3>
+      <button id="request-referendum">Request Referendum</button>
+      <div id="active-referendum"></div>
+      <div id="referendum-history"></div>
+    </div>
+    <div id="hall-chat" class="hall-section" style="display:none;">
+      <h3>Public Chat</h3>
+      <div id="hall-chat-messages"></div>
+      <div style="display:flex;gap:4px;margin-top:8px;">
+        <input id="hall-chat-input" type="text" style="flex:1;padding:4px;" placeholder="Type message...">
+        <button id="hall-chat-send">Send</button>
+      </div>
+    </div>
+    <div id="hall-policies" class="hall-section" style="display:none;">
+      <h3>Policies</h3>
+      <button id="new-policy-btn" style="display:none;">New Policy</button>
+      <div id="policies-list"></div>
+    </div>
+  </div>
   <script type="module">
 
   const DEBUG_LOG = true;
@@ -786,6 +820,16 @@ function updateStatImages() {
       price: 300,
       effects: {},
       animated: false
+    },
+    {
+      name: 'Planet Hall',
+      url: 'planethall.glb',
+      thumbnail: 'planethall.png',
+      scale: 1.5,
+      price: 0,
+      effects: {},
+      animated: false,
+      isPlanetHall: true
     }
   ];
 
@@ -805,6 +849,7 @@ function updateStatImages() {
 
 const PRELOAD_ASSETS = [
   "watox.glb","agrifood.glb","base.glb","defbase.glb","character.glb","flag.glb",
+  "planethall.glb",
   "walking.mp3"
 ];
 // Debug helper for remote server issues
@@ -850,6 +895,7 @@ if (window.location.protocol === 'https:') {
   const INSTITUTION_INTERVAL_FRAMES = 60;
   let institutionFrame = 0;
   institutions.forEach(inst => {
+    if (inst.isPlanetHall) return;
     const tile = document.createElement('div');
     tile.className = 'institution-tile';
     const img = document.createElement('img');
@@ -1047,7 +1093,9 @@ if (window.location.protocol === 'https:') {
         const id = obj.userData.institutionId;
         const data = institutionDataMap[id];
         if (data && !data.destroyed) {
-          if (data.funded === false) {
+          if (data.isPlanetHall) {
+            showPlanetHallPopup();
+          } else if (data.funded === false) {
             openBuySharesForm(data);
           } else {
             showInstitutionPopup(id);
@@ -1462,6 +1510,10 @@ if (window.location.protocol === 'https:') {
         updateMoneyDisplay();
       } else if (msg.type === 'flag') {
         createFlag(msg.id, msg.position);
+      } else if (msg.type === 'hallChat') {
+        loadHallChat();
+      } else if (msg.type === 'newPolicy' || msg.type === 'policyVote') {
+        loadPolicies();
       } else if (msg.type === 'respawn') {
   dead = false;
   deathOverlay.style.display = 'none';
@@ -3791,7 +3843,127 @@ function showWorkerProfile(worker, institutionId, isHired = false, index = null)
     }
 
     // Render using composer for bloom effect
-    composer.render();
+  composer.render();
+}
+
+// Planet Hall functionality
+let currentBoardMembers = [];
+
+function showPlanetHallPopup() {
+  const popup = document.getElementById('planethall-popup');
+  popup.style.display = 'block';
+  loadBoardMembers();
+  loadHallChat();
+  loadPolicies();
+  loadReferendum();
+}
+
+async function loadBoardMembers() {
+  try {
+    const res = await fetch('/api/planethall/board');
+    const data = await res.json();
+    currentBoardMembers = data.boardMembers || [];
+    const container = document.getElementById('board-members');
+    container.innerHTML = '';
+    if (currentBoardMembers.length === 0) {
+      container.innerHTML = '<div style="color:#888;">No board members elected yet</div>';
+      return;
+    }
+    currentBoardMembers.forEach(m => {
+      const div = document.createElement('div');
+      div.className = 'board-member';
+      div.innerHTML = `<div style="font-weight:bold;">${m.name}</div><div style="font-size:12px;color:#888;">Elected: ${new Date(m.electedDate).toLocaleDateString()}</div>`;
+      container.appendChild(div);
+    });
+    const isMember = currentBoardMembers.some(m => m.email === playerEmail);
+    document.getElementById('new-policy-btn').style.display = isMember ? 'block' : 'none';
+  } catch (err) {
+    console.error('Failed to load board members', err);
+  }
+}
+
+async function loadHallChat() {
+  try {
+    const res = await fetch('/api/planethall/chat');
+    const data = await res.json();
+    const container = document.getElementById('hall-chat-messages');
+    container.innerHTML = '';
+    data.messages.forEach(m => {
+      const div = document.createElement('div');
+      div.className = 'hall-chat-message';
+      div.innerHTML = `<strong>${m.name}:</strong> ${m.text}`;
+      container.appendChild(div);
+    });
+    container.scrollTop = container.scrollHeight;
+  } catch (err) {
+    console.error('Failed to load chat', err);
+  }
+}
+
+async function loadPolicies() {
+  try {
+    const res = await fetch('/api/planethall/policies');
+    const data = await res.json();
+    const container = document.getElementById('policies-list');
+    container.innerHTML = '';
+    data.policies.forEach(p => {
+      const div = document.createElement('div');
+      div.className = 'policy-item';
+      let color = '#888';
+      if (p.status === 'approved') color = '#4CAF50';
+      else if (p.status === 'rejected') color = '#f44336';
+      div.innerHTML = `<div style="font-weight:bold;">${p.title}</div><div style="font-size:12px;margin:4px 0;">${p.description}</div><div style="font-size:11px;color:#888;">Proposed by: ${p.proposedBy}</div><div style="font-size:11px;color:${color};">Status: ${p.status}</div>`;
+      const isMember = currentBoardMembers.some(m => m.email === playerEmail);
+      if (isMember && p.status === 'voting' && !p.votes[playerEmail]) {
+        const voteDiv = document.createElement('div');
+        voteDiv.style.marginTop = '8px';
+        voteDiv.innerHTML = `<button onclick="votePolicy(${p.id}, true)">Approve</button> <button onclick="votePolicy(${p.id}, false)">Reject</button>`;
+        div.appendChild(voteDiv);
+      }
+      container.appendChild(div);
+    });
+  } catch (err) {
+    console.error('Failed to load policies', err);
+  }
+}
+
+async function loadReferendum() {
+  document.getElementById('active-referendum').innerHTML = '<div style="color:#888;">No active referendum</div>';
+  document.getElementById('referendum-history').innerHTML = '<div style="color:#888;">No referendum history</div>';
+}
+
+document.getElementById('planethall-close').onclick = () => {
+  document.getElementById('planethall-popup').style.display = 'none';
+};
+
+document.querySelectorAll('.hall-tab').forEach(tab => {
+  tab.onclick = () => {
+    document.querySelectorAll('.hall-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    document.querySelectorAll('.hall-section').forEach(s => s.style.display = 'none');
+    document.getElementById(`hall-${tab.dataset.section}`).style.display = 'block';
+  };
+});
+
+document.getElementById('hall-chat-send').onclick = async () => {
+  const input = document.getElementById('hall-chat-input');
+  const text = input.value.trim();
+  if (!text) return;
+  try {
+    await fetch('/api/planethall/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: playerEmail, text }) });
+    input.value = '';
+  } catch (err) {
+    console.error('Failed to send chat', err);
+  }
+};
+
+async function votePolicy(id, vote) {
+  try {
+    await fetch(`/api/planethall/policies/${id}/vote`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: playerEmail, vote }) });
+    loadPolicies();
+  } catch (err) {
+    console.error('Failed to vote', err);
+  }
 }
 
   // Start the game loop after login
