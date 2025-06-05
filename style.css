@@ -270,44 +270,72 @@ canvas { display: block; width: 100%; height: 100%; }
   height: 100%;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
-  padding: 20px 0;
-  background: #000c;
+  background: #000;
   z-index: 11;
 }
-.loading-box {
-  width: 50%;
-  height: 20px;
-  background: #333;
-  border-radius: 4px;
-  overflow: hidden;
-  position: relative;
-  z-index: 20;
+
+.loading-progress-container {
+  position: absolute;
+  bottom: 15%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60%;
+  max-width: 600px;
+  z-index: 30;
 }
+
+.loading-box {
+  width: 100%;
+  height: 30px;
+  background: rgba(51, 51, 51, 0.8);
+  border-radius: 15px;
+  overflow: hidden;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+}
+
 .loading-bar {
   height: 100%;
   width: 0%;
-  background: #0a0;
-  transition: width 0.2s;
-  position: relative;
-  z-index: 20;
+  background: linear-gradient(90deg, #0a0 0%, #0f0 50%, #0a0 100%);
+  transition: width 0.3s ease;
+  border-radius: 15px;
+  box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
 }
+
 .loading-text {
-  margin-top: 4px;
+  margin-top: 15px;
   color: #fff;
   font-size: 14px;
   text-align: center;
-  position: relative;
-  z-index: 20;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.loading-details {
+  margin-top: 8px;
+  color: #aaa;
+  font-size: 12px;
+  text-align: center;
+  font-family: 'Courier New', monospace;
 }
 
 .loading-tip {
+  position: absolute;
+  top: 10%;
+  left: 50%;
+  transform: translateX(-50%);
   color: #fff;
-  font-size: 16px;
+  font-size: 24px;
+  font-weight: bold;
   text-align: center;
-  position: relative;
-  z-index: 20;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+  background: rgba(0, 0, 0, 0.6);
+  padding: 20px 40px;
+  border-radius: 10px;
+  backdrop-filter: blur(10px);
+  z-index: 30;
 }
 
 .loading-image,
