@@ -3696,11 +3696,11 @@ function showWorkerProfile(worker, institutionId, isHired = false, index = null)
       const avgGroundY = totalGroundY / totalWeight;
 
       if (!onGround) {
-        const impactSpeed = Math.abs(velocity.y);
-        velocity.y *= -0.1 * Math.min(impactSpeed / 10, 1);
+        // Directly settle on the ground when landing
+        velocity.y = 0;
         onGround = true;
         groundY = avgGroundY;
-        if (closestDistance < groundSnapThreshold) {
+        if (closestDistance < groundSnapThreshold * 2) {
           model.position.y = avgGroundY;
         }
       } else {
@@ -3908,6 +3908,8 @@ function showWorkerProfile(worker, institutionId, isHired = false, index = null)
             } else {
                 model.position.y = futureY;
             }
+            // Re-check ground after applying gravity
+            checkGroundContact();
         } else {
             velocity.y *= groundDamping;
         }
