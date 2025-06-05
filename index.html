@@ -849,6 +849,7 @@ function updateStatImages() {
 
 const PRELOAD_ASSETS = [
   "watox.glb","agrifood.glb","base.glb","defbase.glb","character.glb","flag.glb",
+  "planethall.glb",
   "walking.mp3"
 ];
 // Debug helper for remote server issues
@@ -894,6 +895,7 @@ if (window.location.protocol === 'https:') {
   const INSTITUTION_INTERVAL_FRAMES = 60;
   let institutionFrame = 0;
   institutions.forEach(inst => {
+    if (inst.isPlanetHall) return;
     const tile = document.createElement('div');
     tile.className = 'institution-tile';
     const img = document.createElement('img');
