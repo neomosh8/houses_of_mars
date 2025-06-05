@@ -7,6 +7,11 @@ class PlanetHallStore {
   constructor() {
     this.data = this._load();
     this._ensureStructure();
+    if (!Array.isArray(this.data.position) || this.data.position.every(v => v === 0)) {
+      const rand = () => Math.floor(Math.random() * 200 - 100);
+      this.data.position = [rand(), 0, rand()];
+      this._save();
+    }
   }
 
   _load() {
