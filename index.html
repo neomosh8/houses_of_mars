@@ -1536,6 +1536,10 @@ if (window.location.protocol === 'https:') {
         createRemotePlayer(msg.id, msg.state);
       } else if (msg.type === 'update') {
         if (msg.id !== clientId) updateRemotePlayer(msg.id, msg);
+      } else if (msg.type === 'batchUpdate') {
+        msg.updates.forEach(update => {
+          if (update.id !== clientId) updateRemotePlayer(update.id, update);
+        });
       } else if (msg.type === 'remove') {
         removeRemotePlayer(msg.id);
       } else if (msg.type === 'addInstitution') {
