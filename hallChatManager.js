@@ -1,24 +1,17 @@
-const fs = require('fs');
 const path = require('path');
+const FileStore = require('./fileStore');
 
 const FILE = path.join(__dirname, 'hallChat.json');
 const MAX_MESSAGES = 100;
 
 class HallChatManager {
   constructor() {
-    this.messages = this._load();
-  }
-
-  _load() {
-    try {
-      return JSON.parse(fs.readFileSync(FILE, 'utf8'));
-    } catch {
-      return [];
-    }
+    this.store = new FileStore(FILE, []);
+    this.messages = this.store.get();
   }
 
   _save() {
-    fs.writeFileSync(FILE, JSON.stringify(this.messages, null, 2));
+    this.store.update(this.messages);
   }
 
   addMessage(email, name, text) {

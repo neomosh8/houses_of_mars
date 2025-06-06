@@ -1,27 +1,20 @@
-const fs = require('fs');
 const path = require('path');
+const FileStore = require('./fileStore');
 
 const FILE = path.join(__dirname, 'referendums.json');
 
 class ReferendumManager {
   constructor() {
-    this.data = this._load();
-  }
-
-  _load() {
-    try {
-      return JSON.parse(fs.readFileSync(FILE, 'utf8'));
-    } catch {
-      return {
-        active: null,
-        history: [],
-        nextId: 1
-      };
-    }
+    this.store = new FileStore(FILE, {
+      active: null,
+      history: [],
+      nextId: 1
+    });
+    this.data = this.store.get();
   }
 
   _save() {
-    fs.writeFileSync(FILE, JSON.stringify(this.data, null, 2));
+    this.store.update(this.data);
   }
 
   createReferendum(type, data, proposedBy) {

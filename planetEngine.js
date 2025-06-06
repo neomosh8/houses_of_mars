@@ -163,9 +163,9 @@ class PlanetEngine {
     ]);
   }
 
-  _saveMap(name, map) {
+  async _saveMap(name, map) {
     const buf = this._mapToPNGBuffer(map);
-    fs.writeFileSync(path.join(this.saveDir, `${name}.png`), buf);
+    await fs.promises.writeFile(path.join(this.saveDir, `${name}.png`), buf);
   }
 
   _saveAll() {

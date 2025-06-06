@@ -1,5 +1,5 @@
 const axios = require('axios');
-const fs = require('fs');
+const fs = require('fs').promises;
 const path = require('path');
 
 const API_BASE = 'https://api.meshy.ai/openapi/v2';
@@ -36,7 +36,7 @@ async function createRefine(previewId) {
 
 async function download(url, filePath) {
   const res = await axios.get(url, { responseType: 'arraybuffer' });
-  fs.writeFileSync(filePath, res.data);
+  await fs.writeFile(filePath, res.data);
 }
 
 async function generateModel(prompt, filePath) {
