@@ -1139,11 +1139,21 @@ if (window.location.protocol === 'https:') {
       if (socket && socket.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify(data));
       }
-      scene.remove(ghostInstitution);
-      ghostInstitution = null;
-      if (ghostMixer) {
-        ghostMixer.stopAllAction();
-        ghostMixer = null;
+      if (placingApplication) {
+        pendingGhost = ghostInstitution;
+        createFundingIndicator('pending', [ghostInstitution.position.x, ghostInstitution.position.y, ghostInstitution.position.z]);
+        if (ghostMixer) {
+          ghostMixer.stopAllAction();
+          ghostMixer = null;
+        }
+        ghostInstitution = null;
+      } else {
+        scene.remove(ghostInstitution);
+        ghostInstitution = null;
+        if (ghostMixer) {
+          ghostMixer.stopAllAction();
+          ghostMixer = null;
+        }
       }
       placingInstitution = false;
       currentInstitution = null;
@@ -1510,6 +1520,7 @@ if (window.location.protocol === 'https:') {
   const flagObjects = {}; // player id -> flag object
   let currentFlagPos = null;
   const fundingIndicators = {};
+  let pendingGhost = null;
 
   function initNetwork() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -1545,6 +1556,11 @@ if (window.location.protocol === 'https:') {
       } else if (msg.type === 'remove') {
         removeRemotePlayer(msg.id);
       } else if (msg.type === 'addInstitution') {
+        if (pendingGhost) {
+          scene.remove(pendingGhost);
+          pendingGhost = null;
+          removeFundingIndicator('pending');
+        }
         createInstitution(msg.institution, true);
       } else if (msg.type === 'updateInstitution') {
         const inst = institutionDataMap[msg.id];
