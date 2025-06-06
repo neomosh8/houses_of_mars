@@ -268,7 +268,7 @@ wss.on('connection', (ws, req) => {
             totalShares: data.totalShares,
             soldShares: data.myShares,
             shares: { [email]: data.myShares },
-            funded: (data.myShares * data.sharePrice) >= price
+            funded: data.myShares * data.sharePrice >= price
           };
           const instId = institutionStore.addInstitution(inst);
           const storedInst = institutionStore.getInstitution(instId);
