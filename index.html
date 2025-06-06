@@ -1139,11 +1139,21 @@ if (window.location.protocol === 'https:') {
       if (socket && socket.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify(data));
       }
-      scene.remove(ghostInstitution);
-      ghostInstitution = null;
-      if (ghostMixer) {
-        ghostMixer.stopAllAction();
-        ghostMixer = null;
+      if (placingApplication) {
+        pendingGhost = ghostInstitution;
+        createFundingIndicator('pending', [ghostInstitution.position.x, ghostInstitution.position.y, ghostInstitution.position.z]);
+        if (ghostMixer) {
+          ghostMixer.stopAllAction();
+          ghostMixer = null;
+        }
+        ghostInstitution = null;
+      } else {
+        scene.remove(ghostInstitution);
+        ghostInstitution = null;
+        if (ghostMixer) {
+          ghostMixer.stopAllAction();
+          ghostMixer = null;
+        }
       }
       placingInstitution = false;
       currentInstitution = null;
@@ -1317,6 +1327,8 @@ if (window.location.protocol === 'https:') {
 
     ownedInstitutions.forEach(e => {
       if (!e || typeof e !== 'object') return;
+      const inst = institutionDataMap[e.id];
+      if (!inst || !inst.funded) return;
       const f = e.factor == null ? 1 : e.factor;
       if (typeof e.hydration === 'number') hydration = Math.min(hydration + e.hydration * f, 1000);
       if (typeof e.oxygen === 'number') oxygen = Math.min(oxygen + e.oxygen * f, 1000);
@@ -1508,6 +1520,7 @@ if (window.location.protocol === 'https:') {
   const flagObjects = {}; // player id -> flag object
   let currentFlagPos = null;
   const fundingIndicators = {};
+  let pendingGhost = null;
 
   function initNetwork() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -1543,6 +1556,11 @@ if (window.location.protocol === 'https:') {
       } else if (msg.type === 'remove') {
         removeRemotePlayer(msg.id);
       } else if (msg.type === 'addInstitution') {
+        if (pendingGhost) {
+          scene.remove(pendingGhost);
+          pendingGhost = null;
+          removeFundingIndicator('pending');
+        }
         createInstitution(msg.institution, true);
       } else if (msg.type === 'updateInstitution') {
         const inst = institutionDataMap[msg.id];
@@ -1565,7 +1583,7 @@ if (window.location.protocol === 'https:') {
       } else if (msg.type === 'updateInstitutionShares') {
         const inst = institutionDataMap[msg.id];
         if (inst) {
-          inst.shares = msg.info.shares ? { ...inst.shares, [playerEmail]: msg.info.shares } : inst.shares;
+          inst.shares = msg.info.allShares || inst.shares;
           inst.soldShares = msg.info.soldShares;
           inst.totalShares = msg.info.totalShares;
           inst.sharePrice = msg.info.sharePrice;
@@ -1575,6 +1593,16 @@ if (window.location.protocol === 'https:') {
             removeFundingIndicator(inst.id);
             const obj = institutionsMap[inst.id];
             if (obj) obj.traverse(o=>{ if(o.isMesh && o.material && o.material.transparent){ o.material.opacity=1;o.material.transparent=false; }});
+          }
+          if (inst.funded && inst.shares && inst.shares[playerEmail] > 0) {
+            removeInstitutionEffects(inst.id);
+            const def = institutions.find(i => i.name === inst.name);
+            if (def && def.effects) {
+              addInstitutionEffects(inst.id, def.effects);
+            }
+            if (inst.extraEffects) {
+              addInstitutionEffects(inst.id, inst.extraEffects);
+            }
           }
         }
       } else if (msg.type === 'updateWeapon') {
@@ -2228,7 +2256,7 @@ if (window.location.protocol === 'https:') {
       if (inst.funded === false) {
         createFundingIndicator(inst.id, inst.position);
       }
-      if (inst.owner === playerEmail && !inst.destroyed) {
+      if ((inst.owner === playerEmail || (inst.shares && inst.shares[playerEmail] > 0)) && !inst.destroyed && inst.funded) {
         if (def.effects) addInstitutionEffects(inst.id, def.effects);
         if (inst.extraEffects) addInstitutionEffects(inst.id, inst.extraEffects);
       }
@@ -2316,22 +2344,31 @@ function showInstitutionPopup(id) {
   const actionsDiv = popup.querySelector('.popup-actions');
 
   // Show controls if user has access (owner or partner)
-  if (hasAccess) {
+  let ownerText = `Owner: ${instData.owner}`;
+  if (userShares > 0) {
+    ownerText += ` | Your shares: ${userShares}/${instData.totalShares}`;
+  }
+  if (!instData.funded) {
+    const PRICES = { WatOx: 100, agriFood: 200, Depot: 150, 'Defence Base': 300 };
+    const institutionPrice = PRICES[instData.name] || 0;
+    const fundsRaised = instData.soldShares * instData.sharePrice;
+    const fundsNeeded = institutionPrice - fundsRaised;
+    ownerText += ` | Funding: $${fundsRaised}/$${institutionPrice} (Need $${fundsNeeded})`;
+  }
+  ownerSpan.innerHTML = isOwner
+    ? `<span id="owner-click" style="text-decoration:underline;cursor:pointer;">${ownerText}</span>`
+    : ownerText;
+
+  if (hasAccess && instData.funded) {
     actionsDiv.style.display = 'flex';
     resDiv.style.display = 'block';
-
-    // Show ownership info with shares
-    let ownerText = `Owner: ${instData.owner}`;
-    if (userShares > 0) {
-      ownerText += ` | Your shares: ${userShares}/${instData.totalShares}`;
-    }
-    ownerSpan.innerHTML = isOwner
-      ? `<span id="owner-click" style="text-decoration:underline;cursor:pointer;">${ownerText}</span>`
-      : ownerText;
+  } else if (hasAccess && !instData.funded) {
+    actionsDiv.style.display = 'none';
+    resDiv.style.display = 'block';
+    resDiv.innerHTML = '<span style="color:#ff6666;">Institution not operational - awaiting funding</span>';
   } else {
     actionsDiv.style.display = 'none';
     resDiv.style.display = 'none';
-    ownerSpan.textContent = `Owner: ${instData.owner}`;
   }
 
   function showInfo() {
@@ -2645,7 +2682,7 @@ async function showWorkforce() {
   }
 
   // Enable buttons if user has access (owner or partner)
-  if (hasAccess) {
+  if (hasAccess && instData.funded) {
     infoTabBtn.onclick = showInfo;
     workforceTabBtn.onclick = showWorkforce;
     chatTabBtn.onclick = showChat;
@@ -2658,12 +2695,20 @@ async function showWorkforce() {
       weaponsTabBtn.onclick = null;
     }
   } else {
-    infoTabBtn.onclick = null;
-    workforceTabBtn.onclick = null;
-    chatTabBtn.onclick = null;
-    proposalsTabBtn.onclick = null;
-    weaponsTabBtn.onclick = null;
-    weaponsTabBtn.style.display = 'none';
+    infoTabBtn.onclick = showInfo;
+    if (hasAccess && !instData.funded) {
+      workforceTabBtn.onclick = null;
+      chatTabBtn.onclick = null;
+      proposalsTabBtn.onclick = null;
+      weaponsTabBtn.onclick = null;
+      weaponsTabBtn.style.display = 'none';
+    } else {
+      workforceTabBtn.onclick = null;
+      chatTabBtn.onclick = null;
+      proposalsTabBtn.onclick = null;
+      weaponsTabBtn.onclick = null;
+      weaponsTabBtn.style.display = 'none';
+    }
   }
 
   function closePopup() {

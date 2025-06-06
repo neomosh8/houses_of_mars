@@ -4,6 +4,13 @@ const FileStore = require('./fileStore');
 const FILE = path.join(__dirname, 'institutions.json');
 const store = new FileStore(FILE, { nextId: 1, list: [] });
 
+const PRICES = {
+  WatOx: 100,
+  agriFood: 200,
+  Depot: 150,
+  'Defence Base': 300
+};
+
 function getInstitutions() {
   return store.get().list;
 }
@@ -179,9 +186,13 @@ function buyShares(id, email, shares) {
     const buy = Math.min(shares, available);
     inst.soldShares += buy;
     inst.shares[email] = (inst.shares[email] || 0) + buy;
-    if (inst.soldShares >= inst.totalShares) inst.funded = true;
+    const institutionPrice = PRICES[inst.name] || 0;
+    if (inst.soldShares * inst.sharePrice >= institutionPrice) {
+      inst.funded = true;
+    }
     info = {
       shares: inst.shares[email],
+      allShares: { ...inst.shares },
       soldShares: inst.soldShares,
       funded: inst.funded,
       sharePrice: inst.sharePrice,
