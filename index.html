@@ -2007,7 +2007,8 @@ if (window.location.protocol === 'https:') {
     const clone = SkeletonUtils.clone(entry.obj);
     clone.position.copy(start);
     scene.add(clone);
-    projectiles.push({ obj: clone, tech, cat, params, start, target, stage: 0, speed: 0 });
+    const instId = entry.obj.userData.weaponInstId;
+    projectiles.push({ obj: clone, tech, cat, params, start, target, stage: 0, speed: 0, instId });
 
     // Debug: log weapon firing start information
     if (DEBUG_LOG) {
@@ -2060,7 +2061,9 @@ if (window.location.protocol === 'https:') {
       if (hitInst !== null) {
         scene.remove(p.obj);
         projectiles.splice(i, 1);
-        sendDestroyInstitution(hitInst);
+        if (hitInst !== p.instId) {
+          sendDestroyInstitution(hitInst);
+        }
         continue;
       }
       if (p.tech === 'laser') {
