@@ -3314,15 +3314,19 @@ function showWorkerProfile(worker, institutionId, isHired = false, index = null)
   }
 
   // --- PHYSICS AND GRAVITY SETTINGS ---
-  const gravity = 3.7; // Mars gravity (lower than Earth's 9.8)
-  const groundCheckDistance = 2.0; // Slightly increased for stability
+  const gravity = 3.7; // Mars gravity
+  const groundCheckDistance = 0.5; // Reduced for more precise detection
   let velocity = new THREE.Vector3(0, 0, 0);
   let onGround = false;
-  let groundY = null; // To track stable ground height
-  const groundDamping = 1; // Dampening factor (0.0 to 1.0) - higher means less bounce
-  const initialFallHeight = 100; // Reasonable height to start falling from
+  let groundY = null;
+  const groundDamping = 0.98; // Slight damping instead of instant stop
+  const terminalVelocity = -50; // Maximum fall speed
+  const groundSnapThreshold = 0.1; // Distance to snap to ground
 
-  // Raycaster for ground detection
+  // Helper variables
+  let lastGroundY = 0;
+  let groundCheckRay = new THREE.Raycaster();
+  let moveCheckRay = new THREE.Raycaster();
   const raycaster = new THREE.Raycaster();
 
   // --- LOAD GLTF GROUND MODEL ---
@@ -3657,40 +3661,59 @@ function showWorkerProfile(worker, institutionId, isHired = false, index = null)
    * Called every frame in the animation loop
    */
   function checkGroundContact() {
-    if (!model) return;
+    if (!model || terrainMeshes.length === 0) return;
 
-    // Origin is at character's feet plus half height (center of character)
-    const origin = model.position.clone();
-    origin.y += characterHeight / 2;
+    const rays = [
+      { offset: new THREE.Vector3(0, 0, 0), weight: 1.0 },
+      { offset: new THREE.Vector3(characterRadius * 0.5, 0, 0), weight: 0.5 },
+      { offset: new THREE.Vector3(-characterRadius * 0.5, 0, 0), weight: 0.5 },
+      { offset: new THREE.Vector3(0, 0, characterRadius * 0.5), weight: 0.5 },
+      { offset: new THREE.Vector3(0, 0, -characterRadius * 0.5), weight: 0.5 }
+    ];
 
-    // Cast ray downward
-    raycaster.set(origin, new THREE.Vector3(0, -1, 0));
-    const intersects = raycaster.intersectObjects(terrainMeshes, true);
+    let totalGroundY = 0;
+    let totalWeight = 0;
+    let closestHit = null;
+    let closestDistance = Infinity;
 
-    // Check if we're on or near ground
-    if (intersects.length > 0 && intersects[0].distance <= groundCheckDistance) {
-      const groundPosition = intersects[0].point.y;
-
-      // Handle initial ground contact
-      if (!onGround) {
-          velocity.y = 0;
-          onGround = true;
-
-      } else {
-        // Already on ground - stabilize position with smooth interpolation
-        if (groundY === null) {
-          groundY = groundPosition;
-        } else {
-          // Smoothly interpolate ground height to prevent jitter
-          groundY = groundY * 0.9 + groundPosition * 0.1;
+    for (const ray of rays) {
+      const origin = model.position.clone().add(ray.offset);
+      origin.y += characterHeight * 0.1;
+      groundCheckRay.set(origin, new THREE.Vector3(0, -1, 0));
+      const intersects = groundCheckRay.intersectObjects(terrainMeshes, true);
+      if (intersects.length > 0) {
+        const hit = intersects[0];
+        if (hit.distance < closestDistance) {
+          closestDistance = hit.distance;
+          closestHit = hit;
         }
-
-        // Smoothly set character position
-        model.position.y = groundY;
-        velocity.y = 0;
+        totalGroundY += hit.point.y * ray.weight;
+        totalWeight += ray.weight;
       }
+    }
+
+    if (closestHit && closestDistance <= groundCheckDistance) {
+      const avgGroundY = totalGroundY / totalWeight;
+
+      if (!onGround) {
+        // Directly settle on the ground when landing
+        velocity.y = 0;
+        onGround = true;
+        groundY = avgGroundY;
+        if (closestDistance < groundSnapThreshold * 2) {
+          model.position.y = avgGroundY;
+        }
+      } else {
+        groundY = groundY * 0.9 + avgGroundY * 0.1;
+        const targetY = groundY;
+        const diff = targetY - model.position.y;
+        if (Math.abs(diff) > 0.001) {
+          model.position.y += diff * 0.3;
+        }
+      }
+
+      lastGroundY = groundY;
     } else {
-      // Not touching ground
       onGround = false;
       groundY = null;
     }
@@ -3727,6 +3750,94 @@ function showWorkerProfile(worker, institutionId, isHired = false, index = null)
       // Apply smoothed position
       model.position.y = groundY;
     }
+  }
+
+  // Improved movement with predictive collision
+  function moveCharacter(moveDir, speed, dt) {
+    if (!model || !moveDir || moveDir.length() === 0) return;
+
+    const oldPos = model.position.clone();
+    const movement = moveDir.clone().normalize().multiplyScalar(speed * dt);
+    const proposedPos = oldPos.clone().add(movement);
+
+    const checkOrigin = proposedPos.clone();
+    checkOrigin.y += characterHeight;
+
+    moveCheckRay.set(checkOrigin, new THREE.Vector3(0, -1, 0));
+    const terrainHits = moveCheckRay.intersectObjects(terrainMeshes, true);
+
+    let canMove = true;
+    let targetY = oldPos.y;
+
+    if (terrainHits.length > 0) {
+      const terrainY = terrainHits[0].point.y;
+      const heightDiff = terrainY - oldPos.y;
+      if (heightDiff > 1.0) {
+        canMove = false;
+      } else {
+        targetY = terrainY;
+      }
+    }
+
+    if (canMove) {
+      const sphereCenter = proposedPos.clone();
+      sphereCenter.y += characterHeight / 2;
+      const sphere = new THREE.Sphere(sphereCenter, characterRadius);
+      institutionBoxes.forEach(entry => {
+        if (sphereIntersectsFootprint(entry.box, sphere)) canMove = false;
+      });
+      constructionBoxes.forEach(entry => {
+        if (sphereIntersectsFootprint(entry.box, sphere)) canMove = false;
+      });
+    }
+
+    if (canMove) {
+      model.position.x = proposedPos.x;
+      model.position.z = proposedPos.z;
+
+      if (onGround && Math.abs(targetY - model.position.y) < 2.0) {
+        model.position.y += (targetY - model.position.y) * 0.2;
+      }
+    }
+  }
+
+  // Helper to slightly smooth terrain around the character
+  function smoothTerrainAroundCharacter() {
+    if (!model || !onGround) return;
+
+    const smoothRadius = characterRadius * 2;
+    const smoothStrength = 0.1;
+
+    terrainMeshes.forEach(mesh => {
+      const geom = mesh.geometry;
+      if (!geom || !geom.attributes || !geom.attributes.position) return;
+
+      const pos = geom.attributes.position;
+      const world = new THREE.Vector3();
+
+      for (let i = 0; i < pos.count; i++) {
+        world.fromBufferAttribute(pos, i);
+        world.applyMatrix4(mesh.matrixWorld);
+
+        const dist = Math.sqrt(
+          Math.pow(world.x - model.position.x, 2) +
+          Math.pow(world.z - model.position.z, 2)
+        );
+
+        if (dist < smoothRadius) {
+          const factor = 1 - (dist / smoothRadius);
+          const targetY = groundY || model.position.y;
+          world.y += (targetY - world.y) * smoothStrength * factor;
+
+          const inv = mesh.matrixWorld.clone().invert();
+          world.applyMatrix4(inv);
+          pos.setXYZ(i, world.x, world.y, world.z);
+        }
+      }
+
+      pos.needsUpdate = true;
+      geom.computeVertexNormals();
+    });
   }
 
   function updateCamera(dt) {
@@ -3776,47 +3887,51 @@ function showWorkerProfile(worker, institutionId, isHired = false, index = null)
     if (ghostMixer) ghostMixer.update(dt);
 
     if (model && terrainMeshes.length > 0) {
-        // PHYSICS - Apply gravity if not on ground
-        if (!onGround) {
-            velocity.y -= gravity * dt;
-
-            // Apply velocity (for falling)
-            model.position.y += velocity.y * dt;
-
-            // Force idle animation when in the air
-            if (idleAction && activeAction !== idleAction) {
-                switchAnimation(idleAction);
-                // We're not moving forward when in the air
-                isMovingForward = false;
-            }
-        }
-
-        // Check if on ground after applying gravity
+        // 1. Check current ground contact
         checkGroundContact();
 
-        // Controls and movement - only process when on ground
-        if ((idleAction || walkAction || runAction) && onGround) {
-            // Save last position for movement detection
+        // 2. Apply gravity if not on ground
+        if (!onGround) {
+            velocity.y -= gravity * dt;
+            if (velocity.y < terminalVelocity) velocity.y = terminalVelocity;
+
+            const futureY = model.position.y + velocity.y * dt;
+            const origin = model.position.clone();
+            origin.y = futureY + characterHeight * 0.1;
+            groundCheckRay.set(origin, new THREE.Vector3(0, -1, 0));
+            const hits = groundCheckRay.intersectObjects(terrainMeshes, true);
+            if (hits.length > 0 && hits[0].distance < characterHeight * 0.1) {
+                model.position.y = hits[0].point.y;
+                velocity.y = 0;
+                onGround = true;
+                groundY = hits[0].point.y;
+            } else {
+                model.position.y = futureY;
+            }
+            // Re-check ground after applying gravity
+            checkGroundContact();
+        } else {
+            velocity.y *= groundDamping;
+        }
+
+        // 3. Handle input and movement
+        if (onGround) {
             lastPosition.copy(model.position);
 
-            const turnSpeed = (Math.PI); // Adjusted turn speed a bit
-
+            const turnSpeed = Math.PI;
             let wantsToMoveForward = keys.w || keys.up;
             let wantsToMoveBackward = keys.s || keys.down;
             let turnLeft = keys.a || keys.left;
             let turnRight = keys.d || keys.right;
 
-            // Handle turning
             if (turnLeft) model.rotation.y += turnSpeed * dt;
             if (turnRight) model.rotation.y -= turnSpeed * dt;
 
-            // Movement
             let moving = false;
             let moveDir = new THREE.Vector3(0, 0, 0);
             let moveAction = idleAction;
 
             if (wantsToMoveForward) {
-                // Fixed direction to go forward from model perspective
                 moveDir.z = 1;
                 moving = true;
                 isRunning = keys.shift;
@@ -3828,7 +3943,6 @@ function showWorkerProfile(worker, institutionId, isHired = false, index = null)
                 moveAction = walkAction || runAction;
             }
 
-            // Apply movement in model's local direction
             if (moving) {
                 const speed = isRunning ? runSpeed : walkSpeed;
                 if (activeAction !== moveAction && moveAction) {
@@ -3836,45 +3950,16 @@ function showWorkerProfile(worker, institutionId, isHired = false, index = null)
                 }
                 isMovingForward = true;
 
-                // Transform direction to world space
                 moveDir.applyQuaternion(model.quaternion);
-                moveDir.normalize();
+                moveCharacter(moveDir, speed, dt);
 
-                // Store current position before movement
-                const oldPos = model.position.clone();
-
-                const proposed = model.position.clone().add(moveDir.clone().multiplyScalar(speed * dt));
-                let blocked = false;
-                const sphereCenter = proposed.clone();
-                sphereCenter.y += characterHeight / 2;
-                const sphere = new THREE.Sphere(sphereCenter, characterRadius);
-                institutionBoxes.forEach(entry => {
-                    if (sphereIntersectsFootprint(entry.box, sphere)) blocked = true;
-                });
-                constructionBoxes.forEach(entry => {
-                    if (sphereIntersectsFootprint(entry.box, sphere)) blocked = true;
-                });
-                if (!blocked) {
-                    model.position.copy(proposed);
+                timeSinceLastEmit += dt;
+                if (timeSinceLastEmit > 0.1) {
+                    calculateFootPositions();
+                    timeSinceLastEmit = 0;
                 }
-
-                // Update terrain alignment after horizontal movement
-                if (onGround) {
-                    updateTerrainAlignment();
-
-                    // Emit dust particles when walking on ground
-                    timeSinceLastEmit += dt;
-                    if (timeSinceLastEmit > 0.1) { // More frequent emission (was 0.2)
-                        calculateFootPositions();
-                        timeSinceLastEmit = 0;
-
-                        // Debug log for dust emission
-                        if (isMovingForward && onGround) {
-                        }
-                    }
-                }
+                smoothTerrainAroundCharacter();
             } else if (isMovingForward && idleAction) {
-                // Switch to idle when not moving
                 switchAnimation(idleAction);
                 isMovingForward = false;
                 isRunning = false;
@@ -3884,18 +3969,25 @@ function showWorkerProfile(worker, institutionId, isHired = false, index = null)
                 const vol = (isMovingForward && onGround) ? 1 : 0;
                 footstepSound.setVolume(vol);
             }
+        } else {
+            if (idleAction && activeAction !== idleAction) {
+                switchAnimation(idleAction);
+            }
+            isMovingForward = false;
         }
 
-        if (model.position.y < -300) {
-          model.position.y = 40;
-          velocity.y = 0;
-          groundY = null;
-          onGround = false;
+        // 4. Safety check - teleport if fallen too far
+        if (model.position.y < -100) {
+            model.position.y = lastGroundY + 5;
+            velocity.set(0, 0, 0);
+            onGround = false;
         }
 
-        // Camera follow
+        // 5. Update camera
         updateCamera(dt);
         updateGhostInstitution();
+
+        // 6. Update game state
         if (!dead) {
           sendState();
           updateStats();
@@ -3904,8 +3996,7 @@ function showWorkerProfile(worker, institutionId, isHired = false, index = null)
             applyInstitutionEffects();
             institutionFrame = 0;
           }
-        }
-        else {
+        } else {
           sendState();
         }
     }
