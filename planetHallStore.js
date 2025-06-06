@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const FileStore = require('./fileStore');
 
 const FILE = path.join(__dirname, 'planetHall.json');
 const TERRAIN_FILE = path.join(__dirname, 'terrain.gltf');
@@ -23,7 +24,8 @@ function loadTerrainBounds() {
 
 class PlanetHallStore {
   constructor() {
-    this.data = this._load();
+    this.store = new FileStore(FILE, this._getDefaultData());
+    this.data = this.store.get();
     this._ensureStructure();
     if (!Array.isArray(this.data.position) || this.data.position.every(v => v === 0)) {
       const bounds = loadTerrainBounds();
@@ -32,14 +34,6 @@ class PlanetHallStore {
       const z = randRange(bounds.minZ, bounds.maxZ);
       this.data.position = [x, 0, z];
       this._save();
-    }
-  }
-
-  _load() {
-    try {
-      return JSON.parse(fs.readFileSync(FILE, 'utf8'));
-    } catch {
-      return this._getDefaultData();
     }
   }
 
@@ -61,7 +55,7 @@ class PlanetHallStore {
   }
 
   _save() {
-    fs.writeFileSync(FILE, JSON.stringify(this.data, null, 2));
+    this.store.update(this.data);
   }
 
   getHallData() {

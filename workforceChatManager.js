@@ -1,7 +1,7 @@
-const fs = require('fs');
 const path = require('path');
 const institutionStore = require('./institutionStore');
 const defenceStore = require('./defenceBaseStore');
+const FileStore = require('./fileStore');
 
 let OpenAI = null;
 try {
@@ -20,6 +20,7 @@ const FIRST_PROMPTS = {
 
 class WorkforceChatManager {
   constructor() {
+    this.store = new FileStore(CHAT_FILE, {});
     this.chats = this._load();
     this.timers = {};
     this.responseRounds = {}; // Track active response rounds
@@ -29,24 +30,20 @@ class WorkforceChatManager {
   }
 
   _load() {
-    try {
-      const data = JSON.parse(fs.readFileSync(CHAT_FILE, 'utf8'));
-      Object.values(data).forEach(chat => {
-        if (!Array.isArray(chat.messages)) chat.messages = [];
-        if (!Array.isArray(chat.workers)) chat.workers = [];
-        if (!Array.isArray(chat.ids)) chat.ids = [];
-        chat.currentId = typeof chat.currentId === 'number' ? chat.currentId : (chat.ids[0] || null);
-        chat.nextIndex = chat.nextIndex || 0;
-        chat.workers.sort((a, b) => (a.director === b.director ? 0 : a.director ? 1 : -1));
-      });
-      return data;
-    } catch {
-      return {};
-    }
+    const data = this.store.get();
+    Object.values(data).forEach(chat => {
+      if (!Array.isArray(chat.messages)) chat.messages = [];
+      if (!Array.isArray(chat.workers)) chat.workers = [];
+      if (!Array.isArray(chat.ids)) chat.ids = [];
+      chat.currentId = typeof chat.currentId === 'number' ? chat.currentId : (chat.ids[0] || null);
+      chat.nextIndex = chat.nextIndex || 0;
+      chat.workers.sort((a, b) => (a.director === b.director ? 0 : a.director ? 1 : -1));
+    });
+    return data;
   }
 
   _save() {
-    fs.writeFileSync(CHAT_FILE, JSON.stringify(this.chats, null, 2));
+    this.store.update(this.chats);
   }
 
   _key(email, name, id) {

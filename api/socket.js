@@ -1,26 +1,17 @@
 const WebSocket = require('ws');
 const { OAuth2Client } = require('google-auth-library');
-const fs = require('fs');
+const path = require('path');
+const FileStore = require('../fileStore');
 
 const CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '615735242765-o0rm9iuv9291h9iq5t6rh17co4gmjahb.apps.googleusercontent.com';
 const authClient = new OAuth2Client(CLIENT_ID);
 
-const DATA_FILE = './data.json';
-let userData = {};
-try {
-  const data = fs.readFileSync(DATA_FILE, 'utf8');
-  userData = JSON.parse(data);
-} catch (e) {
-  userData = {};
-  fs.writeFileSync(DATA_FILE, JSON.stringify(userData, null, 2));
-}
+const DATA_FILE = path.join(process.cwd(), 'data.json');
+const store = new FileStore(DATA_FILE, {});
+let userData = store.get();
 
 function saveData() {
-  try {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(userData, null, 2));
-  } catch {
-    // ignore persistence errors
-  }
+  store.update(userData);
 }
 
 function createWss(server) {

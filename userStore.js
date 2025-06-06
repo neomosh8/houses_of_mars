@@ -1,18 +1,15 @@
-const fs = require('fs');
 const path = require('path');
+const FileStore = require('./fileStore');
 
 const USERS_FILE = path.join(__dirname, 'users.json');
+const store = new FileStore(USERS_FILE, {});
 
 function loadUsers() {
-  try {
-    return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
-  } catch {
-    return {};
-  }
+  return { ...store.get() };
 }
 
 function saveUsers(users) {
-  fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
+  store.update(users);
 }
 
 module.exports = { loadUsers, saveUsers };
