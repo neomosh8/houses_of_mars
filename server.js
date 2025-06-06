@@ -30,6 +30,7 @@ const chatManager = require('./workforceChatManager');
 const planetHallStore = require('./planetHallStore');
 const hallChatManager = require('./hallChatManager');
 const referendumManager = require('./referendumManager');
+const StateThrottle = require('./stateThrottle');
 
 const INSTITUTION_PRICES = {
   WatOx: 100,
@@ -67,13 +68,15 @@ app.use('/api/planethall', planetHallRoute);
 const emails = new Map();  // id -> email
  let nextId = 1;
 
- function broadcast(data, excludeId) {
-   const msg = JSON.stringify(data);
-   for (const [id, ws] of clients.entries()) {
-     if (id === excludeId) continue;
-     if (ws.readyState === WebSocket.OPEN) ws.send(msg);
-   }
- }
+function broadcast(data, excludeId) {
+  const msg = JSON.stringify(data);
+  for (const [id, ws] of clients.entries()) {
+    if (id === excludeId) continue;
+    if (ws.readyState === WebSocket.OPEN) ws.send(msg);
+  }
+}
+
+const stateThrottle = new StateThrottle(broadcast);
 
 wss.on('connection', (ws, req) => {
   const url = new URL(req.url, 'http://localhost');
@@ -177,20 +180,15 @@ wss.on('connection', (ws, req) => {
           }
           userStore.saveUsers(users);
         }
-        broadcast(
-          {
-            type: 'update',
-            id,
-            position: pos,
-            rotation: data.rotation,
-            moving: data.moving,
-            running: data.running,
-            health: data.health,
-            hydration: data.hydration,
-            oxygen: data.oxygen
-          },
-          id
-        );
+        stateThrottle.update(id, {
+          position: pos,
+          rotation: data.rotation,
+          moving: data.moving,
+          running: data.running,
+          health: data.health,
+          hydration: data.hydration,
+          oxygen: data.oxygen
+        });
       } else if (data.type === 'respawn') {
         const users = userStore.loadUsers();
         const user = users[email];
