@@ -5,8 +5,21 @@ module.exports = function(userStore) {
 
   router.get('/:email', (req, res) => {
     const users = userStore.loadUsers();
-    const user = users[req.params.email];
-    if (!user) return res.status(404).json({ error: 'not found' });
+    let user = users[req.params.email];
+
+    if (!user) {
+      user = {
+        email: req.params.email,
+        position: [70, 100, -50],
+        money: 1000000,
+        health: 100,
+        hydration: 100,
+        oxygen: 100
+      };
+      users[req.params.email] = user;
+      userStore.saveUsers(users);
+    }
+
     res.json({
       position: user.position,
       money: user.money,
