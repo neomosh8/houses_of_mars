@@ -1615,6 +1615,11 @@ if (window.location.protocol === 'https:') {
       } else if (msg.type === 'money') {
         playerMoney = msg.money;
         updateMoneyDisplay();
+      } else if (msg.type === 'health') {
+        if (typeof msg.health === 'number') {
+          health = msg.health;
+          updateStatImages();
+        }
       } else if (msg.type === 'flag') {
         createFlag(msg.id, msg.position);
       } else if (msg.type === 'hallChat') {
@@ -2099,7 +2104,7 @@ if (window.location.protocol === 'https:') {
         if (hitInst !== p.instId) {
           scene.remove(p.obj);
           projectiles.splice(i, 1);
-          sendDestroyInstitution(hitInst);
+          sendDestroyInstitution(hitInst, ammo);
           continue;
         }
       }
@@ -3201,9 +3206,11 @@ function showWorkerProfile(worker, institutionId, isHired = false, index = null)
     }));
   }
 
-  function sendDestroyInstitution(id) {
+  function sendDestroyInstitution(id, ammo) {
     if (!socket || socket.readyState !== WebSocket.OPEN) return;
-    socket.send(JSON.stringify({ type: 'destroyInstitution', id }));
+    socket.send(
+      JSON.stringify({ type: 'destroyInstitution', id, ammo })
+    );
   }
 
 
