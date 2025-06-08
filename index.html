@@ -1883,7 +1883,7 @@ if (window.location.protocol === 'https:') {
     weaponMap[inst.id] = [];
     if (!Array.isArray(inst.weapons)) return;
     inst.weapons.forEach((w, idx) => {
-      if (!w) return;
+      if (!w || w.consumed) return;
       const offset = Array.isArray(w.offset)
         ? new THREE.Vector3().fromArray(w.offset)
         : new THREE.Vector3(6 + idx * 2, 0, 0);
@@ -1990,7 +1990,7 @@ if (window.location.protocol === 'https:') {
   }
 
   function fireWeapon(entry) {
-    if (!model || !entry || !entry.obj || !entry.data) return;
+    if (!model || !entry || !entry.obj || !entry.data || entry.data.consumed) return;
     const params = entry.data.parameters || {};
     let tech = entry.data.technology;
     if (Array.isArray(tech)) tech = tech[0];
@@ -2047,10 +2047,29 @@ if (window.location.protocol === 'https:') {
         animation: activeAction && activeAction._clip ? activeAction._clip.name : 'none'
       });
     }
+    markWeaponConsumed(entry);
   }
 
   function fireAllWeapons() {
-    Object.values(weaponMap).forEach(arr => arr.forEach(w => fireWeapon(w)));
+    Object.values(weaponMap).forEach(arr =>
+      arr.forEach(w => { if (w && w.data && !w.data.consumed) fireWeapon(w); })
+    );
+  }
+
+  function markWeaponConsumed(entry) {
+    if (!entry || !entry.obj) return;
+    const instId = entry.obj.userData.weaponInstId;
+    const idx = entry.obj.userData.weaponIndex;
+    if (instId === undefined || idx === undefined) return;
+    if (entry.obj.parent) entry.obj.parent.remove(entry.obj);
+    entry.data.consumed = true;
+    if (socket) {
+      fetch(`/api/defence/weapons/consume/${instId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ index: idx })
+      });
+    }
   }
 
   function updateProjectiles(dt) {
@@ -2885,11 +2904,31 @@ async function showWorkforce() {
       if (res.ok) {
         const data = await res.json();
         container.innerHTML = '';
-        (data.weapons || []).forEach(w => {
+        (data.weapons || []).forEach((w, idx) => {
           const div = document.createElement('div');
-          div.textContent = `${w.name} - movement ${w.movement.toFixed(2)}`;
           div.className = 'weapon-entry';
-          div.onclick = () => alert('Using weapon ' + w.name);
+          div.textContent = `${w.name} - movement ${w.movement.toFixed(2)}`;
+          if (w.consumed) {
+            const btn = document.createElement('button');
+            btn.textContent = `Rebuild $${(w.movement * 1000).toFixed(0)}`;
+            btn.onclick = async () => {
+              const res2 = await fetch(`/api/defence/weapons/rebuild/${id}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ index: idx, email: playerEmail })
+              });
+              if (res2.ok) {
+                const d = await res2.json();
+                playerMoney = d.money;
+                updateMoneyDisplay();
+                showWeapons();
+              } else {
+                alert('Failed to rebuild');
+              }
+            };
+            div.appendChild(document.createTextNode(' - consumed '));
+            div.appendChild(btn);
+          }
           container.appendChild(div);
         });
         if (!data.weapons || data.weapons.length === 0) {
