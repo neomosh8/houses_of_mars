@@ -2462,6 +2462,55 @@ if (window.location.protocol === 'https:') {
     }
   }
 
+
+
+      } else if (p.tech === 'drone') {
+        p.h = p.h || (force / weight) * 10;
+        p.v0 = p.v0 || (force / weight);
+        p.v1 = p.v1 || (weight * p.h);
+        if (p.stage === 0) {
+          const targetY = p.start.y + p.h;
+          p.obj.position.y += p.v0 * dt;
+          if (p.obj.position.y >= targetY) {
+            p.stage = 1;
+          }
+        } else if (p.stage === 1) {
+          if (!p.dir) p.dir = new THREE.Vector3(p.target.x - p.obj.position.x, 0, p.target.z - p.obj.position.z).normalize();
+          p.speed += (p.v1 - (p.speed || p.v0)) * 0.05;
+          const step = p.speed * dt;
+          const move = p.dir.clone().multiplyScalar(step);
+          p.obj.position.add(move);
+          if (new THREE.Vector2(p.obj.position.x - p.target.x, p.obj.position.z - p.target.z).length() <= step) {
+            p.stage = 2;
+            p.dir = new THREE.Vector3(0, -1, 0);
+          }
+        } else {
+          const step = p.v1 * dt;
+          p.obj.position.addScaledVector(p.dir, step);
+          if (p.obj.position.y <= p.target.y) {
+            p.obj.position.copy(p.target);
+            scene.remove(p.obj);
+            projectiles.splice(i, 1);
+          }
+        }
+      } else if (p.tech === 'kamikaze') {
+        if (!p.dir) p.dir = new THREE.Vector2(p.target.x - p.start.x, p.target.z - p.start.z).normalize();
+        p.speed = p.speed || ((force * fuel) / weight)*5;
+        const step = p.speed * dt;
+        p.obj.position.x += p.dir.x * step;
+        p.obj.position.z += p.dir.y * step;
+        p.obj.position.y = getGroundHeightAt(p.obj.position.x, p.obj.position.z);
+        if (new THREE.Vector2(p.obj.position.x - p.target.x, p.obj.position.z - p.target.z).length() <= step) {
+          scene.remove(p.obj);
+          projectiles.splice(i, 1);
+        }
+      } else {
+        scene.remove(p.obj);
+        projectiles.splice(i, 1);
+      }
+    }
+  }
+
   function createInterceptor(start, target, speed) {
     const geom = new THREE.SphereGeometry(0.5, 8, 8);
     const mat = new THREE.MeshStandardMaterial({ color: 0x00ffff, emissive: 0x00ffff });
@@ -2557,54 +2606,6 @@ if (window.location.protocol === 'https:') {
       });
     }
     updateInterceptors(dt);
-  }
-
-
-      } else if (p.tech === 'drone') {
-        p.h = p.h || (force / weight) * 10;
-        p.v0 = p.v0 || (force / weight);
-        p.v1 = p.v1 || (weight * p.h);
-        if (p.stage === 0) {
-          const targetY = p.start.y + p.h;
-          p.obj.position.y += p.v0 * dt;
-          if (p.obj.position.y >= targetY) {
-            p.stage = 1;
-          }
-        } else if (p.stage === 1) {
-          if (!p.dir) p.dir = new THREE.Vector3(p.target.x - p.obj.position.x, 0, p.target.z - p.obj.position.z).normalize();
-          p.speed += (p.v1 - (p.speed || p.v0)) * 0.05;
-          const step = p.speed * dt;
-          const move = p.dir.clone().multiplyScalar(step);
-          p.obj.position.add(move);
-          if (new THREE.Vector2(p.obj.position.x - p.target.x, p.obj.position.z - p.target.z).length() <= step) {
-            p.stage = 2;
-            p.dir = new THREE.Vector3(0, -1, 0);
-          }
-        } else {
-          const step = p.v1 * dt;
-          p.obj.position.addScaledVector(p.dir, step);
-          if (p.obj.position.y <= p.target.y) {
-            p.obj.position.copy(p.target);
-            scene.remove(p.obj);
-            projectiles.splice(i, 1);
-          }
-        }
-      } else if (p.tech === 'kamikaze') {
-        if (!p.dir) p.dir = new THREE.Vector2(p.target.x - p.start.x, p.target.z - p.start.z).normalize();
-        p.speed = p.speed || ((force * fuel) / weight)*5;
-        const step = p.speed * dt;
-        p.obj.position.x += p.dir.x * step;
-        p.obj.position.z += p.dir.y * step;
-        p.obj.position.y = getGroundHeightAt(p.obj.position.x, p.obj.position.z);
-        if (new THREE.Vector2(p.obj.position.x - p.target.x, p.obj.position.z - p.target.z).length() <= step) {
-          scene.remove(p.obj);
-          projectiles.splice(i, 1);
-        }
-      } else {
-        scene.remove(p.obj);
-        projectiles.splice(i, 1);
-      }
-    }
   }
 
   function handleInstitutionDestruction(id) {
