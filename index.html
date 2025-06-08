@@ -2002,10 +2002,13 @@ if (window.location.protocol === 'https:') {
     }
     tech = (typeof tech === 'string' ? tech : '').toLowerCase();
     const cat = (entry.data.category || '').toLowerCase();
-    const start = entry.obj.position.clone();
-    const target = currentFlagPos ? currentFlagPos.clone() : model.position.clone();
+    const start = entry.obj.getWorldPosition(new THREE.Vector3());
+    const target = currentFlagPos
+      ? currentFlagPos.clone()
+      : model.getWorldPosition(new THREE.Vector3());
     const clone = SkeletonUtils.clone(entry.obj);
     clone.position.copy(start);
+    clone.quaternion.copy(entry.obj.getWorldQuaternion(new THREE.Quaternion()));
     scene.add(clone);
     const instId = entry.obj.userData.weaponInstId;
     projectiles.push({ obj: clone, tech, cat, params, start, target, stage: 0, speed: 0, instId });
@@ -2059,12 +2062,12 @@ if (window.location.protocol === 'https:') {
         }
       }
       if (hitInst !== null) {
-        scene.remove(p.obj);
-        projectiles.splice(i, 1);
         if (hitInst !== p.instId) {
+          scene.remove(p.obj);
+          projectiles.splice(i, 1);
           sendDestroyInstitution(hitInst);
+          continue;
         }
-        continue;
       }
       if (p.tech === 'laser') {
         if (!p.dir) {
