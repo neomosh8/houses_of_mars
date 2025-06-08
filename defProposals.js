@@ -64,7 +64,8 @@ export function renderDefProposals(
         const data = await res.json();
         if (data.status && data.status !== 'pending') {
           statusDiv.textContent = 'Status: ' + data.status;
-          if (data.status === 'approved' && (p.category || '').toLowerCase() === 'defence') {
+            const cat = (p.category || '').toLowerCase();
+            if (data.status === 'approved' && (cat === 'defence' || cat === 'defense')) {
             const buildings = Object.values(institutionDataMap).filter(b => b.shares && b.shares[playerEmail] > 0 && !b.destroyed);
             window.showPatriotPopup(buildings, async ids => {
               if (ids.length) {

@@ -55,7 +55,8 @@ module.exports = function(store, institutionStore, patriotStore, userStore, broa
       let status = 'pending';
       if (approveShares / total > 0.5 || denyShares / total > 0.5) {
         if (approveShares > denyShares) {
-          if ((prop.category || '').toLowerCase() !== 'defence') {
+          const cat = (prop.category || '').toLowerCase();
+            if (cat !== 'defence' && cat !== 'defense') {
             const p = prop.parameters || {};
             const weight = p.weight || 1;
             const force = p.force || 0;
