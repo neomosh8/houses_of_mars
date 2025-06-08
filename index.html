@@ -111,6 +111,14 @@
       </div>
     </div>
   </div>
+
+  <div id="patriot-popup" class="panel resource-popup" style="display:none;">
+    <div id="patriot-close" class="popup-close">×</div>
+    <h3>Select Buildings</h3>
+    <div id="patriot-list" style="max-height:60vh;overflow-y:auto;margin:8px 0;"></div>
+    <button id="patriot-ok">Place</button>
+    <button id="patriot-cancel">Cancel</button>
+  </div>
   <div id="partner-form" class="panel" style="display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);padding:10px;gap:4px;flex-direction:column;">
     <label>Total Shares <input id="partner-total" type="number" value="10" min="1"></label>
     <label>Share Price <input id="partner-price" type="number" value="10" min="1"></label>
@@ -714,6 +722,34 @@ const icons = {
   document.getElementById('breakdown-close').addEventListener('click', () => {
     document.getElementById('resource-breakdown-popup').style.display = 'none';
   });
+
+  function showPatriotPopup(buildings, cb) {
+    const popup = document.getElementById('patriot-popup');
+    const list = document.getElementById('patriot-list');
+    list.innerHTML = '';
+    buildings.forEach(b => {
+      const div = document.createElement('div');
+      const c = document.createElement('input');
+      c.type = 'checkbox';
+      c.value = b.id;
+      div.appendChild(c);
+      div.appendChild(document.createTextNode(` ${b.name}`));
+      list.appendChild(div);
+    });
+    popup.style.display = 'block';
+    document.getElementById('patriot-ok').onclick = () => {
+      const ids = Array.from(list.querySelectorAll('input:checked')).map(i => Number(i.value));
+      popup.style.display = 'none';
+      if (cb) cb(ids);
+    };
+    document.getElementById('patriot-cancel').onclick = () => {
+      popup.style.display = 'none';
+    };
+    document.getElementById('patriot-close').onclick = () => {
+      popup.style.display = 'none';
+    };
+  }
+  window.showPatriotPopup = showPatriotPopup;
 
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1526,10 +1562,12 @@ if (window.location.protocol === 'https:') {
   const sinking = [];
   const constructionMap = {}; // id -> array of {scaff, final}
   const weaponMap = {}; // id -> array of weapon objects
+  const patriotMap = {}; // id -> array of patriot objects
   const projectiles = []; // active fired weapon objects
   const institutionSounds = {}; // id -> THREE.PositionalAudio
   const weaponSounds = {}; // instId -> array of sounds
   const weaponMixers = {}; // instId -> array of AnimationMixers
+  const patriotMixers = {}; // instId -> array of AnimationMixers
   let footstepSound = null;
   const flagObjects = {}; // player id -> flag object
   let currentFlagPos = null;
@@ -1609,6 +1647,19 @@ if (window.location.protocol === 'https:') {
           if (!Array.isArray(inst.weapons)) inst.weapons = [];
           inst.weapons[msg.index] = msg.weapon;
           applyWeapons(inst);
+        }
+      } else if (msg.type === 'updatePatriot') {
+        const inst = institutionDataMap[msg.id];
+        if (inst) {
+          if (!Array.isArray(inst.patriots)) inst.patriots = [];
+          inst.patriots[msg.index] = msg.patriot;
+          applyPatriots(inst);
+        }
+      } else if (msg.type === 'removePatriots') {
+        const inst = institutionDataMap[msg.id];
+        if (inst) {
+          inst.patriots = [];
+          applyPatriots(inst);
         }
       } else if (msg.type === 'destroyInstitution') {
         handleInstitutionDestruction(msg.id);
@@ -1990,6 +2041,58 @@ if (window.location.protocol === 'https:') {
           o.userData.weaponIndex = idx;
         });
         weaponMap[inst.id][idx] = { obj, data: w };
+      });
+    });
+  }
+
+  function applyPatriots(inst) {
+    const existing = patriotMap[inst.id] || [];
+    existing.forEach(p => { if (p.obj) scene.remove(p.obj); });
+    const mixArr = patriotMixers[inst.id] || [];
+    mixArr.forEach(m => { if (m) { m.stopAllAction && m.stopAllAction(); } });
+    patriotMixers[inst.id] = [];
+    patriotMap[inst.id] = [];
+    if (!Array.isArray(inst.patriots)) return;
+    inst.patriots.forEach((p, idx) => {
+      const offset = Array.isArray(p.offset)
+        ? new THREE.Vector3().fromArray(p.offset)
+        : new THREE.Vector3(4 + idx * 2, 0, 0);
+      offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), inst.rotation || 0);
+      const pos = new THREE.Vector3().fromArray(inst.position).add(offset);
+      const loader = new GLTFLoader();
+      loader.load(p.model, gltf => {
+        if (inst.patriots[idx] !== p) return;
+        const obj = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+        if (!obj) return;
+        addPointLightsFromGLTF(gltf);
+        obj.scale.setScalar(p.scale || 1);
+        obj.rotation.y = inst.rotation || 0;
+        obj.position.copy(pos);
+        scene.add(obj);
+        if (gltf.animations && gltf.animations.length > 0) {
+          const mix = new THREE.AnimationMixer(obj);
+          gltf.animations.forEach(anim => mix.clipAction(anim).play());
+          if (!patriotMixers[inst.id]) patriotMixers[inst.id] = [];
+          patriotMixers[inst.id][idx] = mix;
+        }
+        const boxTmp = new THREE.Box3().setFromObject(obj);
+        const fp = createBuildingFootprint(obj);
+        const ground = flattenTerrain(fp.minX, fp.maxX, fp.minZ, fp.maxZ);
+        const offY = boxTmp.min.y - obj.position.y;
+        obj.position.y = ground - offY;
+        patriotMap[inst.id][idx] = { obj, data: p };
+      }, undefined, () => {
+        if (inst.patriots[idx] !== p) return;
+        const obj = createPlaceholder(p.scale || 1, 0x00ff00);
+        obj.position.copy(pos);
+        obj.rotation.y = inst.rotation || 0;
+        scene.add(obj);
+        const boxTmp2 = new THREE.Box3().setFromObject(obj);
+        const fp2 = createBuildingFootprint(obj);
+        const ground2 = flattenTerrain(fp2.minX, fp2.maxX, fp2.minZ, fp2.maxZ);
+        const offY2 = boxTmp2.min.y - obj.position.y;
+        obj.position.y = ground2 - offY2;
+        patriotMap[inst.id][idx] = { obj, data: p };
       });
     });
   }
@@ -2415,6 +2518,11 @@ if (window.location.protocol === 'https:') {
     data.proposals = [];
     data.proposalHistory = [];
     data.constructions = [];
+    data.patriots = [];
+    if (patriotMap[id]) {
+      patriotMap[id].forEach(p => { if (p.obj) scene.remove(p.obj); });
+      patriotMap[id] = [];
+    }
     removeInstitutionEffects(id);
     const anims = obj.userData.animations || [];
     if (anims.length > 0) {
@@ -2505,6 +2613,7 @@ if (window.location.protocol === 'https:') {
       if (!inst.destroyed) {
         applyConstruction(institutionDataMap[inst.id]);
         applyWeapons(institutionDataMap[inst.id]);
+        applyPatriots(institutionDataMap[inst.id]);
       }
       if (inst.funded === false) {
         createFundingIndicator(inst.id, inst.position);
@@ -2539,6 +2648,7 @@ if (window.location.protocol === 'https:') {
       if (!inst.destroyed) {
         applyConstruction(institutionDataMap[inst.id]);
         applyWeapons(institutionDataMap[inst.id]);
+        applyPatriots(institutionDataMap[inst.id]);
       }
     }
   }

@@ -9,6 +9,7 @@ watox.png
 institutions.json
 *.json
 !defence_base.json
+!patriots.json
 /generated_models
 /worker_images
 chatLogs.json
