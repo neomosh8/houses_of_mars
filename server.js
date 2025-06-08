@@ -39,6 +39,8 @@ const INSTITUTION_PRICES = {
   'Defence Base': 300
 };
 
+const BUILDING_DAMAGE_FACTOR = 3;
+
 const loginRoute = require('./api/login')(client, verifySid);
 const verifyRoute = require('./api/verify')(client, verifySid, userStore);
 const stateRoute = require('./api/state')(userStore);
@@ -306,6 +308,35 @@ wss.on('connection', (ws, req) => {
       } else if (data.type === 'destroyInstitution') {
         const inst = institutionStore.destroyInstitution(data.id);
         if (inst) {
+          const ammo = Number(data.ammo) || 0;
+          const damage = ammo * BUILDING_DAMAGE_FACTOR;
+          if (damage > 0) {
+            const users = userStore.loadUsers();
+            const owners = inst.shares ? Object.keys(inst.shares) : [inst.owner];
+            owners.forEach(ownerEmail => {
+              if (!users[ownerEmail]) return;
+              users[ownerEmail].health = Math.max(
+                (users[ownerEmail].health || 0) - damage,
+                0
+              );
+              for (const [pid, mail] of emails.entries()) {
+                if (mail === ownerEmail) {
+                  const wsO = clients.get(pid);
+                  if (wsO && wsO.readyState === WebSocket.OPEN) {
+                    wsO.send(
+                      JSON.stringify({
+                        type: 'health',
+                        health: users[ownerEmail].health,
+                      })
+                    );
+                  }
+                  const st = states.get(pid);
+                  if (st) st.health = users[ownerEmail].health;
+                }
+              }
+            });
+            userStore.saveUsers(users);
+          }
           broadcast({ type: 'destroyInstitution', id: data.id });
         }
       } else if (data.type === 'target') {
