@@ -77,6 +77,35 @@ function updateWeapon(id, index, updates) {
   return w;
 }
 
+function consumeWeapon(id, index) {
+  let w = null;
+  store.update(data => {
+    const entry = ensure(data, id);
+    w = entry.weapons[index];
+    if (!w) return data;
+    w.consumed = true;
+    console.log('[DEFENCE STORE] consumeWeapon', { id, index });
+    return data;
+  });
+  return w;
+}
+
+function cloneWeapon(id, index) {
+  let weapon = null;
+  let newIdx = null;
+  store.update(data => {
+    const entry = ensure(data, id);
+    const src = entry.weapons[index];
+    if (!src) return data;
+    weapon = { ...src, consumed: false };
+    entry.weapons.push(weapon);
+    newIdx = entry.weapons.length - 1;
+    console.log('[DEFENCE STORE] cloneWeapon', { id, index, newIdx });
+    return data;
+  });
+  return { weapon, index: newIdx };
+}
+
 module.exports = {
   getProposals,
   addProposal,
@@ -84,4 +113,6 @@ module.exports = {
   getWeapons,
   addWeapon,
   updateWeapon,
+  consumeWeapon,
+  cloneWeapon,
 };

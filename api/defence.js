@@ -3,7 +3,7 @@ const path = require('path');
 const meshy = require('../meshy');
 const chatManager = require('../workforceChatManager');
 
-module.exports = function(store, institutionStore, broadcast) {
+module.exports = function(store, institutionStore, userStore, broadcast, sendToEmail) {
   const router = express.Router();
   // Default scaffolding model for new weapons. A scale of 6 keeps
   // generated weapons at a reasonable size if no scale is provided.
@@ -124,6 +124,42 @@ module.exports = function(store, institutionStore, broadcast) {
       console.log('[DEFENCE API] GET weapons', { id });
       const weapons = store.getWeapons(id);
       res.json({ weapons });
+    } catch {
+      res.status(500).json({ error: 'failed' });
+    }
+  });
+
+  router.post('/weapons/consume/:id', (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const { index } = req.body;
+      const w = store.consumeWeapon(id, index);
+      if (w) broadcast({ type: 'updateWeapon', id, weapon: w, index });
+      res.json({ ok: true });
+    } catch {
+      res.status(500).json({ error: 'failed' });
+    }
+  });
+
+  router.post('/weapons/rebuild/:id', (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const { index, email } = req.body;
+      const weapons = store.getWeapons(id);
+      const src = weapons[index];
+      if (!src) return res.status(404).json({ error: 'not found' });
+      const cost = (src.movement || 0) * 1000;
+      const users = userStore.loadUsers();
+      const user = users[email];
+      if (!user || user.money < cost) return res.status(400).json({ error: 'not enough money' });
+      user.money -= cost;
+      userStore.saveUsers(users);
+      const { weapon, index: newIdx } = store.cloneWeapon(id, index);
+      broadcast({ type: 'updateWeapon', id, weapon, index: newIdx });
+      if (typeof sendToEmail === 'function') {
+        sendToEmail(email, { type: 'money', money: user.money });
+      }
+      res.json({ index: newIdx, money: user.money });
     } catch {
       res.status(500).json({ error: 'failed' });
     }

@@ -52,7 +52,7 @@ function sendToEmail(email, data) {
 }
 
 const workforceRoute = require('./api/workforce')(institutionStore, userStore, engine, broadcast, sendToEmail);
-const defenceRoute = require('./api/defence')(defenceStore, institutionStore, broadcast);
+const defenceRoute = require('./api/defence')(defenceStore, institutionStore, userStore, broadcast, sendToEmail);
 const planetHallRoute = require('./api/planetHall')(broadcast);
 chatManager.initFromInstitutions(institutionStore.getInstitutions());
 
