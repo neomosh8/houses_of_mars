@@ -26,6 +26,7 @@ if (!accountSid || !authToken || !verifySid) {
 const userStore = require('./userStore');
 const institutionStore = require('./institutionStore');
 const defenceStore = require('./defenceBaseStore');
+const patriotStore = require('./patriotStore');
 const chatManager = require('./workforceChatManager');
 const planetHallStore = require('./planetHallStore');
 const hallChatManager = require('./hallChatManager');
@@ -54,7 +55,7 @@ function sendToEmail(email, data) {
 }
 
 const workforceRoute = require('./api/workforce')(institutionStore, userStore, engine, broadcast, sendToEmail);
-const defenceRoute = require('./api/defence')(defenceStore, institutionStore, userStore, broadcast, sendToEmail);
+const defenceRoute = require('./api/defence')(defenceStore, institutionStore, patriotStore, userStore, broadcast, sendToEmail);
 const planetHallRoute = require('./api/planetHall')(broadcast);
 chatManager.initFromInstitutions(institutionStore.getInstitutions());
 
@@ -132,12 +133,16 @@ wss.on('connection', (ws, req) => {
 
   const institutions = institutionStore.getInstitutions()
     .map(inst => {
+      const data = {
+        ...inst,
+        patriots: patriotStore.getPatriots(inst.id)
+      };
       if (inst.name === 'Defence Base') {
-        return { ...inst, weapons: defenceStore.getWeapons(inst.id) };
+        data.weapons = defenceStore.getWeapons(inst.id);
       }
-      return inst;
+      return data;
     })
-    .concat([hallInstitution]);
+    .concat([{ ...hallInstitution, patriots: patriotStore.getPatriots(hallData.id) }]);
   ws.send(
     JSON.stringify({
       type: 'welcome',
@@ -241,8 +246,8 @@ wss.on('connection', (ws, req) => {
           const instId = institutionStore.addInstitution(inst);
           const storedInst = institutionStore.getInstitution(instId);
           const instData = storedInst.name === 'Defence Base'
-            ? { ...storedInst, weapons: defenceStore.getWeapons(instId) }
-            : storedInst;
+            ? { ...storedInst, weapons: defenceStore.getWeapons(instId), patriots: patriotStore.getPatriots(instId) }
+            : { ...storedInst, patriots: patriotStore.getPatriots(instId) };
           broadcast({ type: 'addInstitution', institution: instData });
           if (ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ type: 'money', money: user.money }));
@@ -275,8 +280,8 @@ wss.on('connection', (ws, req) => {
           const instId = institutionStore.addInstitution(inst);
           const storedInst = institutionStore.getInstitution(instId);
           const instData = storedInst.name === 'Defence Base'
-            ? { ...storedInst, weapons: defenceStore.getWeapons(instId) }
-            : storedInst;
+            ? { ...storedInst, weapons: defenceStore.getWeapons(instId), patriots: patriotStore.getPatriots(instId) }
+            : { ...storedInst, patriots: patriotStore.getPatriots(instId) };
           broadcast({ type: 'addInstitution', institution: instData });
           if (ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ type: 'money', money: user.money }));
@@ -337,6 +342,8 @@ wss.on('connection', (ws, req) => {
             });
             userStore.saveUsers(users);
           }
+          patriotStore.removePatriots(data.id);
+          broadcast({ type: 'removePatriots', id: data.id });
           broadcast({ type: 'destroyInstitution', id: data.id });
         }
       } else if (data.type === 'target') {

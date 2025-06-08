@@ -64,6 +64,18 @@ export function renderDefProposals(
         const data = await res.json();
         if (data.status && data.status !== 'pending') {
           statusDiv.textContent = 'Status: ' + data.status;
+          if (data.status === 'approved' && (p.category || '').toLowerCase() === 'defence') {
+            const buildings = Object.values(institutionDataMap).filter(b => b.shares && b.shares[playerEmail] > 0 && !b.destroyed);
+            window.showPatriotPopup(buildings, async ids => {
+              if (ids.length) {
+                await fetch('/api/defence/patriots', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ buildingIds: ids, name: p.name, parameters: p.parameters })
+                });
+              }
+            });
+          }
         } else {
           votesDiv.textContent = `Approvals: ${data.votes.approve}, Denials: ${data.votes.deny}`;
           approve.textContent = 'Vote sent';

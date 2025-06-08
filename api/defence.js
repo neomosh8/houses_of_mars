@@ -3,7 +3,15 @@ const path = require('path');
 const meshy = require('../meshy');
 const chatManager = require('../workforceChatManager');
 
-module.exports = function(store, institutionStore, userStore, broadcast, sendToEmail) {
+function patriot(params) {
+  const weight = params.weight || 0;
+  const ammo = params.ammo || 0;
+  const force = params.force || 0;
+  const fuel = params.fuel || 0;
+  return { strength: weight + ammo + force + fuel };
+}
+
+module.exports = function(store, institutionStore, patriotStore, userStore, broadcast, sendToEmail) {
   const router = express.Router();
   // Default scaffolding model for new weapons. A scale of 6 keeps
   // generated weapons at a reasonable size if no scale is provided.
@@ -160,6 +168,46 @@ module.exports = function(store, institutionStore, userStore, broadcast, sendToE
         sendToEmail(email, { type: 'money', money: user.money });
       }
       res.json({ index: newIdx, money: user.money });
+    } catch {
+      res.status(500).json({ error: 'failed' });
+    }
+  });
+
+  router.get('/patriots/:id', (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const patriots = patriotStore.getPatriots(id);
+      res.json({ patriots });
+    } catch {
+      res.status(500).json({ error: 'failed' });
+    }
+  });
+
+  router.post('/patriots', (req, res) => {
+    try {
+      const { buildingIds, name, parameters } = req.body;
+      if (!Array.isArray(buildingIds) || buildingIds.length === 0) {
+        return res.status(400).json({ error: 'buildingIds required' });
+      }
+      const result = [];
+      function getOffset() {
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 5 + Math.random() * 5;
+        return [Math.cos(angle) * dist, 0, Math.sin(angle) * dist];
+      }
+      buildingIds.forEach(bid => {
+        const patriot = {
+          name: name || 'Patriot',
+          model: 'patriot.glb',
+          offset: getOffset(),
+          parameters,
+          effect: patriot(parameters || {})
+        };
+        const idx = patriotStore.addPatriot(Number(bid), patriot);
+        broadcast({ type: 'updatePatriot', id: Number(bid), patriot, index: idx });
+        result.push({ id: Number(bid), index: idx });
+      });
+      res.json({ placed: result });
     } catch {
       res.status(500).json({ error: 'failed' });
     }
