@@ -2477,7 +2477,7 @@ if (window.location.protocol === 'https:') {
         const fuel = params.fuel || 0;
         const ammo = params.ammo || 0;
         const radius = force * fuel;
-        const vF = ammo * (fuel / weight);
+        const vF = (fuel / weight);
         for (const p of projectiles) {
           if (p.isInterceptor || !p.obj) continue;
           if (p.intercepted) continue;
@@ -2543,7 +2543,7 @@ if (window.location.protocol === 'https:') {
   }
 
 function createInterceptor(start, target, speed) {
-  const geom = new THREE.SphereGeometry(0.5, 8, 8);
+  const geom = new THREE.SphereGeometry(0.5, 16, 16);
   const mat = new THREE.MeshStandardMaterial({ color: 0x00ffff, emissive: 0x00ffff });
   const mesh = new THREE.Mesh(geom, mat);
   mesh.position.copy(start);
@@ -2575,14 +2575,16 @@ function createInterceptor(start, target, speed) {
 
   coreGeometry.setAttribute('position', new THREE.BufferAttribute(corePositions, 3));
 
-  const coreMaterial = new THREE.PointsMaterial({
-    size: 1.5,
-    color: 0xccffff,
-    transparent: true,
-    opacity: 1,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false
-  });
+const coreMaterial = new THREE.PointsMaterial({
+  size: 1.5,
+  color: 0xccffff,
+  transparent: true,
+  opacity: 1,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false,
+  map: dustTexture,  // Add this line
+  alphaTest: 0.01    // Add this line
+});
 
   const coreParticles = new THREE.Points(coreGeometry, coreMaterial);
   scene.add(coreParticles);
@@ -2602,14 +2604,16 @@ function createInterceptor(start, target, speed) {
 
   flameGeometry.setAttribute('position', new THREE.BufferAttribute(flamePositions, 3));
 
-  const flameMaterial = new THREE.PointsMaterial({
-    size: 2.5,
-    color: 0x00ffff,
-    transparent: true,
-    opacity: 0.8,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false
-  });
+const flameMaterial = new THREE.PointsMaterial({
+  size: 2.5,
+  color: 0x00ffff,
+  transparent: true,
+  opacity: 0.8,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false,
+  map: dustTexture,  // Add this line
+  alphaTest: 0.01    // Add this line
+});
 
   const flameParticles = new THREE.Points(flameGeometry, flameMaterial);
   scene.add(flameParticles);
@@ -2629,14 +2633,16 @@ function createInterceptor(start, target, speed) {
 
   smokeGeometry.setAttribute('position', new THREE.BufferAttribute(smokePositions, 3));
 
-  const smokeMaterial = new THREE.PointsMaterial({
-    size: 9,
-    color: 0x336699,
-    transparent: true,
-    opacity: 0.4,
-    blending: THREE.NormalBlending,
-    depthWrite: true
-  });
+const smokeMaterial = new THREE.PointsMaterial({
+  size: 9,
+  color: 0x336699,
+  transparent: true,
+  opacity: 0.4,
+  blending: THREE.NormalBlending,
+  depthWrite: true,
+  map: dustTexture,  // Add this line
+  alphaTest: 0.01    // Add this line
+});
 
   const smokeParticles = new THREE.Points(smokeGeometry, smokeMaterial);
   scene.add(smokeParticles);
@@ -2686,7 +2692,7 @@ function updateInterceptors(dt) {
 
     // Core particles (emit frequently)
     it.lastCoreEmit += dt;
-    if (it.lastCoreEmit > 0.005) {
+    if (it.lastCoreEmit > 0.002) {
       it.lastCoreEmit = 0;
       const idx = it.coreIndex % it.coreCount;
       it.corePositions[idx * 3] = it.mesh.position.x + (Math.random() - 0.5) * 0.2;
@@ -2698,9 +2704,9 @@ function updateInterceptors(dt) {
 
     // Flame particles (emit less frequently)
     it.lastFlameEmit += dt;
-    if (it.lastFlameEmit > 0.01) {
+    if (it.lastFlameEmit > 0.005) {
       it.lastFlameEmit = 0;
-      for (let j = 0; j < 2; j++) { // Emit 2 at a time
+      for (let j = 0; j < 4; j++) { // Emit 2 at a time
         const idx = it.flameIndex % it.flameCount;
         it.flamePositions[idx * 3] = it.mesh.position.x + (Math.random() - 0.5) * 0.5;
         it.flamePositions[idx * 3 + 1] = it.mesh.position.y - 0.5;
@@ -2712,9 +2718,9 @@ function updateInterceptors(dt) {
 
     // Smoke particles (emit least frequently)
     it.lastSmokeEmit += dt;
-    if (it.lastSmokeEmit > 0.02) {
+    if (it.lastSmokeEmit > 0.01) {
       it.lastSmokeEmit = 0;
-      for (let j = 0; j < 3; j++) { // Emit 3 at a time
+      for (let j = 0; j < 6; j++) { // Emit 3 at a time
         const idx = it.smokeIndex % it.smokeCount;
         it.smokePositions[idx * 3] = it.mesh.position.x + (Math.random() - 0.5) * 1.0;
         it.smokePositions[idx * 3 + 1] = it.mesh.position.y - 0.5;
