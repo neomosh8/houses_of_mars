@@ -329,6 +329,32 @@ const icons = {
     return mesh;
   }
 
+  function createLaserBeam(start, target) {
+    const dir = new THREE.Vector3().subVectors(target, start);
+    const len = dir.length();
+    const geom = new THREE.CylinderGeometry(0.1, 0.1, len, 8, 1, true);
+    const mat = new THREE.MeshStandardMaterial({ color: 0xff0000, emissive: 0xff0000 });
+    const mesh = new THREE.Mesh(geom, mat);
+    const mid = start.clone().add(target).multiplyScalar(0.5);
+    mesh.position.copy(mid);
+    mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+    const light = new THREE.PointLight(0xff0000, 2, len * 2);
+    mesh.add(light);
+    return mesh;
+  }
+
+  function createBulletBurst(count = 5) {
+    const group = new THREE.Group();
+    const mat = new THREE.MeshStandardMaterial({ color: 0xffa500, emissive: 0xffa500 });
+    for (let i = 0; i < count; i++) {
+      const geom = new THREE.CylinderGeometry(0.05, 0.05, 0.5, 6);
+      const mesh = new THREE.Mesh(geom, mat);
+      mesh.position.y = i * (0.3 + Math.random() * 0.5);
+      group.add(mesh);
+    }
+    return group;
+  }
+
   // Load a GLB model using the Cache API if available. Falls back to
   // fetching from the network and stores the result in the cache for
   // future use.
@@ -1978,12 +2004,29 @@ if (window.location.protocol === 'https:') {
     const target = currentFlagPos
       ? currentFlagPos.clone()
       : model.getWorldPosition(new THREE.Vector3());
-    const clone = SkeletonUtils.clone(entry.obj);
-    clone.position.copy(start);
-    clone.quaternion.copy(entry.obj.getWorldQuaternion(new THREE.Quaternion()));
-    scene.add(clone);
-    const instId = entry.obj.userData.weaponInstId;
-    projectiles.push({ obj: clone, tech, cat, params, start, target, stage: 0, speed: 0, instId });
+    let projObj = null;
+    if (tech === 'laser') {
+      projObj = createLaserBeam(start, target);
+      scene.add(projObj);
+      const instId = entry.obj.userData.weaponInstId;
+      projectiles.push({ obj: projObj, tech, cat, params, start, target, life: 0.3, instId });
+    } else if (tech === 'bullet') {
+      const count = params.ammo ? Math.max(1, Math.min(5, params.ammo)) : 3;
+      projObj = createBulletBurst(count);
+      const dir = new THREE.Vector3().subVectors(target, start).normalize();
+      projObj.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+      projObj.position.copy(start);
+      scene.add(projObj);
+      const instId = entry.obj.userData.weaponInstId;
+      projectiles.push({ obj: projObj, tech, cat, params, start, target, stage: 0, speed: 0, dir, instId });
+    } else {
+      const clone = SkeletonUtils.clone(entry.obj);
+      clone.position.copy(start);
+      clone.quaternion.copy(entry.obj.getWorldQuaternion(new THREE.Quaternion()));
+      scene.add(clone);
+      const instId = entry.obj.userData.weaponInstId;
+      projectiles.push({ obj: clone, tech, cat, params, start, target, stage: 0, speed: 0, instId });
+    }
 
     // Debug: log weapon firing start information
     if (DEBUG_LOG) {
@@ -2042,13 +2085,8 @@ if (window.location.protocol === 'https:') {
         }
       }
       if (p.tech === 'laser') {
-        if (!p.dir) {
-          p.dir = new THREE.Vector3().subVectors(p.target, p.start).normalize();
-          p.speed = force * 1;
-        }
-        const step = p.speed * dt;
-        p.obj.position.addScaledVector(p.dir, step);
-        if (p.obj.position.distanceTo(p.target) <= step) {
+        p.life -= dt;
+        if (p.life <= 0) {
           scene.remove(p.obj);
           projectiles.splice(i, 1);
         }
