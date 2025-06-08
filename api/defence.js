@@ -3,7 +3,7 @@ const path = require('path');
 const meshy = require('../meshy');
 const chatManager = require('../workforceChatManager');
 
-function patriot(params) {
+function calcPatriotEffect(params) {
   const weight = params.weight || 0;
   const ammo = params.ammo || 0;
   const force = params.force || 0;
@@ -55,49 +55,51 @@ module.exports = function(store, institutionStore, patriotStore, userStore, broa
       let status = 'pending';
       if (approveShares / total > 0.5 || denyShares / total > 0.5) {
         if (approveShares > denyShares) {
-          const p = prop.parameters || {};
-          const weight = p.weight || 1;
-          const force = p.force || 0;
-          const fuel = p.fuel || 0;
-          const movement = weight > 0 ? (force / weight) * fuel : 0;
-          function getOffset() {
-            const angle = Math.random() * Math.PI * 2;
-            const distance = 8 + Math.random() * 4;
-            return [Math.cos(angle) * distance, 0, Math.sin(angle) * distance];
-          }
-          const offset = getOffset();
-          const weapon = {
-            name: prop.name,
-            model: SCAFF.url,
-            movement,
-            status: 'scaffolding',
-            scale: SCAFF.scale,
-            offset,
-            category: prop.category,
-            technology: prop.technology,
-            parameters: prop.parameters,
-          };
-          const wIdx = store.addWeapon(id, weapon);
-          broadcast({ type: 'updateWeapon', id, weapon, index: wIdx });
+          if ((prop.category || '').toLowerCase() !== 'defence') {
+            const p = prop.parameters || {};
+            const weight = p.weight || 1;
+            const force = p.force || 0;
+            const fuel = p.fuel || 0;
+            const movement = weight > 0 ? (force / weight) * fuel : 0;
+            function getOffset() {
+              const angle = Math.random() * Math.PI * 2;
+              const distance = 8 + Math.random() * 4;
+              return [Math.cos(angle) * distance, 0, Math.sin(angle) * distance];
+            }
+            const offset = getOffset();
+            const weapon = {
+              name: prop.name,
+              model: SCAFF.url,
+              movement,
+              status: 'scaffolding',
+              scale: SCAFF.scale,
+              offset,
+              category: prop.category,
+              technology: prop.technology,
+              parameters: prop.parameters,
+            };
+            const wIdx = store.addWeapon(id, weapon);
+            broadcast({ type: 'updateWeapon', id, weapon, index: wIdx });
 
-          const prompt = prop.look || prop.name;
-          const fileRel = path.join('generated_models', `weapon_${id}_${Date.now()}.glb`);
-          const file = path.join(__dirname, '..', fileRel);
-          meshy.generateModel(prompt, file)
-            .then(() => {
-              const final = {
-                ...weapon,
-                model: fileRel.replace(/\\/g, '/'),
-                status: 'completed',
-                scale: weapon.scale || 6,
-                category: prop.category,
-                technology: prop.technology,
-                parameters: prop.parameters,
-              };
-              store.updateWeapon(id, wIdx, final);
-              broadcast({ type: 'updateWeapon', id, weapon: final, index: wIdx });
-            })
-            .catch(err => console.error('Meshy error:', err));
+            const prompt = prop.look || prop.name;
+            const fileRel = path.join('generated_models', `weapon_${id}_${Date.now()}.glb`);
+            const file = path.join(__dirname, '..', fileRel);
+            meshy.generateModel(prompt, file)
+              .then(() => {
+                const final = {
+                  ...weapon,
+                  model: fileRel.replace(/\\/g, '/'),
+                  status: 'completed',
+                  scale: weapon.scale || 6,
+                  category: prop.category,
+                  technology: prop.technology,
+                  parameters: prop.parameters,
+                };
+                store.updateWeapon(id, wIdx, final);
+                broadcast({ type: 'updateWeapon', id, weapon: final, index: wIdx });
+              })
+              .catch(err => console.error('Meshy error:', err));
+          }
           status = 'approved';
         } else {
           status = 'denied';
@@ -196,15 +198,15 @@ module.exports = function(store, institutionStore, patriotStore, userStore, broa
         return [Math.cos(angle) * dist, 0, Math.sin(angle) * dist];
       }
       buildingIds.forEach(bid => {
-        const patriot = {
+        const item = {
           name: name || 'Patriot',
           model: 'patriot.glb',
           offset: getOffset(),
           parameters,
-          effect: patriot(parameters || {})
+          effect: calcPatriotEffect(parameters || {})
         };
-        const idx = patriotStore.addPatriot(Number(bid), patriot);
-        broadcast({ type: 'updatePatriot', id: Number(bid), patriot, index: idx });
+        const idx = patriotStore.addPatriot(Number(bid), item);
+        broadcast({ type: 'updatePatriot', id: Number(bid), patriot: item, index: idx });
         result.push({ id: Number(bid), index: idx });
       });
       res.json({ placed: result });
