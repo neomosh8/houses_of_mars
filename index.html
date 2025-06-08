@@ -2062,12 +2062,12 @@ if (window.location.protocol === 'https:') {
         }
       }
       if (hitInst !== null) {
-        scene.remove(p.obj);
-        projectiles.splice(i, 1);
         if (hitInst !== p.instId) {
+          scene.remove(p.obj);
+          projectiles.splice(i, 1);
           sendDestroyInstitution(hitInst);
+          continue;
         }
-        continue;
       }
       if (p.tech === 'laser') {
         if (!p.dir) {
