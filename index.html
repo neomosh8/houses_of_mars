@@ -2542,7 +2542,7 @@ if (window.location.protocol === 'https:') {
     }
   }
 
-  function createInterceptor(start, target, speed) {
+function createInterceptor(start, target, speed) {
   const geom = new THREE.SphereGeometry(0.5, 8, 8);
   const mat = new THREE.MeshStandardMaterial({ color: 0x00ffff, emissive: 0x00ffff });
   const mesh = new THREE.Mesh(geom, mat);
@@ -2560,25 +2560,17 @@ if (window.location.protocol === 'https:') {
   tipLight.position.set(0, 1, 0);
   mesh.add(tipLight);
 
-  // Create multi-layer exhaust effects
-  const exhaustGroup = new THREE.Group();
-  mesh.add(exhaustGroup);
-
-  // Layer 1: Hot core (white-blue for interceptor)
+  // Layer 1: Hot core (white-blue)
+  const coreCount = 100;
   const coreGeometry = new THREE.BufferGeometry();
-  const coreCount = 20;
   const corePositions = new Float32Array(coreCount * 3);
-  const coreVelocities = new Float32Array(coreCount * 3);
   const coreLifetimes = new Float32Array(coreCount);
 
   for (let i = 0; i < coreCount; i++) {
-    corePositions[i * 3] = 0;
-    corePositions[i * 3 + 1] = -0.5;
-    corePositions[i * 3 + 2] = 0;
-    coreVelocities[i * 3] = (Math.random() - 0.5) * 0.5;
-    coreVelocities[i * 3 + 1] = -Math.random() * 5 - 3;
-    coreVelocities[i * 3 + 2] = (Math.random() - 0.5) * 0.5;
-    coreLifetimes[i] = Math.random();
+    corePositions[i * 3] = -10000;
+    corePositions[i * 3 + 1] = -10000;
+    corePositions[i * 3 + 2] = -10000;
+    coreLifetimes[i] = 0;
   }
 
   coreGeometry.setAttribute('position', new THREE.BufferAttribute(corePositions, 3));
@@ -2593,23 +2585,19 @@ if (window.location.protocol === 'https:') {
   });
 
   const coreParticles = new THREE.Points(coreGeometry, coreMaterial);
-  exhaustGroup.add(coreParticles);
+  scene.add(coreParticles);
 
-  // Layer 2: Flame (cyan for interceptor)
+  // Layer 2: Flame (cyan)
+  const flameCount = 200;
   const flameGeometry = new THREE.BufferGeometry();
-  const flameCount = 40;
   const flamePositions = new Float32Array(flameCount * 3);
-  const flameVelocities = new Float32Array(flameCount * 3);
   const flameLifetimes = new Float32Array(flameCount);
 
   for (let i = 0; i < flameCount; i++) {
-    flamePositions[i * 3] = 0;
-    flamePositions[i * 3 + 1] = -0.5;
-    flamePositions[i * 3 + 2] = 0;
-    flameVelocities[i * 3] = (Math.random() - 0.5) * 1.5;
-    flameVelocities[i * 3 + 1] = -Math.random() * 4 - 2;
-    flameVelocities[i * 3 + 2] = (Math.random() - 0.5) * 1.5;
-    flameLifetimes[i] = Math.random();
+    flamePositions[i * 3] = -10000;
+    flamePositions[i * 3 + 1] = -10000;
+    flamePositions[i * 3 + 2] = -10000;
+    flameLifetimes[i] = 0;
   }
 
   flameGeometry.setAttribute('position', new THREE.BufferAttribute(flamePositions, 3));
@@ -2624,23 +2612,19 @@ if (window.location.protocol === 'https:') {
   });
 
   const flameParticles = new THREE.Points(flameGeometry, flameMaterial);
-  exhaustGroup.add(flameParticles);
+  scene.add(flameParticles);
 
-  // Layer 3: Smoke (blue-gray for interceptor)
+  // Layer 3: Smoke (blue-gray)
+  const smokeCount = 400;
   const smokeGeometry = new THREE.BufferGeometry();
-  const smokeCount = 50;
   const smokePositions = new Float32Array(smokeCount * 3);
-  const smokeVelocities = new Float32Array(smokeCount * 3);
   const smokeLifetimes = new Float32Array(smokeCount);
 
   for (let i = 0; i < smokeCount; i++) {
-    smokePositions[i * 3] = 0;
-    smokePositions[i * 3 + 1] = -0.5;
-    smokePositions[i * 3 + 2] = 0;
-    smokeVelocities[i * 3] = (Math.random() - 0.5) * 3;
-    smokeVelocities[i * 3 + 1] = -Math.random() * 2 - 1;
-    smokeVelocities[i * 3 + 2] = (Math.random() - 0.5) * 3;
-    smokeLifetimes[i] = Math.random();
+    smokePositions[i * 3] = -10000;
+    smokePositions[i * 3 + 1] = -10000;
+    smokePositions[i * 3 + 2] = -10000;
+    smokeLifetimes[i] = 0;
   }
 
   smokeGeometry.setAttribute('position', new THREE.BufferAttribute(smokePositions, 3));
@@ -2655,30 +2639,34 @@ if (window.location.protocol === 'https:') {
   });
 
   const smokeParticles = new THREE.Points(smokeGeometry, smokeMaterial);
-  exhaustGroup.add(smokeParticles);
-
-  // Remove old simple particle system
-  // (we'll keep the interceptor object but replace its particle system)
+  scene.add(smokeParticles);
 
   interceptors.push({
     mesh,
     exhaustLight,
     tipLight,
-    exhaustGroup,
     coreParticles,
-    coreVelocities,
+    corePositions,
     coreLifetimes,
+    coreIndex: 0,
+    coreCount,
     flameParticles,
-    flameVelocities,
+    flamePositions,
     flameLifetimes,
+    flameIndex: 0,
+    flameCount,
     smokeParticles,
-    smokeVelocities,
+    smokePositions,
     smokeLifetimes,
+    smokeIndex: 0,
+    smokeCount,
+    lastCoreEmit: 0,
+    lastFlameEmit: 0,
+    lastSmokeEmit: 0,
     startY: start.y,
     phase: 'ascent',
     speed,
-    target,
-    particlesActive: true
+    target
   });
 }
 
@@ -2687,82 +2675,123 @@ function updateInterceptors(dt) {
     const it = interceptors[i];
     if (!it.target || !it.target.obj) {
       scene.remove(it.mesh);
+      scene.remove(it.coreParticles);
+      scene.remove(it.flameParticles);
+      scene.remove(it.smokeParticles);
       interceptors.splice(i, 1);
       continue;
     }
 
-    // Update exhaust particles
-    if (it.particlesActive) {
-      // Update core particles
-      if (it.coreParticles) {
-        const positions = it.coreParticles.geometry.attributes.position.array;
-        for (let j = 0; j < positions.length / 3; j++) {
-          positions[j * 3] += it.coreVelocities[j * 3] * dt;
-          positions[j * 3 + 1] += it.coreVelocities[j * 3 + 1] * dt;
-          positions[j * 3 + 2] += it.coreVelocities[j * 3 + 2] * dt;
+    // Emit new particles at current position
 
-          it.coreLifetimes[j] -= dt * 2;
-          if (it.coreLifetimes[j] <= 0) {
-            positions[j * 3] = 0;
-            positions[j * 3 + 1] = -0.5;
-            positions[j * 3 + 2] = 0;
-            it.coreLifetimes[j] = 1;
-          }
-        }
-        it.coreParticles.geometry.attributes.position.needsUpdate = true;
-      }
+    // Core particles (emit frequently)
+    it.lastCoreEmit += dt;
+    if (it.lastCoreEmit > 0.005) {
+      it.lastCoreEmit = 0;
+      const idx = it.coreIndex % it.coreCount;
+      it.corePositions[idx * 3] = it.mesh.position.x + (Math.random() - 0.5) * 0.2;
+      it.corePositions[idx * 3 + 1] = it.mesh.position.y - 0.5;
+      it.corePositions[idx * 3 + 2] = it.mesh.position.z + (Math.random() - 0.5) * 0.2;
+      it.coreLifetimes[idx] = 1.0;
+      it.coreIndex++;
+    }
 
-      // Update flame particles
-      if (it.flameParticles) {
-        const positions = it.flameParticles.geometry.attributes.position.array;
-        for (let j = 0; j < positions.length / 3; j++) {
-          positions[j * 3] += it.flameVelocities[j * 3] * dt;
-          positions[j * 3 + 1] += it.flameVelocities[j * 3 + 1] * dt;
-          positions[j * 3 + 2] += it.flameVelocities[j * 3 + 2] * dt;
-
-          it.flameLifetimes[j] -= dt * 1.5;
-          if (it.flameLifetimes[j] <= 0) {
-            positions[j * 3] = 0;
-            positions[j * 3 + 1] = -0.5;
-            positions[j * 3 + 2] = 0;
-            it.flameLifetimes[j] = 1;
-          }
-        }
-        it.flameParticles.geometry.attributes.position.needsUpdate = true;
-      }
-
-      // Update smoke particles
-      if (it.smokeParticles) {
-        const positions = it.smokeParticles.geometry.attributes.position.array;
-        for (let j = 0; j < positions.length / 3; j++) {
-          positions[j * 3] += it.smokeVelocities[j * 3] * dt;
-          positions[j * 3 + 1] += it.smokeVelocities[j * 3 + 1] * dt;
-          positions[j * 3 + 2] += it.smokeVelocities[j * 3 + 2] * dt;
-
-          it.smokeLifetimes[j] -= dt * 0.5;
-          if (it.smokeLifetimes[j] <= 0) {
-            positions[j * 3] = 0;
-            positions[j * 3 + 1] = -0.5;
-            positions[j * 3 + 2] = 0;
-            it.smokeLifetimes[j] = 1;
-          }
-        }
-        it.smokeParticles.geometry.attributes.position.needsUpdate = true;
+    // Flame particles (emit less frequently)
+    it.lastFlameEmit += dt;
+    if (it.lastFlameEmit > 0.01) {
+      it.lastFlameEmit = 0;
+      for (let j = 0; j < 2; j++) { // Emit 2 at a time
+        const idx = it.flameIndex % it.flameCount;
+        it.flamePositions[idx * 3] = it.mesh.position.x + (Math.random() - 0.5) * 0.5;
+        it.flamePositions[idx * 3 + 1] = it.mesh.position.y - 0.5;
+        it.flamePositions[idx * 3 + 2] = it.mesh.position.z + (Math.random() - 0.5) * 0.5;
+        it.flameLifetimes[idx] = 1.0;
+        it.flameIndex++;
       }
     }
 
-    // Check for collision regardless of phase
+    // Smoke particles (emit least frequently)
+    it.lastSmokeEmit += dt;
+    if (it.lastSmokeEmit > 0.02) {
+      it.lastSmokeEmit = 0;
+      for (let j = 0; j < 3; j++) { // Emit 3 at a time
+        const idx = it.smokeIndex % it.smokeCount;
+        it.smokePositions[idx * 3] = it.mesh.position.x + (Math.random() - 0.5) * 1.0;
+        it.smokePositions[idx * 3 + 1] = it.mesh.position.y - 0.5;
+        it.smokePositions[idx * 3 + 2] = it.mesh.position.z + (Math.random() - 0.5) * 1.0;
+        it.smokeLifetimes[idx] = 1.0;
+        it.smokeIndex++;
+      }
+    }
+
+    // Update core particles
+    for (let j = 0; j < it.coreCount; j++) {
+      if (it.coreLifetimes[j] > 0) {
+        it.coreLifetimes[j] -= dt * 2; // Fast fade
+        // Add slight drift
+        it.corePositions[j * 3] += (Math.random() - 0.5) * dt * 0.3;
+        it.corePositions[j * 3 + 1] += (Math.random() - 0.5) * dt * 0.3;
+        it.corePositions[j * 3 + 2] += (Math.random() - 0.5) * dt * 0.3;
+
+        if (it.coreLifetimes[j] <= 0) {
+          it.corePositions[j * 3] = -10000;
+          it.corePositions[j * 3 + 1] = -10000;
+          it.corePositions[j * 3 + 2] = -10000;
+        }
+      }
+    }
+    it.coreParticles.geometry.attributes.position.needsUpdate = true;
+
+    // Update flame particles
+    for (let j = 0; j < it.flameCount; j++) {
+      if (it.flameLifetimes[j] > 0) {
+        it.flameLifetimes[j] -= dt * 1.5; // Medium fade
+        // Add expansion drift
+        it.flamePositions[j * 3] += (Math.random() - 0.5) * dt * 0.8;
+        it.flamePositions[j * 3 + 1] += (Math.random() - 0.5) * dt * 0.8;
+        it.flamePositions[j * 3 + 2] += (Math.random() - 0.5) * dt * 0.8;
+
+        if (it.flameLifetimes[j] <= 0) {
+          it.flamePositions[j * 3] = -10000;
+          it.flamePositions[j * 3 + 1] = -10000;
+          it.flamePositions[j * 3 + 2] = -10000;
+        }
+      }
+    }
+    it.flameParticles.geometry.attributes.position.needsUpdate = true;
+
+    // Update smoke particles
+    for (let j = 0; j < it.smokeCount; j++) {
+      if (it.smokeLifetimes[j] > 0) {
+        it.smokeLifetimes[j] -= dt * 0.5; // Slow fade
+        // Add larger drift and slight upward motion
+        it.smokePositions[j * 3] += (Math.random() - 0.5) * dt * 1.5;
+        it.smokePositions[j * 3 + 1] += Math.random() * dt * 0.5; // Slight rise
+        it.smokePositions[j * 3 + 2] += (Math.random() - 0.5) * dt * 1.5;
+
+        if (it.smokeLifetimes[j] <= 0) {
+          it.smokePositions[j * 3] = -10000;
+          it.smokePositions[j * 3 + 1] = -10000;
+          it.smokePositions[j * 3 + 2] = -10000;
+        }
+      }
+    }
+    it.smokeParticles.geometry.attributes.position.needsUpdate = true;
+
+    // Check for collision
     const dist = it.mesh.position.distanceTo(it.target.obj.position);
     const collisionRadius = 10;
 
     if (dist <= collisionRadius) {
-      // Hit the target!
       const idxProj = projectiles.indexOf(it.target);
       if (idxProj >= 0) {
         scene.remove(it.target.obj);
         projectiles.splice(idxProj, 1);
       }
       scene.remove(it.mesh);
+      scene.remove(it.coreParticles);
+      scene.remove(it.flameParticles);
+      scene.remove(it.smokeParticles);
       interceptors.splice(i, 1);
       continue;
     }
@@ -2771,7 +2800,6 @@ function updateInterceptors(dt) {
     if (!it.phase) it.phase = 'ascent';
 
     if (it.phase === 'ascent') {
-      // Phase 1: Go straight up
       const targetAltitude = it.startY + 50;
       it.mesh.position.y += it.speed * dt * 2;
 
@@ -2779,26 +2807,19 @@ function updateInterceptors(dt) {
         it.phase = 'tracking';
       }
     } else if (it.phase === 'tracking') {
-      // Phase 2: Track and intercept target
       const targetPos = it.target.obj.position.clone();
       const currentPos = it.mesh.position.clone();
 
-      // Calculate direction to target
       const dir = new THREE.Vector3().subVectors(targetPos, currentPos);
-
-      // Normalize direction and apply speed
       dir.normalize();
 
-      // Add slight upward bias to avoid terrain
       if (it.mesh.position.y < targetPos.y + 10) {
         dir.y = Math.max(dir.y, 0.3);
         dir.normalize();
       }
 
-      // Move towards target
       it.mesh.position.addScaledVector(dir, it.speed * dt);
 
-      // Orient the interceptor towards its movement direction
       const nextPos = it.mesh.position.clone().add(dir.clone().multiplyScalar(it.speed * dt));
       it.mesh.lookAt(nextPos);
     }
