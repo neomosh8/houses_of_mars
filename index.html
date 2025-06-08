@@ -1564,6 +1564,7 @@ if (window.location.protocol === 'https:') {
   const weaponMap = {}; // id -> array of weapon objects
   const patriotMap = {}; // id -> array of patriot objects
   const projectiles = []; // active fired weapon objects
+  const interceptors = []; // patriot fired interception spheres
   const institutionSounds = {}; // id -> THREE.PositionalAudio
   const weaponSounds = {}; // instId -> array of sounds
   const weaponMixers = {}; // instId -> array of AnimationMixers
@@ -2459,6 +2460,103 @@ if (window.location.protocol === 'https:') {
       scene.remove(p.obj);
       projectiles.splice(i, 1);
     }
+  }
+
+  function createInterceptor(start, target, speed) {
+    const geom = new THREE.SphereGeometry(0.5, 8, 8);
+    const mat = new THREE.MeshStandardMaterial({ color: 0x00ffff, emissive: 0x00ffff });
+    const mesh = new THREE.Mesh(geom, mat);
+    mesh.position.copy(start);
+    scene.add(mesh);
+
+    const maxP = 60;
+    const g = new THREE.BufferGeometry();
+    const pos = new Float32Array(maxP * 3);
+    const life = new Float32Array(maxP);
+    for (let i = 0; i < maxP; i++) {
+      pos[i * 3] = pos[i * 3 + 1] = pos[i * 3 + 2] = -1000;
+      life[i] = 0;
+    }
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const pm = new THREE.PointsMaterial({ color: 0x00ffff, size: 0.3, transparent: true, opacity: 0.8, depthWrite: false, blending: THREE.AdditiveBlending });
+    const points = new THREE.Points(g, pm);
+    points.frustumCulled = false;
+    scene.add(points);
+
+    interceptors.push({ mesh, points, pos, life, next: 0, speed, target });
+  }
+
+  function updateInterceptors(dt) {
+    for (let i = interceptors.length - 1; i >= 0; i--) {
+      const it = interceptors[i];
+      if (!it.target || !it.target.obj) {
+        scene.remove(it.mesh);
+        scene.remove(it.points);
+        interceptors.splice(i, 1);
+        continue;
+      }
+
+      // emit particle at current position
+      const idx = it.next % it.life.length;
+      it.pos[idx * 3] = it.mesh.position.x;
+      it.pos[idx * 3 + 1] = it.mesh.position.y;
+      it.pos[idx * 3 + 2] = it.mesh.position.z;
+      it.life[idx] = 1;
+      it.next++;
+
+      for (let j = 0; j < it.life.length; j++) {
+        if (it.life[j] > 0) {
+          it.life[j] -= dt;
+          if (it.life[j] <= 0) {
+            it.pos[j * 3] = it.pos[j * 3 + 1] = it.pos[j * 3 + 2] = -1000;
+          }
+        }
+      }
+      it.points.geometry.attributes.position.needsUpdate = true;
+
+      const dir = new THREE.Vector3().subVectors(it.target.obj.position, it.mesh.position);
+      const dist = dir.length();
+      const step = it.speed * dt;
+      if (dist <= step) {
+        const idxProj = projectiles.indexOf(it.target);
+        if (idxProj >= 0) {
+          scene.remove(it.target.obj);
+          projectiles.splice(idxProj, 1);
+        }
+        scene.remove(it.mesh);
+        scene.remove(it.points);
+        interceptors.splice(i, 1);
+        continue;
+      }
+      dir.normalize();
+      it.mesh.position.addScaledVector(dir, step);
+    }
+  }
+
+  function updatePatriotDefence(dt) {
+    for (const arr of Object.values(patriotMap)) {
+      if (!Array.isArray(arr)) continue;
+      arr.forEach(entry => {
+        if (!entry || !entry.obj) return;
+        const params = entry.data.parameters || {};
+        const weight = params.weight || 1;
+        const force = params.force || 0;
+        const fuel = params.fuel || 0;
+        const ammo = params.ammo || 0;
+        const radius = force * fuel;
+        const vF = ammo * (fuel / weight);
+        for (const p of projectiles) {
+          if (p.isInterceptor || !p.obj) continue;
+          if (p.intercepted) continue;
+          const dist = p.obj.position.distanceTo(entry.obj.position);
+          if (dist <= radius) {
+            createInterceptor(entry.obj.position.clone(), p, vF);
+            p.intercepted = true;
+          }
+        }
+      });
+    }
+    updateInterceptors(dt);
   }
 
 
@@ -4175,6 +4273,7 @@ function showWorkerProfile(worker, institutionId, isHired = false, index = null)
     // Update particles
     updateParticles(dt);
     updateProjectiles(dt);
+    updatePatriotDefence(dt);
     updateSinking(dt);
     updateInstitutionBoxes();
     updateConstructionBoxes();
