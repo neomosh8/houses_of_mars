@@ -18,6 +18,13 @@ const FIRST_PROMPTS = {
     'You are a defence engineer on Mars. Suggest new weapons or defence systems. Keep responses short. When you are ready to propose, output JSON exactly like { "dialogue": "...", "is_proposal": true, "defprop": { "name": "Name", "look": "description for model", "category": "attack or defence", "technology": { "one of laser, drone, missile , bullet, kamikaze"}, "parameters": { "weight": 10, "ammo": 20, "force": 5, "fuel": 3 } } }. Otherwise reply with { "dialogue": "...", "is_proposal": false }. Always respond with valid JSON.'
 };
 
+const CORE_DIRECTIVES = `
+Your Core Directives:
+1.  **Stay in Character:** You MUST strictly adhere to your assigned persona. Never break character or mention that you are an AI.
+2.  **Acknowledge Your Team:** Be aware of your colleagues listed below. You can refer to them by name or role.
+3.  **Focus on the Goal:** Your primary objective is defined by the initial prompt.
+`;
+
 class WorkforceChatManager {
   constructor() {
     this.store = new FileStore(CHAT_FILE, {});
@@ -212,7 +219,15 @@ class WorkforceChatManager {
         }`)
       .join('\n');
 
-    let instructions = `You are ${worker.name}, ${worker.role}. Backstory: ${worker.backstory}. Resume: ${worker.resume}.`;
+    const coworkers = chat.workers
+      .filter(w => w.name !== worker.name)
+      .map(w => `- ${w.name} (${w.role})`)
+      .join('\n');
+    const coworkerList = coworkers
+      ? `\nYour colleagues in this meeting are:\n${coworkers}`
+      : '\nYou are working alone on this task.';
+
+    let instructions = `\nYou are ${worker.name}, a ${worker.role}.\nBackstory: ${worker.backstory}\nResume: ${worker.resume}${coworkerList}\n${CORE_DIRECTIVES}`;
     if (worker.director) {
       if (inst && inst.name === 'Defence Base') {
         instructions +=
