@@ -73,7 +73,7 @@ module.exports = function(institutionStore, userStore, engine, broadcast, sendTo
     return worker;
   }
 
-  async function generateWorkerWithAI(institutionName) {
+  async function generateWorkerWithAI(institutionName, job) {
     if (!openai) {
       return randomWorker();
     }
@@ -96,7 +96,7 @@ module.exports = function(institutionStore, userStore, engine, broadcast, sendTo
           content: systemPrompt
         }, {
           role: "user",
-          content: `Generate a  bullet point style, short, worker profile for a Mars colonization game. The worker will be employed at a ${institutionName} facility.
+          content: `Generate a  bullet point style, short, worker profile for a Mars colonization game. The worker will be employed at a ${institutionName} facility.${job && (job.title || job.description) ? ` The position is ${job.title || ''}. ${job.description || ''}` : ''}
 
           Please provide:
           1. A realistic full name
@@ -178,14 +178,14 @@ module.exports = function(institutionStore, userStore, engine, broadcast, sendTo
     }
   }
 
-  async function generateWorkers(num, institutionName = 'Mars Colony') {
+  async function generateWorkers(num, institutionName = 'Mars Colony', job) {
     const workers = [];
 
     // Use Promise.all to generate workers in parallel for better performance
     const workerPromises = [];
     for (let i = 0; i < num; i++) {
       if (openai) {
-        workerPromises.push(generateWorkerWithAI(institutionName));
+        workerPromises.push(generateWorkerWithAI(institutionName, job));
       } else {
         workerPromises.push(Promise.resolve(randomWorker()));
       }
@@ -212,8 +212,9 @@ module.exports = function(institutionStore, userStore, engine, broadcast, sendTo
 
       const institutionName = institution ? institution.name : 'Mars Colony';
       const num = Math.floor(Math.random() * 5) + 1; // 1-5 workers
+      const job = { title: req.body && req.body.title, description: req.body && req.body.description };
 
-      const workers = await generateWorkers(num, institutionName);
+      const workers = await generateWorkers(num, institutionName, job);
       console.log('Workers generated:', workers);
 
       res.json({ workers });
