@@ -61,6 +61,10 @@
       <div id="popup-workforce-carousel" ></div>
     </div>
     <div id="popup-workforce" class="hidden">
+      <div id="job-posting">
+        <input id="job-title-input" type="text" placeholder="Job Title" />
+        <input id="job-desc-input" type="text" placeholder="Job Description" />
+      </div>
       <div id="workforce-container" ></div>
     </div>
     <div id="popup-chat" class="hidden">
@@ -3135,7 +3139,15 @@ async function showWorkforce() {
 
     try {
       console.log('Requesting applicants from', `/api/workforce/generate/${id}`);
-      const res = await fetch(`/api/workforce/generate/${id}`, { method: 'POST' });
+      const title = document.getElementById('job-title-input').value.trim();
+      const desc = document.getElementById('job-desc-input').value.trim();
+      const body = title || desc ? JSON.stringify({ title, description: desc }) : null;
+      const options = { method: 'POST' };
+      if (body) {
+        options.headers = { 'Content-Type': 'application/json' };
+        options.body = body;
+      }
+      const res = await fetch(`/api/workforce/generate/${id}`, options);
       console.log('Generate response status', res.status);
       if (!res.ok) {
         throw new Error(`HTTP error! status: ${res.status}`);
