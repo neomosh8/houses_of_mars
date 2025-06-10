@@ -621,6 +621,13 @@ const icons = {
         ['hydration', 'oxygen', 'health', 'money'].forEach(k => {
           if (typeof inst[k] === 'number') effects[k] = inst[k];
         });
+        if (instData.extraEffects) {
+          for (const [k, v] of Object.entries(instData.extraEffects)) {
+            if (typeof v === 'number') {
+              effects[k] = (effects[k] || 0) + v;
+            }
+          }
+        }
         resourceTracking.updateInstitution(
           inst.id,
           instData.name,
