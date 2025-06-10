@@ -9,14 +9,24 @@ try {
 } catch (_) {}
 
 const CHAT_FILE = path.join(__dirname, 'chatLogs.json');
-const RESPONSE_DELAY_MS = 2000; // 2 seconds between each worker response
+const RESPONSE_DELAY_MS = 1000; // 2 seconds between each worker response
 const INITIAL_DELAY_MS = 1000; // 1 second delay after user message
 const FIRST_PROMPTS = {
   WatOx:
-    'You are employee in water-oxygen extraction facility in mars. How can we increase production? Give one concise idea. the idea should be either a device, or a facility/building. specification should be clear. i dont want plan or approach. i want machines or buildings/facilities If you need more info, ask one sentence. do not output more than 2 sentences ever. help shape ideas , start from broad and help your parties to specify and make project idea tangible and concrete. based on your expertise and resume, be creative.',
+    'You are employee in water-oxygen extraction facility in mars. this is a meeting of you and your boss. through a collaboration in this meeting you should get to one idea, the idea should be either a device, or a facility/building. specification should be clear. i dont want plan or approach. i want machines or buildings/facilities If you need more info, ask one sentence. do not output more than 1 sentences ever. help shape ideas , start from broad and help your parties to specify and make project idea tangible and concrete. based on your expertise and resume, be creative.',
   'Defence Base':
     'You are a defence engineer on Mars. Suggest new weapons or defence systems. Keep responses short. When you are ready to propose, output JSON exactly like { "dialogue": "...", "is_proposal": true, "defprop": { "name": "Name", "look": "description for model", "category": "attack or defence", "technology": { "one of laser, drone, missile , bullet, kamikaze"}, "parameters": { "weight": 10, "ammo": 20, "force": 5, "fuel": 3 } } }. Otherwise reply with { "dialogue": "...", "is_proposal": false }. Always respond with valid JSON.'
 };
+
+const CORE_DIRECTIVES = `
+Your Core Directives:
+1.  **Stay in Character:** You MUST strictly adhere to your assigned persona. Never break character or mention that you are an AI.
+2.  **Acknowledge Your Team:** Be aware of your colleagues listed below. You can refer to them by name or role.
+3.  **Focus on the Goal:** Your primary objective is defined by the initial prompt.
+4.  **Your technical expertise and knowledge is limited to your backstory and resume, stay thinking in that space
+5. **If you need help with part of project, you can ask your coworkers, to fill your knowledge holes
+6.  ** NEVER OUTPUT MORE THAN ONE SENTENCE
+`;
 
 class WorkforceChatManager {
   constructor() {
@@ -204,7 +214,7 @@ class WorkforceChatManager {
     }
 
     const history = chat.messages
-      .slice(-10)
+      .slice(-40)
       .map(m => `${m.worker}: ${
           typeof m.text === 'object'
             ? JSON.stringify(m.text)
@@ -212,14 +222,22 @@ class WorkforceChatManager {
         }`)
       .join('\n');
 
-    let instructions = `You are ${worker.name}, ${worker.role}. Backstory: ${worker.backstory}. Resume: ${worker.resume}.`;
+    const coworkers = chat.workers
+      .filter(w => w.name !== worker.name)
+      .map(w => `- ${w.name} (${w.role})`)
+      .join('\n');
+    const coworkerList = coworkers
+      ? `\nYour colleagues in this meeting are:\n${coworkers}`
+      : '\nYou are working alone on this task.';
+
+    let instructions = `\nYou are ${worker.name}, a ${worker.role}.\nBackstory: ${worker.backstory}\nResume: ${worker.resume}${coworkerList}\n${CORE_DIRECTIVES}`;
     if (worker.director) {
       if (inst && inst.name === 'Defence Base') {
         instructions +=
           ' When you are ready to propose, reply with JSON exactly like { "dialogue": "...", "is_proposal": true, "defprop": { "name": "Name", "look": "description for model", "category": "attack or defence", "technology": {one of laser,missile,bullet,drone, kamikaze}, "parameters": { "weight": 10, "ammo": 20, "force": 5, "fuel": 3 } } }. Otherwise reply with { "dialogue": "...", "is_proposal": false }. Always respond with valid JSON.';
       } else {
         instructions +=
-          ' When you are ready to propose, reply with JSON exactly like { "dialogue": "...", "is_proposal": true, "proposal": { "title": "Title", "description": "Details", "cost": 100, "prerequisites": [ { "type": "hire", "value": "Role" } ], "gains": { "hydration": 1 to 9, "oxygen": 1 to 9, "health": 1 to 9, "money": 100 to 100 }, "risk": "low" } }. Otherwise reply with { "dialogue": "...", "is_proposal": false, "proposal": null }. Always respond with valid JSON.';
+          ' When you are ready to propose, reply with JSON exactly like { "dialogue": "...", "is_proposal": true, "proposal": { "title": "Title", "description": "Details", "cost": 100 to 500000, "prerequisites": [ { "type": "hire", "value": "Role" } ], "gains": { "hydration": -9 to 9, "oxygen": -9 to 9, "health": -9 to 9, "money": -1000 to 10000 }, "risk": "low" } }. Otherwise reply with { "dialogue": "...", "is_proposal": false, "proposal": null }.  pick the numbers for gains, based on the proposal itself and how relevant and sophisticated it is, also for cost, the one time implementation cost should proper to the risk and size of project. Always respond with valid JSON.';
       }
     }
 
